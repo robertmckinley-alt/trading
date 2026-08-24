@@ -2,7 +2,7 @@
 node_modules/
 .vercel/
 *.log
+lib/__pycache__/
 
 # Local paper-trader state
 state.json
-

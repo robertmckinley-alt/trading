@@ -188,11 +188,15 @@ The live watcher reads its feed settings from `config.json` plus environment var
 
 Key live fields:
 
-- `live.provider`: `mock` or `polygon-futures`
-- `live.ticker`: futures contract to poll, for example `NQU6`
+- `live.provider`: `databento`, `mock`, or legacy `polygon-futures`
+- `live.ticker`: futures symbol to poll, for example `NQ.v.0` for the front-month continuous Nasdaq contract on Databento
 - `live.mockCsvPath`: fixture path used in mock mode
 - `live.apiKeyEnv`: env var name that stores the real market-data key
-- `live.baseUrl`: market-data API base URL
+- `live.dataset`: Databento dataset, default `GLBX.MDP3`
+- `live.schema`: Databento bar schema, default `ohlcv-1m`
+- `live.stypeIn`: Databento symbology type, default `continuous`
+- `live.pythonBin`: Python binary used for the Databento helper
+- `live.baseUrl`: legacy Polygon market-data API base URL
 - `live.lookbackBars`: recent `1m` candles pulled per scan
 - `live.pollIntervalMs`: scan interval
 - `live.sessionWindows`: `Asia` and `London` time windows used for range detection
@@ -200,10 +204,13 @@ Key live fields:
 For a real feed:
 
 ```bash
-export LIVE_DATA_API_KEY=your_rotated_clean_key
+python3 -m pip install -r requirements-live.txt
+export DATABENTO_API_KEY=your_rotated_clean_key
 cd lucid-nq-paper-trader
 npm run trader:watch
 ```
+
+Use `npm run trader:watch:mock` when you want to replay the bundled fixture instead of querying Databento.
 
 Each live tick:
 
