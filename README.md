@@ -180,6 +180,9 @@ cd lucid-nq-paper-trader
 npm run trader:plan
 npm run trader:watch
 npm run trader:watch:mock
+npm run trader:watch:start
+npm run trader:watch:status
+npm run trader:watch:stop
 ```
 
 ## Live Feed Config
@@ -211,6 +214,23 @@ npm run trader:watch
 ```
 
 Use `npm run trader:watch:mock` when you want to replay the bundled fixture instead of querying Databento.
+
+For a managed detached watcher on the VPS:
+
+```bash
+python3 -m pip install -r requirements-live.txt
+export DATABENTO_API_KEY=your_rotated_clean_key
+cd lucid-nq-paper-trader
+npm run trader:watch:start
+npm run trader:watch:status
+```
+
+The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
+
+```bash
+cd lucid-nq-paper-trader
+ALLOW_MOCK=1 npm run trader:watch:start
+```
 
 Each live tick:
 

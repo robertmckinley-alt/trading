@@ -8,7 +8,10 @@
     "start": "next start",
     "trader:plan": "node paper-trader.cjs live-plan",
     "trader:watch": "node paper-trader.cjs watch-live",
-    "trader:watch:mock": "node paper-trader.cjs watch-live --provider=mock"
+    "trader:watch:mock": "node paper-trader.cjs watch-live --provider=mock",
+    "trader:watch:start": "bash scripts/start-live-watcher.sh",
+    "trader:watch:stop": "bash scripts/stop-live-watcher.sh",
+    "trader:watch:status": "bash scripts/status-live-watcher.sh"
   },
   "dependencies": {
     "next": "16.1.6",
