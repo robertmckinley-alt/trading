@@ -80,6 +80,7 @@ Important persistence note:
 - the deployed Vercel app keeps journal history in the browser, so trades persist per browser/profile
 - the CLI still writes durable local trades into `state.json`
 - the always-on live watcher should run on your VPS, not inside Vercel
+- the main page can now show both strategy cards plus outcomes, but Vercel needs a live status bridge to read the VPS watcher
 
 ## Setup Format
 
@@ -225,6 +226,20 @@ npm run trader:watch:start
 npm run trader:watch:status
 ```
 
+Expose the live watcher to the website:
+
+```bash
+npm run trader:status:server
+```
+
+This serves `GET /api/live-status` from the VPS on port `3210` by default. To let the Vercel app read that live data, set:
+
+```bash
+LIVE_STATUS_SOURCE_URL=http://YOUR_VPS_PUBLIC_IP:3210/api/live-status
+```
+
+in the Vercel project environment, then redeploy. Without that bridge URL, the Vercel app can only show local/manual state.
+
 The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
 
 ```bash
@@ -293,6 +308,6 @@ Price columns must be numeric. Timestamps are used only for reporting.
 
 The fastest next step would be one of these:
 
-1. expose the VPS watcher state to the Vercel UI through a small external store or webhook
+1. expose the VPS watcher state to the Vercel UI through the live status bridge or a more durable external store
 2. add TradingView export compatibility if your CSV format differs
 3. add alert delivery when a live setup triggers

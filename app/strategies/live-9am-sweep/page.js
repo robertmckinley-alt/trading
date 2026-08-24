@@ -1,17 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 import Link from 'next/link';
+import LiveStrategyBoard from '../../../components/live-strategy-board';
 import TraderDashboard from '../../../components/trader-dashboard';
+import { getStrategySnapshots } from '../../../lib/live-status.cjs';
 import { normalizeConfig } from '../../../lib/trader-core.cjs';
 
 function readFile(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 }
 
-export default function LiveNineAmSweepPage() {
+export default async function LiveNineAmSweepPage() {
   const config = normalizeConfig(JSON.parse(readFile('config.json')));
   const sampleSetup = readFile('examples/lucid-sweep-short.setup.json');
   const liveFixture = readFile('examples/live-signal-nq-1m.csv');
+  const liveStatus = await getStrategySnapshots();
 
   return (
     <main className="page-shell">
@@ -61,6 +64,8 @@ export default function LiveNineAmSweepPage() {
           </p>
         </article>
       </section>
+
+      <LiveStrategyBoard initialData={liveStatus} />
 
       <TraderDashboard
         initialConfig={config}

@@ -1,17 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 import Link from 'next/link';
+import LiveStrategyBoard from '../../../components/live-strategy-board';
 import TraderDashboard from '../../../components/trader-dashboard';
+import { getStrategySnapshots } from '../../../lib/live-status.cjs';
 import { normalizeConfig } from '../../../lib/trader-core.cjs';
 
 function readFile(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 }
 
-export default function HourlySweepIfvgBosPage() {
+export default async function HourlySweepIfvgBosPage() {
   const config = normalizeConfig(JSON.parse(readFile('config.json')));
   const sampleSetup = readFile('examples/hourly-sweep-ifvg-bos.setup.json');
   const sampleCsv = readFile('examples/sample-nq-1m.csv');
+  const liveStatus = await getStrategySnapshots();
 
   return (
     <main className="page-shell">
@@ -66,6 +69,8 @@ export default function HourlySweepIfvgBosPage() {
           </p>
         </article>
       </section>
+
+      <LiveStrategyBoard initialData={liveStatus} />
 
       <TraderDashboard
         initialConfig={config}

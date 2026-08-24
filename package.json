@@ -11,7 +11,8 @@
     "trader:watch:mock": "node paper-trader.cjs watch-live --provider=mock",
     "trader:watch:start": "bash scripts/start-live-watcher.sh",
     "trader:watch:stop": "bash scripts/stop-live-watcher.sh",
-    "trader:watch:status": "bash scripts/status-live-watcher.sh"
+    "trader:watch:status": "bash scripts/status-live-watcher.sh",
+    "trader:status:server": "node scripts/live-status-server.cjs"
   },
   "dependencies": {
     "next": "16.1.6",
