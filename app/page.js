@@ -32,6 +32,9 @@ export default function HomePage() {
             <Link className="primary-link" href="/strategies/live-9am-sweep">
               Open live strategy build
             </Link>
+            <Link className="secondary-link" href="/strategies/hourly-sweep-ifvg-bos">
+              Open 1H sweep route
+            </Link>
           </div>
         </div>
         <div className="hero-card">
@@ -61,6 +64,16 @@ export default function HomePage() {
           </p>
           <Link className="secondary-link" href="/strategies/live-9am-sweep">
             View live strategy page
+          </Link>
+        </article>
+        <article className="strategy-card">
+          <p className="eyebrow">New clip route</p>
+          <h2>Break out the 1H sweep plus iFVG entry model.</h2>
+          <p className="strategy-copy">
+            The latest video uses hourly highs and lows, a 5-minute sweep, and a 1-minute BOS confirmation. This route keeps that flow separate from the 9AM session watcher.
+          </p>
+          <Link className="secondary-link" href="/strategies/hourly-sweep-ifvg-bos">
+            View 1H sweep route
           </Link>
         </article>
       </section>

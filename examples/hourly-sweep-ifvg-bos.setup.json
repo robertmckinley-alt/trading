@@ -1,0 +1,26 @@
+{
+  "symbol": "NQ",
+  "date": "2026-08-24",
+  "session": "Hourly Sweep",
+  "side": "short",
+  "entry": 23215.25,
+  "stop": 23224.75,
+  "targets": [23202.75, 23195.25, 23184.75],
+  "thesis": "Mark the 1-hour highs and lows, scale into 5 minutes, wait for the sweep, mark the fair value gap, wait for the inverse gap and 1-minute BOS confirmation back in the original direction, then enter toward the next draw on liquidity.",
+  "setup": {
+    "liquiditySweep": true,
+    "reaction": "bearish",
+    "marketStructureShift": true,
+    "cisd": false,
+    "displacement": true,
+    "entryModel": "hourly-sweep-ifvg-bos",
+    "gapType": "ifvg",
+    "entryTimeframe": "M1",
+    "referenceSessions": ["hourly-high-low", "five-minute-fvg"],
+    "stopPlacement": "swing-high",
+    "higherTimeframeBias": "intraday-bearish-reversal",
+    "liquidityPool": "one-hour-high",
+    "liquidityLabel": "1H high sweep",
+    "drawOnLiquidity": ["intraday-sell-side", "range-low", "prior-lows"]
+  }
+}
