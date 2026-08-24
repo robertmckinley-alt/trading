@@ -1,0 +1,18 @@
+{
+  "symbol": "NQ",
+  "startingBalanceUsd": 50000,
+  "maxAccountDrawdownPercent": 10,
+  "maxRiskPerTradeUsd": 250,
+  "maxDailyLossUsd": 750,
+  "tickSize": 0.25,
+  "tickValueUsd": 5,
+  "commissionPerContractUsd": 4.5,
+  "slippageTicks": 1,
+  "minimumRMultiple": 0,
+  "sameCandleConflict": "stop-first",
+  "defaultScaleOuts": [
+    { "targetIndex": 0, "closeFraction": 0.5 },
+    { "targetIndex": 1, "closeFraction": 0.3 },
+    { "targetIndex": 2, "closeFraction": 0.2 }
+  ]
+}
