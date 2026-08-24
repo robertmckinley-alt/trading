@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "trader:plan": "node paper-trader.cjs live-plan",
+    "trader:watch": "node paper-trader.cjs watch-live",
+    "trader:watch:mock": "node paper-trader.cjs watch-live --provider=mock"
   },
   "dependencies": {
     "next": "16.1.6",

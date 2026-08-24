@@ -10,6 +10,25 @@
   "slippageTicks": 1,
   "minimumRMultiple": 0,
   "sameCandleConflict": "stop-first",
+  "liveActivationTime": "09:00 America/New_York",
+  "live": {
+    "provider": "mock",
+    "ticker": "NQU6",
+    "mockCsvPath": "./examples/live-signal-nq-1m.csv",
+    "apiKeyEnv": "LIVE_DATA_API_KEY",
+    "baseUrl": "https://api.polygon.io",
+    "lookbackBars": 1200,
+    "pollIntervalMs": 1000,
+    "riskRewardFallback": 1.5,
+    "entryBufferTicks": 0,
+    "stopBufferTicks": 1,
+    "maxSignalAgeBars": 15,
+    "maxTradesPerDay": 1,
+    "sessionWindows": {
+      "asia": { "start": "20:00", "end": "01:59" },
+      "london": { "start": "02:00", "end": "07:59" }
+    }
+  },
   "defaultScaleOuts": [
     { "targetIndex": 0, "closeFraction": 0.5 },
     { "targetIndex": 1, "closeFraction": 0.3 },

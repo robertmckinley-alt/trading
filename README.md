@@ -7,7 +7,14 @@ This folder now contains both:
 
 Both are built around the literal flow spoken in the DoctorTrades clip: at `9:00 AM` New York time, mark the `Asia` and `London` highs/lows, wait for one of those pools to get swept, drop to the `1m` chart, take the `FVG` reversal back to the other side, set the stop at the swing extreme, and target the next draw on liquidity.
 
-This is not a live broker integration. It is a paper-trading sandbox for planning, replaying, and journaling the setup.
+This is still not a live broker integration. It is a paper-trading sandbox for planning, replaying, detecting, and journaling the setup.
+
+The live mode now adds:
+
+- automatic `Asia` and `London` range detection from incoming `1m` candles
+- automatic post-`9AM` sweep detection
+- automatic `1m` `FVG` reversal signal generation
+- always-on polling mode that keeps one live paper trade open at a time and journals the close
 
 The account model is seeded at `50,000 USD` with a fixed `10%` max drawdown, so the account floor is `45,000 USD`. New plans automatically size off the smaller of your per-trade risk cap and the drawdown room left above that floor.
 
@@ -72,6 +79,7 @@ Important persistence note:
 
 - the deployed Vercel app keeps journal history in the browser, so trades persist per browser/profile
 - the CLI still writes durable local trades into `state.json`
+- the always-on live watcher should run on your VPS, not inside Vercel
 
 ## Setup Format
 
@@ -144,6 +152,69 @@ Print the running journal summary:
 node lucid-nq-paper-trader/paper-trader.cjs report
 ```
 
+Generate a live plan from the configured live feed:
+
+```bash
+cd lucid-nq-paper-trader
+node paper-trader.cjs live-plan
+```
+
+Run the always-on live watcher:
+
+```bash
+cd lucid-nq-paper-trader
+node paper-trader.cjs watch-live
+```
+
+Run the live watcher against the bundled mock full-session fixture:
+
+```bash
+cd lucid-nq-paper-trader
+node paper-trader.cjs watch-live --provider=mock
+```
+
+Equivalent npm shortcuts:
+
+```bash
+cd lucid-nq-paper-trader
+npm run trader:plan
+npm run trader:watch
+npm run trader:watch:mock
+```
+
+## Live Feed Config
+
+The live watcher reads its feed settings from `config.json` plus environment variables.
+
+Key live fields:
+
+- `live.provider`: `mock` or `polygon-futures`
+- `live.ticker`: futures contract to poll, for example `NQU6`
+- `live.mockCsvPath`: fixture path used in mock mode
+- `live.apiKeyEnv`: env var name that stores the real market-data key
+- `live.baseUrl`: market-data API base URL
+- `live.lookbackBars`: recent `1m` candles pulled per scan
+- `live.pollIntervalMs`: scan interval
+- `live.sessionWindows`: `Asia` and `London` time windows used for range detection
+
+For a real feed:
+
+```bash
+export LIVE_DATA_API_KEY=your_rotated_clean_key
+cd lucid-nq-paper-trader
+npm run trader:watch
+```
+
+Each live tick:
+
+1. pulls the latest `1m` candles
+2. computes the `Asia` and `London` highs/lows
+3. waits until `9:00 AM America/New_York`
+4. detects a sweep of one of those pools
+5. confirms a `1m` `FVG` reversal
+6. builds the paper-trade plan from the `50k` / `10%` drawdown model
+7. keeps tracking the trade until stop or targets finish it, then journals the result into `state.json`
+
 ## Git Launch
 
 Initialize this folder as its own repo:
@@ -195,6 +266,6 @@ Price columns must be numeric. Timestamps are used only for reporting.
 
 The fastest next step would be one of these:
 
-1. add TradingView export compatibility if your CSV format differs
-2. add live market replay from a specific data source
-3. auto-detect Asia/London session highs and lows directly from intraday data
+1. expose the VPS watcher state to the Vercel UI through a small external store or webhook
+2. add TradingView export compatibility if your CSV format differs
+3. add alert delivery when a live setup triggers
