@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import Link from 'next/link';
 import TraderDashboard from '../components/trader-dashboard';
 import { normalizeConfig } from '../lib/trader-core.cjs';
 
@@ -27,6 +28,11 @@ export default function HomePage() {
             <span>Max drawdown {config.maxAccountDrawdownPercent}%</span>
             <span>Per-trade cap {config.maxRiskPerTradeUsd} USD</span>
           </div>
+          <div className="hero-actions">
+            <Link className="primary-link" href="/strategies/live-9am-sweep">
+              Open live strategy build
+            </Link>
+          </div>
         </div>
         <div className="hero-card">
           <p className="eyebrow">Deploy shape</p>
@@ -37,6 +43,26 @@ export default function HomePage() {
             <li>Same validated config and sample data from the CLI build</li>
           </ul>
         </div>
+      </section>
+
+      <section className="strategy-strip">
+        <article className="strategy-card">
+          <p className="eyebrow">Manual lab</p>
+          <h2>Replay and journal the clip setup.</h2>
+          <p className="strategy-copy">
+            Use the JSON and CSV editors below to validate entries, replay candles, and keep a browser-local paper journal.
+          </p>
+        </article>
+        <article className="strategy-card strategy-card-accent">
+          <p className="eyebrow">Always-on route</p>
+          <h2>Spin out the live watcher as its own page.</h2>
+          <p className="strategy-copy">
+            The live strategy page mirrors the same 9AM Asia or London sweep logic, but frames it around the VPS watcher and auto-detected signals.
+          </p>
+          <Link className="secondary-link" href="/strategies/live-9am-sweep">
+            View live strategy page
+          </Link>
+        </article>
       </section>
 
       <TraderDashboard
