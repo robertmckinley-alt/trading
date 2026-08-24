@@ -1,6 +1,8 @@
 .next/
 node_modules/
 .vercel/
+.env.local
+runtime/
 *.log
 lib/__pycache__/
 

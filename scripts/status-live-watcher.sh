@@ -2,8 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PID_FILE="${PID_FILE:-/tmp/lucid-nq-paper-trader-watch.pid}"
-LOG_FILE="${LOG_FILE:-/tmp/lucid-nq-paper-trader-watch.log}"
+RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
+PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
+LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.log}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
 find_existing_watcher_pid() {
   if [[ -f "$PID_FILE" ]]; then
@@ -18,6 +20,13 @@ find_existing_watcher_pid() {
 }
 
 cd "$ROOT_DIR"
+mkdir -p "$RUNTIME_DIR"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
 
 echo "Repo: $ROOT_DIR"
 echo "DATABENTO_API_KEY=$([[ -n "${DATABENTO_API_KEY:-}" ]] && echo set || echo missing)"

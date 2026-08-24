@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--schema", default="ohlcv-1m")
     parser.add_argument("--stype-in", default="continuous")
     parser.add_argument("--start", required=True)
+    parser.add_argument("--end")
     parser.add_argument("--limit", type=int, default=1200)
     args = parser.parse_args()
 
@@ -41,6 +42,7 @@ def main():
         schema=args.schema,
         stype_in=args.stype_in,
         start=args.start,
+        end=args.end,
         limit=args.limit,
     )
     frame = store.to_df()
@@ -62,7 +64,7 @@ def main():
             }
         )
 
-    print(json.dumps({"candles": rows[-args.limit :], "rows": len(rows)}))
+    print(json.dumps({"candles": rows, "rows": len(rows)}))
 
 
 if __name__ == "__main__":

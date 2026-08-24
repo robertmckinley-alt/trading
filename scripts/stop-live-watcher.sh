@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PID_FILE="${PID_FILE:-/tmp/lucid-nq-paper-trader-watch.pid}"
-RESET_LIVE_STATE="${RESET_LIVE_STATE:-1}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
+PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
+RESET_LIVE_STATE="${RESET_LIVE_STATE:-1}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
+
+mkdir -p "$RUNTIME_DIR"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
 
 find_existing_watcher_pid() {
   if [[ -f "$PID_FILE" ]]; then
