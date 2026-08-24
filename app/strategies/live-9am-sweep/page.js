@@ -66,6 +66,7 @@ export default function LiveNineAmSweepPage() {
         initialConfig={config}
         initialSetupText={sampleSetup}
         initialCsvText={liveFixture}
+        storageKey="lucid-nq-paper-trader-live-9am-sweep-journal-v1"
       />
     </main>
   );

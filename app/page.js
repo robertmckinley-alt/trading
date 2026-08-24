@@ -82,6 +82,7 @@ export default function HomePage() {
         initialConfig={config}
         initialSetupText={sampleSetup}
         initialCsvText={sampleCsv}
+        storageKey="lucid-nq-paper-trader-home-journal-v1"
       />
     </main>
   );

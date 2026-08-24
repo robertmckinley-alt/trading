@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-const STORAGE_KEY = 'lucid-nq-paper-trader-journal-v1';
+const DEFAULT_STORAGE_KEY = 'lucid-nq-paper-trader-journal-v1';
 
 const defaultSetup = {
   symbol: 'NQ',
@@ -88,7 +88,12 @@ function StatCard({ label, value, hint }) {
   );
 }
 
-export default function TraderDashboard({ initialConfig, initialSetupText, initialCsvText }) {
+export default function TraderDashboard({
+  initialConfig,
+  initialSetupText,
+  initialCsvText,
+  storageKey = DEFAULT_STORAGE_KEY
+}) {
   const [setupText, setSetupText] = useState(initialSetupText);
   const [csvText, setCsvText] = useState(initialCsvText);
   const [journalState, setJournalState] = useState(() => buildEmptyState(initialConfig));
@@ -98,18 +103,18 @@ export default function TraderDashboard({ initialConfig, initialSetupText, initi
   const [busy, setBusy] = useState('');
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const stored = window.localStorage.getItem(storageKey);
     if (!stored) return;
     try {
       setJournalState(hydrateState(JSON.parse(stored), initialConfig));
     } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(storageKey);
     }
-  }, [initialConfig]);
+  }, [initialConfig, storageKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(journalState));
-  }, [journalState]);
+    window.localStorage.setItem(storageKey, JSON.stringify(journalState));
+  }, [journalState, storageKey]);
 
   const report = useMemo(() => computeReport(journalState, initialConfig), [journalState, initialConfig]);
 
@@ -172,7 +177,7 @@ export default function TraderDashboard({ initialConfig, initialSetupText, initi
   function resetJournal() {
     const empty = buildEmptyState(initialConfig);
     setJournalState(empty);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(empty));
+    window.localStorage.setItem(storageKey, JSON.stringify(empty));
   }
 
   return (

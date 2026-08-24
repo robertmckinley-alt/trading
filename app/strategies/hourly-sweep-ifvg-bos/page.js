@@ -24,7 +24,7 @@ export default function HourlySweepIfvgBosPage() {
             5 minutes for the sweep and fair value gap, then waits for 1-minute structure to break back in the original direction before entry.
           </p>
           <div className="hero-badges">
-            <span>Same {config.startingBalanceUsd.toLocaleString()} USD model</span>
+            <span>Fresh {config.startingBalanceUsd.toLocaleString()} USD bankroll</span>
             <span>{config.maxAccountDrawdownPercent}% max drawdown</span>
             <span>Built from the new clip</span>
           </div>
@@ -62,7 +62,7 @@ export default function HourlySweepIfvgBosPage() {
           <p className="eyebrow">Current scope</p>
           <h2>Public route now, automation logic next if needed.</h2>
           <p className="strategy-copy">
-            The route ships with its own sample setup JSON and shares the same planner, replayer, and browser journal. If you want, the next pass can encode the full 5m and 1m trigger logic into the watcher engine too.
+            This route ships with its own sample setup JSON and now keeps its own browser-local paper account, so its bankroll and journal stay separate from the homepage and 9AM route.
           </p>
         </article>
       </section>
@@ -71,6 +71,7 @@ export default function HourlySweepIfvgBosPage() {
         initialConfig={config}
         initialSetupText={sampleSetup}
         initialCsvText={sampleCsv}
+        storageKey="lucid-nq-paper-trader-hourly-sweep-ifvg-bos-journal-v1"
       />
     </main>
   );
