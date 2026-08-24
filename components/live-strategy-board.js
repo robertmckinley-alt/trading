@@ -13,18 +13,18 @@ function formatStamp(value) {
 }
 
 function outcomeTone(strategy) {
-  if (strategy.mode === 'manual-route') return 'neutral';
+  if (strategy.mode === 'paper-route') return 'neutral';
   if (strategy.watcher?.isRunning && !strategy.live?.latestError) return 'good';
   if (strategy.live?.latestError) return 'warn';
   return 'neutral';
 }
 
 function StrategyOutcome({ strategy }) {
-  if (strategy.mode === 'manual-route') {
+  if (strategy.mode === 'paper-route') {
     return (
       <div className="strategy-outcome">
         <p className="outcome-label">Current outcome</p>
-        <strong>{strategy.setupSummary?.outcome || 'Manual route'}</strong>
+        <strong>{strategy.setupSummary?.outcome || 'Paper route'}</strong>
         <span>
           {strategy.setupSummary?.entryModel || 'manual'} / {strategy.setupSummary?.gapType || 'n/a'}
         </span>
@@ -54,6 +54,7 @@ function StrategyCard({ strategy }) {
         <div>
           <p className="eyebrow">Strategy</p>
           <h3>{strategy.name}</h3>
+          <p className="live-inline-meta">{strategy.paperAccountLabel}</p>
         </div>
         <a className="ghost-link" href={strategy.route}>
           Open route
@@ -69,7 +70,7 @@ function StrategyCard({ strategy }) {
       <div className="live-mini-grid">
         <div>
           <span>Mode</span>
-          <strong>{strategy.mode === 'live-watcher' ? 'Live watcher' : 'Manual route'}</strong>
+          <strong>{strategy.mode === 'live-watcher' ? 'Live watcher' : 'Separate paper route'}</strong>
         </div>
         <div>
           <span>Provider</span>
@@ -101,7 +102,10 @@ function StrategyCard({ strategy }) {
       {strategy.mode === 'live-watcher' && !strategy.live?.latestError && strategy.live?.activationTime ? (
         <p className="live-inline-meta">Activation gate: {strategy.live.activationTime}</p>
       ) : null}
-      {strategy.mode === 'manual-route' && strategy.setupSummary?.targets?.length ? (
+      {strategy.journalScope ? (
+        <p className="live-inline-meta">{strategy.journalScope}</p>
+      ) : null}
+      {strategy.mode === 'paper-route' && strategy.setupSummary?.targets?.length ? (
         <p className="live-inline-meta">
           Sample targets: {strategy.setupSummary.targets.join(', ')}
         </p>

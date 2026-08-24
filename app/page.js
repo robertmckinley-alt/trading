@@ -54,9 +54,9 @@ export default async function HomePage() {
       <section className="strategy-strip">
         <article className="strategy-card">
           <p className="eyebrow">Manual lab</p>
-          <h2>Replay and journal the clip setup.</h2>
+          <h2>Replay and journal the 9AM strategy account.</h2>
           <p className="strategy-copy">
-            Use the JSON and CSV editors below to validate entries, replay candles, and keep a browser-local paper journal.
+            Use the JSON and CSV editors below to validate entries, replay candles, and keep the same browser-local paper account used by the 9AM strategy route.
           </p>
         </article>
         <article className="strategy-card strategy-card-accent">
@@ -87,7 +87,7 @@ export default async function HomePage() {
         initialConfig={config}
         initialSetupText={sampleSetup}
         initialCsvText={sampleCsv}
-        storageKey="lucid-nq-paper-trader-home-journal-v1"
+        storageKey="lucid-nq-paper-trader-live-9am-sweep-journal-v1"
       />
     </main>
   );
