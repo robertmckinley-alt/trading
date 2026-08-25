@@ -6,6 +6,9 @@ import TraderDashboard from '../components/trader-dashboard';
 import { getStrategySnapshots } from '../lib/live-status.cjs';
 import { normalizeConfig } from '../lib/trader-core.cjs';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function readFile(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 }
