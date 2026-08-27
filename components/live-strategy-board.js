@@ -6,45 +6,121 @@ function formatUsd(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 }
 
+function formatPercent(value) {
+  return `${Number(value || 0).toFixed(2)}%`;
+}
+
 function formatStamp(value) {
   if (!value) return 'n/a';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function buildPortfolioTotals(strategies) {
+  return strategies.reduce(
+    (totals, strategy) => {
+      const journal = strategy.journal || {};
+      totals.bankrollUsd += Number(strategy.bankrollUsd || 0);
+      totals.balanceUsd += Number(journal.balanceUsd ?? strategy.bankrollUsd ?? 0);
+      totals.realizedPnlUsd += Number(journal.realizedPnlUsd || 0);
+      totals.trades += Number(journal.trades || 0);
+      totals.wins += Number(journal.wins || 0);
+      totals.losses += Number(journal.losses || 0);
+      if (strategy.mode === 'live-watcher') {
+        totals.automatedStrategies += 1;
+        if (strategy.watcher?.isRunning) totals.runningWatchers += 1;
+      }
+      if (strategy.mode === 'paper-route') totals.manualRoutes += 1;
+      return totals;
+    },
+    {
+      bankrollUsd: 0,
+      balanceUsd: 0,
+      realizedPnlUsd: 0,
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      automatedStrategies: 0,
+      runningWatchers: 0,
+      manualRoutes: 0
+    }
+  );
+}
+
 function outcomeTone(strategy) {
   if (strategy.mode === 'paper-route') return 'neutral';
   if (strategy.watcher?.isRunning && !strategy.live?.latestError) return 'good';
   if (strategy.live?.latestError) return 'warn';
+  if (strategy.watcher?.hasLiveEvidence || strategy.watcher?.staleStatusHint) return 'warn';
   return 'neutral';
 }
 
-function StrategyOutcome({ strategy }) {
+function PortfolioTotals({ strategies }) {
+  const totals = buildPortfolioTotals(strategies);
+  const winRate = totals.trades > 0 ? (totals.wins / totals.trades) * 100 : 0;
+  const returnPercent = totals.bankrollUsd > 0 ? (totals.realizedPnlUsd / totals.bankrollUsd) * 100 : 0;
+
+  return (
+    <div className="portfolio-totals" aria-label="Running strategy totals">
+      <div className="portfolio-total-card portfolio-total-card-primary">
+        <span>Combined balance</span>
+        <strong>{formatUsd(totals.balanceUsd)}</strong>
+        <p>{formatUsd(totals.realizedPnlUsd)} realized across {formatUsd(totals.bankrollUsd)} allocated</p>
+      </div>
+      <div className="portfolio-total-card">
+        <span>Total trades</span>
+        <strong>{totals.trades}</strong>
+        <p>{totals.wins} wins / {totals.losses} losses</p>
+      </div>
+      <div className="portfolio-total-card">
+        <span>Win rate</span>
+        <strong>{formatPercent(winRate)}</strong>
+        <p>{formatPercent(returnPercent)} realized return</p>
+      </div>
+      <div className="portfolio-total-card">
+        <span>Automated strategies</span>
+        <strong>{totals.automatedStrategies}/{strategies.length}</strong>
+        <p>{totals.runningWatchers} running live watcher, {totals.manualRoutes} manual only</p>
+      </div>
+    </div>
+  );
+}
+
+function StrategyOutcome({ strategy, isBridgeFallback }) {
   if (strategy.mode === 'paper-route') {
     return (
       <div className="strategy-outcome">
         <p className="outcome-label">Current outcome</p>
-        <strong>{strategy.setupSummary?.outcome || 'Paper route'}</strong>
+        <strong>Not live automated yet</strong>
         <span>
-          {strategy.setupSummary?.entryModel || 'manual'} / {strategy.setupSummary?.gapType || 'n/a'}
+          {strategy.setupSummary?.outcome || 'Separate manual paper route; no VPS watcher attached.'}
         </span>
       </div>
     );
   }
 
   const candle = strategy.live?.lastCandle;
+  const primaryOutcome = strategy.live?.latestReason
+    || (candle ? 'Watching live candle stream' : null)
+    || (isBridgeFallback ? 'Waiting on fresh bridge snapshot' : null)
+    || strategy.watcher?.statusLabel
+    || 'Unknown';
+  const secondaryOutcome = candle
+    ? `Last close ${candle.close} at ${formatStamp(candle.timestamp)}`
+    : isBridgeFallback
+      ? 'Remote bridge timed out; showing local fallback only'
+      : 'No live candle yet';
+
   return (
     <div className="strategy-outcome">
       <p className="outcome-label">Current outcome</p>
-      <strong>{strategy.live?.latestReason || strategy.watcher?.statusLabel || 'Unknown'}</strong>
-      <span>
-        {candle ? `Last close ${candle.close} at ${formatStamp(candle.timestamp)}` : 'No live candle yet'}
-      </span>
+      <strong>{primaryOutcome}</strong>
+      <span>{secondaryOutcome}</span>
     </div>
   );
 }
 
-function StrategyCard({ strategy }) {
+function StrategyCard({ strategy, isBridgeFallback }) {
   const tone = outcomeTone(strategy);
   const journal = strategy.journal || {};
 
@@ -70,7 +146,7 @@ function StrategyCard({ strategy }) {
       <div className="live-mini-grid">
         <div>
           <span>Mode</span>
-          <strong>{strategy.mode === 'live-watcher' ? 'Live watcher' : 'Separate paper route'}</strong>
+          <strong>{strategy.mode === 'live-watcher' ? 'Live watcher' : 'Manual only'}</strong>
         </div>
         <div>
           <span>Provider</span>
@@ -92,12 +168,21 @@ function StrategyCard({ strategy }) {
           <strong>{strategy.watcher?.statusLabel || 'Unknown'}</strong>
           <span>PID {strategy.watcher?.pid || 'n/a'}</span>
         </div>
-      ) : null}
+      ) : (
+        <div className="live-status-strip">
+          <span className="live-dot live-dot-warn" />
+          <strong>No live watcher</strong>
+          <span>Manual journal only</span>
+        </div>
+      )}
 
-      <StrategyOutcome strategy={strategy} />
+      <StrategyOutcome strategy={strategy} isBridgeFallback={isBridgeFallback} />
 
       {strategy.mode === 'live-watcher' && strategy.live?.latestError ? (
         <p className="live-inline-error">Latest runtime noise: {strategy.live.latestError.message}</p>
+      ) : null}
+      {strategy.mode === 'live-watcher' && strategy.watcher?.staleStatusHint ? (
+        <p className="live-inline-warning">{strategy.watcher.staleStatusHint}</p>
       ) : null}
       {strategy.mode === 'live-watcher' && !strategy.live?.latestError && strategy.live?.activationTime ? (
         <p className="live-inline-meta">Activation gate: {strategy.live.activationTime}</p>
@@ -107,7 +192,8 @@ function StrategyCard({ strategy }) {
       ) : null}
       {strategy.mode === 'paper-route' && strategy.setupSummary?.targets?.length ? (
         <p className="live-inline-meta">
-          Sample targets: {strategy.setupSummary.targets.join(', ')}
+          Sample model: {strategy.setupSummary?.entryModel || 'manual'} / {strategy.setupSummary?.gapType || 'n/a'}.
+          Targets: {strategy.setupSummary.targets.join(', ')}
         </p>
       ) : null}
     </article>
@@ -141,25 +227,32 @@ export default function LiveStrategyBoard({ initialData }) {
   }, []);
 
   const strategies = Array.isArray(data?.strategies) ? data.strategies : [];
+  const isBridgeFallback = data?.source === 'remote-bridge-fallback';
 
   return (
     <section className="live-board">
       <div className="live-board-head">
         <div>
           <p className="eyebrow">Main page visual</p>
-          <h2>Both strategies plus current outcomes</h2>
+          <h2>Dashboard totals and current outcomes</h2>
         </div>
         <div className="live-board-meta">
-          <span>Source: {data?.source || 'unknown'}</span>
+          <span>Source: {isBridgeFallback ? 'fallback snapshot' : data?.source || 'unknown'}</span>
           <span>Updated: {formatStamp(data?.generatedAt)}</span>
         </div>
       </div>
 
-      {data?.error ? <p className="live-inline-error">Bridge warning: {data.error}</p> : null}
+      {data?.error ? (
+        <p className="live-inline-warning">
+          Bridge warning: remote status timed out, so this board is showing the local fallback snapshot. {data.error}
+        </p>
+      ) : null}
+
+      <PortfolioTotals strategies={strategies} />
 
       <div className="live-board-grid">
         {strategies.map((strategy) => (
-          <StrategyCard key={strategy.slug} strategy={strategy} />
+          <StrategyCard key={strategy.slug} strategy={strategy} isBridgeFallback={isBridgeFallback} />
         ))}
       </div>
     </section>

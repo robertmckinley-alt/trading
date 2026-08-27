@@ -406,6 +406,44 @@ pre {
   gap: 20px;
 }
 
+.portfolio-totals {
+  display: grid;
+  grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-total-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 252, 247, 0.88);
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.portfolio-total-card-primary {
+  background:
+    linear-gradient(135deg, rgba(12, 111, 104, 0.12), transparent 62%),
+    rgba(255, 252, 247, 0.94);
+}
+
+.portfolio-total-card span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.portfolio-total-card strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.portfolio-total-card p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .live-card {
   border: 1px solid var(--line);
   border-radius: 28px;
@@ -526,6 +564,15 @@ pre {
   color: var(--accent-deep);
 }
 
+.live-inline-warning {
+  margin: 0;
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(207, 149, 43, 0.16);
+  color: #7a4b07;
+  line-height: 1.55;
+}
+
 .live-inline-meta {
   margin: 0;
 }
@@ -535,6 +582,7 @@ pre {
   .dashboard-grid,
   .stat-grid,
   .strategy-strip,
+  .portfolio-totals,
   .live-board-grid {
     grid-template-columns: 1fr;
   }
