@@ -284,12 +284,45 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
         <div className="recap-trade-list">
           {selectedRecap.tradesList.length ? selectedRecap.tradesList.map((trade) => (
             <article className="recap-trade-row" key={trade.id}>
-              <div>
-                <strong>{trade.account}</strong>
-                <span>{trade.symbol} {String(trade.side || '').toUpperCase()} / {trade.exitReason}</span>
+              <div className="recap-trade-main">
+                <div>
+                  <span>{trade.account}</span>
+                  <strong>{trade.symbol} {String(trade.side || '').toUpperCase()}</strong>
+                </div>
+                <p>{trade.thesis || `${trade.strategyName} trade`}</p>
               </div>
-              <p>{trade.filledAt ? formatStamp(trade.filledAt) : 'n/a'}</p>
-              <strong>{formatUsd(trade.realizedPnlUsd)}</strong>
+
+              <div className="recap-trade-facts">
+                <div>
+                  <span>Entry</span>
+                  <strong>{trade.entry ?? 'n/a'}</strong>
+                </div>
+                <div>
+                  <span>Stop</span>
+                  <strong>{trade.stop ?? 'n/a'}</strong>
+                </div>
+                <div>
+                  <span>Exit</span>
+                  <strong>{trade.finalExitPrice ?? 'n/a'}</strong>
+                </div>
+                <div>
+                  <span>Result</span>
+                  <strong>{formatUsd(trade.realizedPnlUsd)} / {Number(trade.rMultiple || 0).toFixed(2)}R</strong>
+                </div>
+              </div>
+
+              <div className="recap-trade-tags">
+                <span>{trade.exitReason || 'closed'}</span>
+                {trade.entryModel ? <span>{trade.entryModel}</span> : null}
+                {trade.gapType ? <span>{trade.gapType}</span> : null}
+                {trade.liquidityLabel ? <span>{trade.liquidityLabel}</span> : null}
+              </div>
+
+              <div className="recap-trade-foot">
+                <span>Filled {trade.filledAt ? formatStamp(trade.filledAt) : 'n/a'}</span>
+                <span>Targets hit: {trade.targetsHit?.length ? trade.targetsHit.join(', ') : 'none'}</span>
+                <span>Draw: {trade.drawOnLiquidity?.length ? trade.drawOnLiquidity.join(', ') : 'n/a'}</span>
+              </div>
             </article>
           )) : (
             <p className="empty-copy">No journaled trades for {activeDate}.</p>

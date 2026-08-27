@@ -597,23 +597,66 @@ pre {
   border: 1px solid rgba(24, 37, 45, 0.1);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.62);
-  padding: 12px 14px;
+  padding: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
-  align-items: center;
 }
 
-.recap-trade-row div {
+.recap-trade-main,
+.recap-trade-main div {
   display: grid;
   gap: 4px;
 }
 
-.recap-trade-row span,
-.recap-trade-row p {
+.recap-trade-main {
+  grid-template-columns: minmax(130px, 0.25fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.recap-trade-main p,
+.recap-trade-row span {
   color: var(--muted);
   margin: 0;
   font-size: 0.9rem;
+}
+
+.recap-trade-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recap-trade-facts > div {
+  border: 1px solid rgba(24, 37, 45, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.76);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.recap-trade-facts strong {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.recap-trade-tags,
+.recap-trade-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recap-trade-tags span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.82);
+  color: var(--ink);
+  padding: 7px 10px;
+}
+
+.recap-trade-foot span {
+  color: var(--muted);
 }
 
 .live-card {
@@ -786,14 +829,14 @@ pre {
   .live-card-head,
   .live-mini-grid,
   .daily-recap-head,
-  .recap-trade-row {
+  .recap-trade-main,
+  .recap-trade-facts {
     grid-template-columns: 1fr;
   }
 
   .live-board-head,
   .live-card-head,
-  .daily-recap-head,
-  .recap-trade-row {
+  .daily-recap-head {
     display: grid;
   }
 
