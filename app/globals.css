@@ -444,6 +444,92 @@ pre {
   font-size: 0.9rem;
 }
 
+.daily-tracker {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.86);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.daily-tracker-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.daily-tracker-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.daily-tracker-head span,
+.daily-tracker-metric span,
+.daily-strategy-row span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.daily-tracker-head strong {
+  font-size: 1.15rem;
+}
+
+.daily-tracker-head p,
+.daily-tracker-metric p,
+.daily-strategy-row p {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.daily-tracker-grid {
+  display: grid;
+  grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.daily-tracker-metric {
+  border: 1px solid rgba(24, 37, 45, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.daily-tracker-primary {
+  background:
+    linear-gradient(135deg, rgba(207, 149, 43, 0.18), transparent 64%),
+    rgba(255, 255, 255, 0.72);
+}
+
+.daily-tracker-metric strong {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.daily-strategy-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.daily-strategy-row {
+  border-top: 1px solid rgba(24, 37, 45, 0.1);
+  padding-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.daily-strategy-row p {
+  grid-column: 1 / -1;
+}
+
 .live-card {
   border: 1px solid var(--line);
   border-radius: 28px;
@@ -583,6 +669,8 @@ pre {
   .stat-grid,
   .strategy-strip,
   .portfolio-totals,
+  .daily-tracker-grid,
+  .daily-strategy-list,
   .live-board-grid {
     grid-template-columns: 1fr;
   }

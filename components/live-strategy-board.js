@@ -47,12 +47,94 @@ function buildPortfolioTotals(strategies) {
   );
 }
 
+function buildDailyTotals(strategies) {
+  return strategies.reduce(
+    (totals, strategy) => {
+      const daily = strategy.journal?.daily || {};
+      totals.realizedPnlUsd += Number(daily.realizedPnlUsd || 0);
+      totals.activeRealizedPnlUsd += Number(daily.activeRealizedPnlUsd || 0);
+      totals.activeUnrealizedPnlUsd += Number(daily.activeUnrealizedPnlUsd || 0);
+      totals.activePnlUsd += Number(daily.activePnlUsd || 0);
+      totals.trades += Number(daily.trades || 0);
+      totals.wins += Number(daily.wins || 0);
+      totals.losses += Number(daily.losses || 0);
+      if (!totals.date && daily.date) totals.date = daily.date;
+      if (daily.openTradeStatus) totals.openTrades += 1;
+      return totals;
+    },
+    {
+      date: null,
+      realizedPnlUsd: 0,
+      activeRealizedPnlUsd: 0,
+      activeUnrealizedPnlUsd: 0,
+      activePnlUsd: 0,
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      openTrades: 0
+    }
+  );
+}
+
 function outcomeTone(strategy) {
   if (strategy.mode === 'paper-route') return 'neutral';
   if (strategy.watcher?.isRunning && !strategy.live?.latestError) return 'good';
   if (strategy.live?.latestError) return 'warn';
   if (strategy.watcher?.hasLiveEvidence || strategy.watcher?.staleStatusHint) return 'warn';
   return 'neutral';
+}
+
+function DailyTracker({ strategies }) {
+  const daily = buildDailyTotals(strategies);
+  const hasDailyActivity = daily.trades > 0 || daily.openTrades > 0 || daily.activePnlUsd !== 0;
+
+  return (
+    <div className="daily-tracker" aria-label="Daily active PnL tracker">
+      <div className="daily-tracker-head">
+        <div>
+          <span>Daily tracker</span>
+          <strong>{daily.date || 'Current session'}</strong>
+        </div>
+        <p>{hasDailyActivity ? `${daily.openTrades} open / ${daily.trades} closed today` : 'No trades recorded for the current trading date yet'}</p>
+      </div>
+
+      <div className="daily-tracker-grid">
+        <div className="daily-tracker-metric daily-tracker-primary">
+          <span>Active PnL</span>
+          <strong>{formatUsd(daily.activePnlUsd)}</strong>
+          <p>Realized plus open-position mark</p>
+        </div>
+        <div className="daily-tracker-metric">
+          <span>Today realized</span>
+          <strong>{formatUsd(daily.realizedPnlUsd)}</strong>
+          <p>{daily.wins} wins / {daily.losses} losses</p>
+        </div>
+        <div className="daily-tracker-metric">
+          <span>Open unrealized</span>
+          <strong>{formatUsd(daily.activeUnrealizedPnlUsd)}</strong>
+          <p>{daily.openTrades} active position{daily.openTrades === 1 ? '' : 's'}</p>
+        </div>
+        <div className="daily-tracker-metric">
+          <span>Today trades</span>
+          <strong>{daily.trades}</strong>
+          <p>Closed journal entries</p>
+        </div>
+      </div>
+
+      <div className="daily-strategy-list">
+        {strategies.map((strategy) => {
+          const item = strategy.journal?.daily || {};
+          return (
+            <div className="daily-strategy-row" key={strategy.slug}>
+              <span>{strategy.paperAccountLabel}</span>
+              <strong>{formatUsd(item.activePnlUsd || 0)}</strong>
+              <p>{item.trades || 0} trades / {item.openTradeStatus || 'no open trade'}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function PortfolioTotals({ strategies }) {
@@ -249,6 +331,7 @@ export default function LiveStrategyBoard({ initialData }) {
       ) : null}
 
       <PortfolioTotals strategies={strategies} />
+      <DailyTracker strategies={strategies} />
 
       <div className="live-board-grid">
         {strategies.map((strategy) => (
