@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
 PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
+HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
 RESET_LIVE_STATE="${RESET_LIVE_STATE:-1}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
@@ -16,42 +17,59 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 find_existing_watcher_pid() {
-  if [[ -f "$PID_FILE" ]]; then
+  local pid_file="$1"
+  local pattern="$2"
+  if [[ -f "$pid_file" ]]; then
     local pid
-    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       echo "$pid"
       return 0
     fi
   fi
-  pgrep -f "node paper-trader.cjs watch-live" | head -n 1 || true
+  pgrep -f "$pattern" | head -n 1 || true
 }
 
-watcher_pid="$(find_existing_watcher_pid)"
-if [[ -n "$watcher_pid" ]] && kill -0 "$watcher_pid" 2>/dev/null; then
-  kill "$watcher_pid"
-  echo "Stopped watcher PID $watcher_pid"
-else
-  echo "No running watcher found"
-fi
+stop_watcher() {
+  local label="$1"
+  local strategy="$2"
+  local pid_file="$3"
+  local watcher_pid
+  local pattern="node paper-trader.cjs watch-live.*--strategy=$strategy"
+  if [[ "$strategy" == "live-9am-sweep" ]]; then
+    pattern="node paper-trader.cjs watch-live"
+  fi
+  watcher_pid="$(find_existing_watcher_pid "$pid_file" "$pattern")"
+  if [[ -n "$watcher_pid" ]] && kill -0 "$watcher_pid" 2>/dev/null; then
+    kill "$watcher_pid"
+    echo "Stopped $label watcher PID $watcher_pid"
+  else
+    echo "No running $label watcher found"
+  fi
+  rm -f "$pid_file"
+}
 
-rm -f "$PID_FILE"
+stop_watcher "9AM" "live-9am-sweep" "$PID_FILE"
+stop_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE"
 
 if [[ "$RESET_LIVE_STATE" == "1" ]]; then
   cd "$ROOT_DIR"
   node <<'EOF'
 const fs = require('fs');
 const path = require('path');
-const statePath = path.join(process.cwd(), 'state.json');
-const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-state.live = {
-  ...(state.live || {}),
-  openSignalKey: null,
-  openPlan: null,
-  openTriggeredAt: null,
-  signalHistory: []
-};
-fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+for (const filename of ['state.json', 'state-hourly-sweep-ifvg-bos.json']) {
+  const statePath = path.join(process.cwd(), filename);
+  if (!fs.existsSync(statePath)) continue;
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  state.live = {
+    ...(state.live || {}),
+    openSignalKey: null,
+    openPlan: null,
+    openTriggeredAt: null,
+    signalHistory: []
+  };
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+}
 EOF
   echo "Cleared transient live signal state"
 fi

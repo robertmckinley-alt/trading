@@ -5,18 +5,22 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
 PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
 LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.log}"
+HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
+HOURLY_LOG_FILE="${HOURLY_LOG_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.log}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
 find_existing_watcher_pid() {
-  if [[ -f "$PID_FILE" ]]; then
+  local pid_file="$1"
+  local pattern="$2"
+  if [[ -f "$pid_file" ]]; then
     local pid
-    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       echo "$pid"
       return 0
     fi
   fi
-  pgrep -f "node paper-trader.cjs watch-live" | head -n 1 || true
+  pgrep -f "$pattern" | head -n 1 || true
 }
 
 cd "$ROOT_DIR"
@@ -32,21 +36,35 @@ echo "Repo: $ROOT_DIR"
 echo "DATABENTO_API_KEY=$([[ -n "${DATABENTO_API_KEY:-}" ]] && echo set || echo missing)"
 echo "LIVE_DATA_PROVIDER=${LIVE_DATA_PROVIDER:-auto}"
 
-watcher_pid="$(find_existing_watcher_pid)"
-echo "PID file: $PID_FILE"
-if [[ -n "$watcher_pid" ]] && kill -0 "$watcher_pid" 2>/dev/null; then
-  echo "PID: $watcher_pid"
-  ps -fp "$watcher_pid"
-else
-  echo "PID: not running"
-fi
+print_watcher() {
+  local label="$1"
+  local strategy="$2"
+  local pid_file="$3"
+  local log_file="$4"
+  local state_path="$5"
+  local watcher_pid
+  local pattern="node paper-trader.cjs watch-live.*--strategy=$strategy"
+  if [[ "$strategy" == "live-9am-sweep" ]]; then
+    pattern="node paper-trader.cjs watch-live"
+  fi
+  watcher_pid="$(find_existing_watcher_pid "$pid_file" "$pattern")"
+  echo
+  echo "=== $label ==="
+  echo "PID file: $pid_file"
+  if [[ -n "$watcher_pid" ]] && kill -0 "$watcher_pid" 2>/dev/null; then
+    echo "PID: $watcher_pid"
+    ps -fp "$watcher_pid"
+  else
+    echo "PID: not running"
+  fi
 
-echo "State:"
-node <<'EOF'
+  echo "State:"
+  STATE_PATH="$state_path" node <<'EOF'
 const fs = require('fs');
-const path = require('path');
-const statePath = path.join(process.cwd(), 'state.json');
-const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+const statePath = process.env.STATE_PATH;
+const state = fs.existsSync(statePath)
+  ? JSON.parse(fs.readFileSync(statePath, 'utf8'))
+  : { balanceUsd: 50000, realizedPnlUsd: 0, trades: [] };
 const snapshot = {
   balanceUsd: state.balanceUsd,
   realizedPnlUsd: state.realizedPnlUsd,
@@ -58,9 +76,13 @@ const snapshot = {
 console.log(JSON.stringify(snapshot, null, 2));
 EOF
 
-if [[ -f "$LOG_FILE" ]]; then
-  echo "Recent log:"
-  tail -n 20 "$LOG_FILE"
-else
-  echo "Log file missing: $LOG_FILE"
-fi
+  if [[ -f "$log_file" ]]; then
+    echo "Recent log:"
+    tail -n 20 "$log_file"
+  else
+    echo "Log file missing: $log_file"
+  fi
+}
+
+print_watcher "9AM Asia/London Sweep" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json"
+print_watcher "1H Sweep + iFVG + 1M BOS" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json"

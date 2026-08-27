@@ -1,0 +1,13 @@
+{
+  "startingBalanceUsd": 50000,
+  "balanceUsd": 50000,
+  "realizedPnlUsd": 0,
+  "trades": [],
+  "lastUpdatedAt": null,
+  "live": {
+    "openSignalKey": null,
+    "openPlan": null,
+    "openTriggeredAt": null,
+    "signalHistory": []
+  }
+}

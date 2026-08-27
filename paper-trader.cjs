@@ -31,15 +31,21 @@ const {
 
 const BASE = __dirname;
 const CONFIG_PATH = path.join(BASE, 'config.json');
-const STATE_PATH = path.join(BASE, 'state.json');
+
+function statePathForStrategy(strategySlug) {
+  if (strategySlug === 'hourly-sweep-ifvg-bos') {
+    return path.join(BASE, 'state-hourly-sweep-ifvg-bos.json');
+  }
+  return path.join(BASE, 'state.json');
+}
 
 function loadConfig() {
   return normalizeConfig(loadJson(CONFIG_PATH));
 }
 
-function loadState(config) {
+function loadState(config, statePath) {
   try {
-    return loadLiveState(hydrateState(loadJson(STATE_PATH), config));
+    return loadLiveState(hydrateState(loadJson(statePath), config));
   } catch {
     return loadLiveState(createEmptyState(config));
   }
@@ -60,6 +66,7 @@ function parseWatchOptions(rest) {
   const fileArgs = [];
   let intervalMs = 1000;
   let provider = null;
+  let strategySlug = 'live-9am-sweep';
 
   for (const arg of rest) {
     if (arg.startsWith('--interval=')) {
@@ -68,6 +75,10 @@ function parseWatchOptions(rest) {
     }
     if (arg.startsWith('--provider=')) {
       provider = String(arg.slice('--provider='.length));
+      continue;
+    }
+    if (arg.startsWith('--strategy=')) {
+      strategySlug = String(arg.slice('--strategy='.length));
       continue;
     }
     fileArgs.push(arg);
@@ -80,7 +91,8 @@ function parseWatchOptions(rest) {
   return {
     fileArgs,
     intervalMs: Math.round(intervalMs),
-    provider
+    provider,
+    strategySlug
   };
 }
 
@@ -167,7 +179,7 @@ async function runLivePlan(config, state) {
   console.log(printPlan(plan));
 }
 
-function persistClosedTrade(state, config, plan, lifecycle) {
+function persistClosedTrade(statePath, state, config, plan, lifecycle) {
   const trade = toJournalTrade(plan, lifecycle);
   state.trades.push(trade);
   state.realizedPnlUsd = Math.round((state.realizedPnlUsd + trade.realizedPnlUsd) * 100) / 100;
@@ -180,10 +192,11 @@ function persistClosedTrade(state, config, plan, lifecycle) {
   return trade;
 }
 
-async function runWatchLive(config, state, intervalMs) {
+async function runWatchLive(config, state, intervalMs, statePath) {
   const liveConfig = normalizeStrategyConfig(config);
   let lastSignature = null;
   const actualIntervalMs = intervalMs || liveConfig.pollIntervalMs;
+  let inFlight = false;
 
   const tick = async () => {
     const { candles, metadata } = await fetchLiveCandles(config);
@@ -200,9 +213,9 @@ async function runWatchLive(config, state, intervalMs) {
       const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false });
       summaryLines.push(formatOpenTradeSummary(state.live.openPlan, lifecycle));
       if (lifecycle.status === 'closed') {
-        const trade = persistClosedTrade(state, config, state.live.openPlan, lifecycle);
+        const trade = persistClosedTrade(statePath, state, config, state.live.openPlan, lifecycle);
         summaryLines.push(`Closed and journaled: ${trade.id} PnL ${trade.realizedPnlUsd}`);
-        saveLiveState(STATE_PATH, state);
+        saveLiveState(statePath, state);
       }
       const signature = JSON.stringify({
         mode: 'open-position',
@@ -257,12 +270,29 @@ async function runWatchLive(config, state, intervalMs) {
       return;
     }
 
-    const plan = buildPlanFromSignal(signal, config, state);
+    let plan;
+    try {
+      plan = buildPlanFromSignal(signal, config, state);
+    } catch (error) {
+      summaryLines.push(`No trade: ${error.message}`);
+      const signature = JSON.stringify({
+        mode: 'rejected-signal',
+        reason: error.message,
+        lastTimestamp: lastCandle ? lastCandle.timestamp : null
+      });
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        console.log(`[${new Date().toISOString()}] live tick`);
+        console.log(summaryLines.join('\n'));
+        console.log('');
+      }
+      return;
+    }
     state.live.openSignalKey = key;
     state.live.openPlan = plan;
     state.live.openTriggeredAt = signal.triggerTimestamp;
     state.live.signalHistory.push(key);
-    saveLiveState(STATE_PATH, state);
+    saveLiveState(statePath, state);
     summaryLines.push(formatSignalSummary(signal, plan));
     const signature = JSON.stringify({
       mode: 'new-signal',
@@ -277,20 +307,40 @@ async function runWatchLive(config, state, intervalMs) {
     }
   };
 
+  const poll = async () => {
+    if (inFlight) {
+      return;
+    }
+    inFlight = true;
+    try {
+      await tick();
+    } finally {
+      inFlight = false;
+    }
+  };
+
   console.log(`Watching live market every ${actualIntervalMs}ms using provider ${liveConfig.provider}`);
-  await tick();
+  try {
+    await poll();
+  } catch (error) {
+    const now = new Date().toISOString();
+    console.error(`[${now}] live watch error: ${error.message}`);
+  }
   setInterval(() => {
-    tick().catch((error) => {
+    poll().catch((error) => {
       const now = new Date().toISOString();
       console.error(`[${now}] live watch error: ${error.message}`);
     });
   }, actualIntervalMs);
+  await new Promise(() => {});
 }
 
 async function main() {
   const { command, rest } = parseArgs(process.argv);
+  const { provider, strategySlug } = parseWatchOptions(rest);
+  const statePath = statePathForStrategy(strategySlug);
   const config = loadConfig();
-  const state = loadState(config);
+  const state = loadState(config, statePath);
 
   if (!command) {
     throw new Error('Usage: node paper-trader.js <plan|replay|journal|report|live-plan|watch-live> [files]');
@@ -311,14 +361,13 @@ async function main() {
   }
 
   if (command === 'live-plan') {
-    const { provider } = parseWatchOptions(rest);
-    await runLivePlan(applyLiveProviderOverride(config, provider), state);
+    await runLivePlan({ ...applyLiveProviderOverride(config, provider), strategySlug }, state);
     return;
   }
 
   if (command === 'watch-live') {
-    const { intervalMs, provider } = parseWatchOptions(rest);
-    await runWatchLive(applyLiveProviderOverride(config, provider), state, intervalMs);
+    const { intervalMs } = parseWatchOptions(rest);
+    await runWatchLive({ ...applyLiveProviderOverride(config, provider), strategySlug }, state, intervalMs, statePath);
     return;
   }
 
@@ -353,7 +402,7 @@ async function main() {
     state.startingBalanceUsd = config.startingBalanceUsd;
     state.balanceUsd = Math.round((config.startingBalanceUsd + state.realizedPnlUsd) * 100) / 100;
     state.lastUpdatedAt = new Date().toISOString();
-    saveJson(STATE_PATH, state);
+    saveJson(statePath, state);
     console.log(printReplay(plan, replayResult));
     return;
   }
