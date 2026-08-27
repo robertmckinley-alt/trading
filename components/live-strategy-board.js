@@ -76,6 +76,83 @@ function buildDailyTotals(strategies) {
   );
 }
 
+function buildRecapDates(strategies) {
+  return [...new Set(strategies.flatMap((strategy) => (
+    Array.isArray(strategy.journal?.dailyRecaps)
+      ? strategy.journal.dailyRecaps.map((recap) => recap.date)
+      : []
+  )).filter(Boolean))].sort().reverse();
+}
+
+function findStrategyRecap(strategy, date) {
+  return Array.isArray(strategy.journal?.dailyRecaps)
+    ? strategy.journal.dailyRecaps.find((recap) => recap.date === date) || null
+    : null;
+}
+
+function buildRecapForDate(strategies, date) {
+  return strategies.reduce(
+    (recap, strategy) => {
+      const strategyRecap = findStrategyRecap(strategy, date);
+      if (!strategyRecap) {
+        recap.strategyRows.push({
+          slug: strategy.slug,
+          name: strategy.paperAccountLabel,
+          strategyName: strategy.name,
+          activePnlUsd: 0,
+          realizedPnlUsd: 0,
+          trades: 0,
+          wins: 0,
+          losses: 0,
+          openTradeStatus: null,
+          tradesList: []
+        });
+        return recap;
+      }
+
+      recap.trades += Number(strategyRecap.trades || 0);
+      recap.wins += Number(strategyRecap.wins || 0);
+      recap.losses += Number(strategyRecap.losses || 0);
+      recap.realizedPnlUsd += Number(strategyRecap.realizedPnlUsd || 0);
+      recap.activePnlUsd += Number(strategyRecap.activePnlUsd || 0);
+      recap.activeUnrealizedPnlUsd += Number(strategyRecap.activeUnrealizedPnlUsd || 0);
+      recap.avgRTotal += Number(strategyRecap.avgR || 0) * Number(strategyRecap.trades || 0);
+      recap.openTrades += strategyRecap.openTradeStatus ? 1 : 0;
+      recap.tradesList.push(...(strategyRecap.tradesList || []).map((trade) => ({
+        ...trade,
+        strategyName: strategy.name,
+        account: strategy.paperAccountLabel
+      })));
+      recap.strategyRows.push({
+        slug: strategy.slug,
+        name: strategy.paperAccountLabel,
+        strategyName: strategy.name,
+        activePnlUsd: Number(strategyRecap.activePnlUsd || 0),
+        realizedPnlUsd: Number(strategyRecap.realizedPnlUsd || 0),
+        trades: Number(strategyRecap.trades || 0),
+        wins: Number(strategyRecap.wins || 0),
+        losses: Number(strategyRecap.losses || 0),
+        openTradeStatus: strategyRecap.openTradeStatus || null,
+        tradesList: strategyRecap.tradesList || []
+      });
+      return recap;
+    },
+    {
+      date,
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      realizedPnlUsd: 0,
+      activePnlUsd: 0,
+      activeUnrealizedPnlUsd: 0,
+      avgRTotal: 0,
+      openTrades: 0,
+      strategyRows: [],
+      tradesList: []
+    }
+  );
+}
+
 function outcomeTone(strategy) {
   if (strategy.mode === 'paper-route') return 'neutral';
   if (strategy.watcher?.isRunning && !strategy.live?.latestError) return 'good';
@@ -84,9 +161,15 @@ function outcomeTone(strategy) {
   return 'neutral';
 }
 
-function DailyTracker({ strategies }) {
+function DailyTracker({ strategies, selectedDate, onDateChange }) {
   const daily = buildDailyTotals(strategies);
+  const recapDates = buildRecapDates(strategies);
+  const activeDate = selectedDate || recapDates[0] || daily.date || new Date().toISOString().slice(0, 10);
+  const selectedRecap = buildRecapForDate(strategies, activeDate);
+  const selectedWinRate = selectedRecap.trades > 0 ? (selectedRecap.wins / selectedRecap.trades) * 100 : 0;
+  const selectedAvgR = selectedRecap.trades > 0 ? selectedRecap.avgRTotal / selectedRecap.trades : 0;
   const hasDailyActivity = daily.trades > 0 || daily.openTrades > 0 || daily.activePnlUsd !== 0;
+  const hasSelectedActivity = selectedRecap.trades > 0 || selectedRecap.openTrades > 0 || selectedRecap.activePnlUsd !== 0;
 
   return (
     <div className="daily-tracker" aria-label="Daily active PnL tracker">
@@ -132,6 +215,86 @@ function DailyTracker({ strategies }) {
             </div>
           );
         })}
+      </div>
+
+      <div className="daily-recap">
+        <div className="daily-recap-head">
+          <div>
+            <span>Daily recap</span>
+            <strong>{activeDate}</strong>
+          </div>
+          <label>
+            <span>Search date</span>
+            <input
+              type="date"
+              value={activeDate}
+              onChange={(event) => onDateChange(event.target.value)}
+            />
+          </label>
+        </div>
+
+        {recapDates.length ? (
+          <div className="recap-date-strip" aria-label="Recent recap dates">
+            {recapDates.slice(0, 8).map((date) => (
+              <button
+                className={date === activeDate ? 'recap-date-button recap-date-button-active' : 'recap-date-button'}
+                key={date}
+                type="button"
+                onClick={() => onDateChange(date)}
+              >
+                {date}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="daily-tracker-grid">
+          <div className="daily-tracker-metric daily-tracker-primary">
+            <span>Recap PnL</span>
+            <strong>{formatUsd(selectedRecap.activePnlUsd)}</strong>
+            <p>{hasSelectedActivity ? `${selectedRecap.openTrades} open / ${selectedRecap.trades} closed` : 'No trades found for this date'}</p>
+          </div>
+          <div className="daily-tracker-metric">
+            <span>Closed PnL</span>
+            <strong>{formatUsd(selectedRecap.realizedPnlUsd)}</strong>
+            <p>{selectedRecap.wins} wins / {selectedRecap.losses} losses</p>
+          </div>
+          <div className="daily-tracker-metric">
+            <span>Win rate</span>
+            <strong>{formatPercent(selectedWinRate)}</strong>
+            <p>{selectedRecap.trades} closed trade{selectedRecap.trades === 1 ? '' : 's'}</p>
+          </div>
+          <div className="daily-tracker-metric">
+            <span>Avg R</span>
+            <strong>{selectedAvgR.toFixed(2)}R</strong>
+            <p>{formatUsd(selectedRecap.activeUnrealizedPnlUsd)} open mark</p>
+          </div>
+        </div>
+
+        <div className="daily-strategy-list">
+          {selectedRecap.strategyRows.map((row) => (
+            <div className="daily-strategy-row" key={row.slug}>
+              <span>{row.name}</span>
+              <strong>{formatUsd(row.activePnlUsd)}</strong>
+              <p>{row.trades} trades / {row.openTradeStatus || 'no open trade'}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="recap-trade-list">
+          {selectedRecap.tradesList.length ? selectedRecap.tradesList.map((trade) => (
+            <article className="recap-trade-row" key={trade.id}>
+              <div>
+                <strong>{trade.account}</strong>
+                <span>{trade.symbol} {String(trade.side || '').toUpperCase()} / {trade.exitReason}</span>
+              </div>
+              <p>{trade.filledAt ? formatStamp(trade.filledAt) : 'n/a'}</p>
+              <strong>{formatUsd(trade.realizedPnlUsd)}</strong>
+            </article>
+          )) : (
+            <p className="empty-copy">No journaled trades for {activeDate}.</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -284,6 +447,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
 
 export default function LiveStrategyBoard({ initialData }) {
   const [data, setData] = useState(initialData);
+  const [selectedDate, setSelectedDate] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -331,7 +495,7 @@ export default function LiveStrategyBoard({ initialData }) {
       ) : null}
 
       <PortfolioTotals strategies={strategies} />
-      <DailyTracker strategies={strategies} />
+      <DailyTracker strategies={strategies} selectedDate={selectedDate} onDateChange={setSelectedDate} />
 
       <div className="live-board-grid">
         {strategies.map((strategy) => (
