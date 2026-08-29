@@ -456,6 +456,18 @@ h3 {
 .analytics-list dt, .analytics-list dd { margin: 0; }
 .analytics-list dd { overflow-wrap: anywhere; font-weight: 750; font-variant-numeric: tabular-nums; }
 
+.analytics-breakdowns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.breakdown-card { min-width: 0; }
+.breakdown-card h4 { margin: 0 0 9px; font-size: 0.85rem; }
+.breakdown-card table { min-width: 520px; font-size: 0.78rem; }
+.breakdown-card th, .breakdown-card td { padding: 9px 10px; }
+
 .table-scroll { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius-md); }
 
 table {
@@ -719,6 +731,37 @@ textarea {
 .csv-box { min-height: 220px; }
 .action-row { gap: 8px; }
 .highlight-panel { background: var(--accent-soft); }
+.cloud-journal-panel { border-color: var(--line); }
+
+.operator-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.operator-state-good { border-color: #75e0a7; color: var(--positive); background: var(--positive-soft); }
+.operator-form, .operator-actions { display: grid; gap: 10px; }
+.operator-form label { color: var(--muted); font-size: 0.8rem; font-weight: 650; }
+.operator-form > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+
+.operator-form input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.operator-actions p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 .stat-grid { border: 0; background: transparent; gap: 8px; }
 .stat-card { border: 1px solid #b2ccff; border-radius: var(--radius-sm); }
 .stat-card p, .stat-card h3, .stat-card span { margin: 0; }
@@ -815,6 +858,7 @@ textarea {
   .date-search-controls label { flex: 1 1 180px; }
   .date-search-controls input { width: 100%; }
   .recap-trade-main, .recap-trade-facts { grid-template-columns: 1fr 1fr; }
+  .analytics-breakdowns { grid-template-columns: 1fr; }
   .performance-panel, .daily-ledger, .daily-tracker, .panel, .live-card, .hero-copy, .hero-card, .strategy-card { padding: 17px; }
 }
 
@@ -831,6 +875,7 @@ textarea {
   .performance-chart { min-height: 180px; }
   .chart-legend { justify-content: flex-start; }
   .action-row > * { flex: 1 1 100%; }
+  .operator-form > div { grid-template-columns: 1fr; }
 }
 
 @media (prefers-color-scheme: dark) {

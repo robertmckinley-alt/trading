@@ -22,6 +22,10 @@ test('sample setup builds and replays through the shared trading engine', () => 
 
   assert.ok(plan.sizing.maxContracts > 0);
   assert.ok(Number.isFinite(replay.realizedPnlUsd));
+  assert.ok(replay.mfePoints >= 0);
+  assert.ok(replay.maePoints >= 0);
+  assert.ok(replay.mfeUsd >= 0);
+  assert.ok(replay.maeUsd <= 0);
   assert.ok(['closed', 'open', 'not-filled'].includes(replay.status));
 });
 
@@ -89,4 +93,35 @@ test('remote snapshots do not expose bridge URLs or private watcher commands', (
     snapshot.strategies[0].live.latestError.message,
     'Live data refresh failed. Check the private watcher logs on the VPS.'
   );
+});
+
+test('operator sessions use a server-only derived cookie and accept bearer access', async () => {
+  const originalToken = process.env.TRADING_ADMIN_TOKEN;
+  process.env.TRADING_ADMIN_TOKEN = 'test-operator-token-with-adequate-length';
+  try {
+    const auth = await import('../lib/operator-auth.mjs');
+    const session = auth.operatorSessionValue();
+    assert.ok(session);
+    assert.notEqual(session, process.env.TRADING_ADMIN_TOKEN);
+    assert.equal(auth.verifyOperatorPasscode(process.env.TRADING_ADMIN_TOKEN), true);
+    assert.equal(auth.verifyOperatorPasscode('wrong-token'), false);
+    assert.equal(auth.isOperatorRequest({
+      headers: new Headers({ authorization: `Bearer ${process.env.TRADING_ADMIN_TOKEN}` }),
+      cookies: { get: () => undefined }
+    }), true);
+    assert.equal(auth.isTrustedMutationOrigin({
+      url: 'http://localhost:3000/api/operator-session',
+      headers: new Headers({ host: '127.0.0.1:3000', origin: 'http://127.0.0.1:3000' })
+    }), true);
+  } finally {
+    if (originalToken === undefined) delete process.env.TRADING_ADMIN_TOKEN;
+    else process.env.TRADING_ADMIN_TOKEN = originalToken;
+  }
+});
+
+test('cloud journal validation rejects malformed and oversized batches before database access', async () => {
+  const { validateJournalEntries } = await import('../lib/cloud-journal.mjs');
+  assert.deepEqual(validateJournalEntries([{ id: 'trade-1', date: '2026-08-29' }]), [{ id: 'trade-1', date: '2026-08-29' }]);
+  assert.throws(() => validateJournalEntries([{ date: '2026-08-29' }]), /non-empty id/);
+  assert.throws(() => validateJournalEntries(Array.from({ length: 251 }, (_, index) => ({ id: String(index) }))), /up to 250/);
 });

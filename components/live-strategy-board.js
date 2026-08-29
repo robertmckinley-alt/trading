@@ -199,12 +199,60 @@ function collectTrades(strategies) {
         const key = `${strategy.slug}:${trade.id || `${recap.date}:${trade.filledAt}:${trade.entry}`}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        trades.push({ ...trade, strategySlug: strategy.slug, date: recap.date });
+        trades.push({ ...trade, strategySlug: strategy.slug, strategyName: strategy.name, date: recap.date });
       }
     }
   }
 
   return trades.sort((a, b) => String(a.filledAt || a.date).localeCompare(String(b.filledAt || b.date)));
+}
+
+function buildBreakdown(trades, labelForTrade) {
+  const groups = new Map();
+  for (const trade of trades) {
+    const label = labelForTrade(trade) || 'Unspecified';
+    const group = groups.get(label) || { label, trades: 0, wins: 0, pnlUsd: 0, rTotal: 0 };
+    group.trades += 1;
+    group.wins += Number(trade.realizedPnlUsd || 0) > 0 ? 1 : 0;
+    group.pnlUsd += Number(trade.realizedPnlUsd || 0);
+    group.rTotal += Number(trade.rMultiple || 0);
+    groups.set(label, group);
+  }
+
+  return [...groups.values()].map((group) => ({
+    ...group,
+    winRate: group.trades ? (group.wins / group.trades) * 100 : 0,
+    avgR: group.trades ? group.rTotal / group.trades : 0,
+    expectancyUsd: group.trades ? group.pnlUsd / group.trades : 0
+  })).sort((a, b) => b.expectancyUsd - a.expectancyUsd || b.trades - a.trades);
+}
+
+function weekdayForTrade(trade) {
+  const date = new Date(`${trade.date}T12:00:00Z`);
+  return Number.isNaN(date.getTime())
+    ? 'Unknown'
+    : new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(date);
+}
+
+function buildStreaks(trades) {
+  let currentType = null;
+  let currentCount = 0;
+  let maxWins = 0;
+  let maxLosses = 0;
+
+  for (const trade of trades) {
+    const pnl = Number(trade.realizedPnlUsd || 0);
+    const type = pnl > 0 ? 'win' : pnl < 0 ? 'loss' : 'flat';
+    if (type === currentType) currentCount += 1;
+    else {
+      currentType = type;
+      currentCount = 1;
+    }
+    if (type === 'win') maxWins = Math.max(maxWins, currentCount);
+    if (type === 'loss') maxLosses = Math.max(maxLosses, currentCount);
+  }
+
+  return { currentType, currentCount: trades.length ? currentCount : 0, maxWins, maxLosses };
 }
 
 function buildPerformanceAnalytics(strategies, dailySeries) {
@@ -214,6 +262,8 @@ function buildPerformanceAnalytics(strategies, dailySeries) {
   const grossProfit = wins.reduce((sum, trade) => sum + Number(trade.realizedPnlUsd || 0), 0);
   const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + Number(trade.realizedPnlUsd || 0), 0));
   const totalPnl = grossProfit - grossLoss;
+  const avgWin = wins.length ? grossProfit / wins.length : 0;
+  const avgLoss = losses.length ? grossLoss / losses.length : 0;
   const avgR = trades.length
     ? trades.reduce((sum, trade) => sum + Number(trade.rMultiple || 0), 0) / trades.length
     : 0;
@@ -228,6 +278,14 @@ function buildPerformanceAnalytics(strategies, dailySeries) {
     expectancyUsd: trades.length ? totalPnl / trades.length : 0,
     avgR,
     maxDrawdown,
+    avgWin,
+    avgLoss,
+    payoffRatio: avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Infinity : null,
+    recoveryFactor: maxDrawdown > 0 ? totalPnl / maxDrawdown : totalPnl > 0 ? Infinity : null,
+    streaks: buildStreaks(trades),
+    byStrategy: buildBreakdown(trades, (trade) => trade.strategyName || trade.strategySlug),
+    bySession: buildBreakdown(trades, (trade) => trade.session),
+    byWeekday: buildBreakdown(trades, weekdayForTrade),
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
     bestDay: dailySeries.length
       ? dailySeries.reduce((best, day) => day.realizedPnlUsd > best.realizedPnlUsd ? day : best, dailySeries[0])
@@ -236,6 +294,40 @@ function buildPerformanceAnalytics(strategies, dailySeries) {
       ? dailySeries.reduce((worst, day) => day.realizedPnlUsd < worst.realizedPnlUsd ? day : worst, dailySeries[0])
       : null
   };
+}
+
+function BreakdownTable({ title, rows }) {
+  return (
+    <div className="breakdown-card">
+      <h4>{title}</h4>
+      {rows.length ? (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Group</th>
+                <th scope="col">Trades</th>
+                <th scope="col">Win rate</th>
+                <th scope="col">Avg R</th>
+                <th scope="col">PnL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.label}>
+                  <th scope="row">{row.label}</th>
+                  <td>{row.trades}</td>
+                  <td>{formatPercent(row.winRate)}</td>
+                  <td>{row.avgR.toFixed(2)}R</td>
+                  <td className={row.pnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(row.pnlUsd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="empty-copy">No closed trades yet.</p>}
+    </div>
+  );
 }
 
 function PerformanceChart({ dailySeries }) {
@@ -333,6 +425,19 @@ function PerformancePanel({ strategies, dailySeries }) {
     : Number.isFinite(analytics.profitFactor)
       ? analytics.profitFactor.toFixed(2)
       : '∞';
+  const payoffRatio = analytics.payoffRatio === null
+    ? '—'
+    : Number.isFinite(analytics.payoffRatio)
+      ? analytics.payoffRatio.toFixed(2)
+      : '∞';
+  const recoveryFactor = analytics.recoveryFactor === null
+    ? '—'
+    : Number.isFinite(analytics.recoveryFactor)
+      ? analytics.recoveryFactor.toFixed(2)
+      : '∞';
+  const streakLabel = analytics.streaks.currentCount
+    ? `${analytics.streaks.currentCount} ${analytics.streaks.currentType}${analytics.streaks.currentCount === 1 ? '' : 's'}`
+    : '—';
 
   return (
     <section className="performance-panel" aria-labelledby="performance-title">
@@ -370,7 +475,28 @@ function PerformancePanel({ strategies, dailySeries }) {
             <dt>Worst day</dt>
             <dd>{analytics.worstDay ? `${formatUsd(analytics.worstDay.realizedPnlUsd)} · ${formatShortDate(analytics.worstDay.date)}` : '—'}</dd>
           </div>
+          <div>
+            <dt>Payoff ratio</dt>
+            <dd>{payoffRatio}</dd>
+          </div>
+          <div>
+            <dt>Recovery factor</dt>
+            <dd>{recoveryFactor}</dd>
+          </div>
+          <div>
+            <dt>Current streak</dt>
+            <dd>{streakLabel}</dd>
+          </div>
+          <div>
+            <dt>Longest W / L</dt>
+            <dd>{analytics.streaks.maxWins} / {analytics.streaks.maxLosses}</dd>
+          </div>
         </dl>
+      </div>
+      <div className="analytics-breakdowns" aria-label="Performance breakdowns">
+        <BreakdownTable title="By strategy" rows={analytics.byStrategy} />
+        <BreakdownTable title="By session" rows={analytics.bySession} />
+        <BreakdownTable title="By weekday" rows={analytics.byWeekday} />
       </div>
     </section>
   );

@@ -109,6 +109,38 @@ function applyLiveProviderOverride(config, provider) {
   };
 }
 
+async function sendWatcherAlert(state, event) {
+  const webhookUrl = process.env.TRADING_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  const eventType = String(event.type || 'watcher');
+  const dedupeKey = String(event.dedupeKey || event.status || eventType);
+  if (state.live.alertKeys?.[eventType] === dedupeKey) return;
+
+  try {
+    const token = process.env.TRADING_ALERT_WEBHOOK_TOKEN;
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        source: 'doctortrades-watcher',
+        at: new Date().toISOString(),
+        ...event
+      }),
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!response.ok) throw new Error(`Alert webhook responded ${response.status}`);
+    state.live.alertKeys = { ...(state.live.alertKeys || {}), [eventType]: dedupeKey };
+    state.live.lastAlertAt = new Date().toISOString();
+    state.live.lastAlertError = null;
+  } catch (error) {
+    state.live.lastAlertError = `Alert delivery failed: ${error.message}`;
+    console.error(`[${new Date().toISOString()}] ${state.live.lastAlertError}`);
+  }
+}
+
 function runWatch(setupPath, csvPath, config, state, intervalMs) {
   const resolvedSetupPath = path.resolve(setupPath);
   const resolvedCsvPath = path.resolve(csvPath);
@@ -201,6 +233,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
   const tick = async () => {
     const { candles, metadata } = await fetchLiveCandles(config);
     const lastCandle = candles[candles.length - 1];
+    const previousHeartbeat = state.live.heartbeat;
     state.live.heartbeat = {
       at: new Date().toISOString(),
       ok: true,
@@ -210,6 +243,17 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       lastCandle: lastCandle || null,
       error: null
     };
+    if (previousHeartbeat?.ok === false) {
+      await sendWatcherAlert(state, {
+        type: 'watcher-health',
+        status: 'recovered',
+        dedupeKey: 'recovered',
+        strategy: config.strategySlug,
+        provider: metadata.provider,
+        ticker: metadata.ticker,
+        message: 'Live market data refresh recovered.'
+      });
+    }
     saveLiveState(statePath, state);
     let summaryLines = [
       `Feed: ${metadata.provider} ${metadata.ticker}`,
@@ -224,6 +268,17 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       summaryLines.push(formatOpenTradeSummary(state.live.openPlan, lifecycle));
       if (lifecycle.status === 'closed') {
         const trade = persistClosedTrade(statePath, state, config, state.live.openPlan, lifecycle);
+        await sendWatcherAlert(state, {
+          type: 'trade-closed',
+          status: 'closed',
+          dedupeKey: trade.id,
+          strategy: config.strategySlug,
+          symbol: trade.symbol,
+          side: trade.side,
+          realizedPnlUsd: trade.realizedPnlUsd,
+          rMultiple: trade.rMultiple,
+          message: 'Paper trade closed and journaled.'
+        });
         summaryLines.push(`Closed and journaled: ${trade.id} PnL ${trade.realizedPnlUsd}`);
         saveLiveState(statePath, state);
       }
@@ -302,6 +357,17 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     state.live.openPlan = plan;
     state.live.openTriggeredAt = signal.triggerTimestamp;
     state.live.signalHistory.push(key);
+    await sendWatcherAlert(state, {
+      type: 'trade-opened',
+      status: 'opened',
+      dedupeKey: key,
+      strategy: config.strategySlug,
+      symbol: signal.symbol,
+      side: signal.side,
+      entry: signal.entry,
+      stop: signal.stop,
+      message: 'Paper trade signal opened.'
+    });
     saveLiveState(statePath, state);
     summaryLines.push(formatSignalSummary(signal, plan));
     const signature = JSON.stringify({
@@ -332,6 +398,15 @@ async function runWatchLive(config, state, intervalMs, statePath) {
         pollIntervalMs: actualIntervalMs,
         error: error.message
       };
+      await sendWatcherAlert(state, {
+        type: 'watcher-health',
+        status: 'failed',
+        dedupeKey: 'failed',
+        strategy: config.strategySlug,
+        provider: liveConfig.provider,
+        ticker: liveConfig.ticker,
+        message: 'Live market data refresh failed. Check the private watcher logs.'
+      });
       try {
         saveLiveState(statePath, state);
       } catch {

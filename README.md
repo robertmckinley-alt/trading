@@ -50,7 +50,8 @@ This version now follows the spoken recording rather than the earlier inferred m
 The web app is designed for Vercel:
 
 - stateless server routes handle `plan` and `replay`
-- the journal is stored in browser `localStorage`, not the server filesystem
+- the journal always works in browser `localStorage` and can optionally synchronize to serverless Postgres
+- cloud journal access is protected by a server-verified operator session
 - the same shared core logic powers both the CLI and the web app
 
 Run it locally:
@@ -77,7 +78,8 @@ Deploy to Vercel:
 
 Important persistence note:
 
-- the deployed Vercel app keeps journal history in the browser, so trades persist per browser/profile
+- browser journal history remains the zero-configuration fallback
+- when `DATABASE_URL` and `TRADING_ADMIN_TOKEN` are configured, an authenticated operator can synchronize journal history across devices
 - the CLI still writes durable local trades into `state.json`
 - the always-on live watcher should run on your VPS, not inside Vercel
 - the main page can now show both strategy cards plus outcomes, but Vercel needs a live status bridge to read the VPS watcher
@@ -259,6 +261,25 @@ sudo systemctl enable --now doctortrades-status
 
 The dashboard treats a heartbeat older than three polling intervals as stale and keeps the last good remote snapshot for up to 15 minutes when the bridge briefly fails.
 
+## Cloud Journal and Operator Access
+
+The protected cloud journal uses any Neon-compatible serverless Postgres connection. Add these environment values to the Vercel project and redeploy:
+
+```bash
+DATABASE_URL=postgresql://...
+TRADING_ADMIN_TOKEN=a-long-random-passcode-at-least-20-characters
+```
+
+The table is created lazily by the app; `deploy/sql/001_cloud_journal.sql` is also provided for an explicit migration. Operator sessions use an HTTP-only, secure, same-site cookie, and every journal route repeats authorization close to the database operation. The passcode is never stored in browser JavaScript.
+
+## Monitoring and Alerts
+
+- `GET /api/health` returns `200` only when the bridge and all watchers are healthy, otherwise `503` for an uptime monitor.
+- Vercel Web Analytics and Speed Insights are included in the root layout.
+- API routes emit structured request logs without setup or candle payloads.
+- Set `TRADING_ALERT_WEBHOOK_URL` on the VPS watcher to receive feed-failure, recovery, trade-opened, and trade-closed events. Add `TRADING_ALERT_WEBHOOK_TOKEN` when the receiver expects bearer authentication.
+- Example environment values live in `deploy/vercel.env.example`.
+
 The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
 
 ```bash
@@ -314,6 +335,7 @@ Price columns must be numeric. Timestamps are used only for reporting.
 - starting bankroll, drawdown floor, and remaining drawdown room
 - realized PnL
 - R-multiple
+- maximum favorable and adverse excursion for new replayed/journaled trades
 - whether the setup passed the `9AM` / session-reference / liquidity-sweep / reaction / `1m FVG` rule check
 - which targets filled
 - whether the stop or end-of-data closed the trade
@@ -325,8 +347,4 @@ Price columns must be numeric. Timestamps are used only for reporting.
 
 ## Next Useful Upgrade
 
-The fastest next step would be one of these:
-
-1. expose the VPS watcher state to the Vercel UI through the live status bridge or a more durable external store
-2. add TradingView export compatibility if your CSV format differs
-3. add alert delivery when a live setup triggers
+Add a managed identity provider such as Clerk when the dashboard needs multiple operators, role-based access, password recovery, or MFA. The built-in operator session is intentionally scoped to a single trusted operator.

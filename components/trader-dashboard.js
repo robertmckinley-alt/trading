@@ -63,6 +63,23 @@ function hydrateState(rawState, config) {
   };
 }
 
+function mergeTrades(...tradeLists) {
+  const byId = new Map();
+  for (const trade of tradeLists.flat()) {
+    if (trade?.id) byId.set(trade.id, trade);
+  }
+  return [...byId.values()].sort((a, b) => String(a.createdAt || a.date).localeCompare(String(b.createdAt || b.date)));
+}
+
+function stateFromTrades(trades, config) {
+  const realizedPnlUsd = trades.reduce((sum, trade) => sum + Number(trade.realizedPnlUsd || 0), 0);
+  return hydrateState({
+    trades,
+    realizedPnlUsd,
+    lastUpdatedAt: trades.at(-1)?.createdAt || null
+  }, config);
+}
+
 function computeReport(state, config) {
   const totalTrades = state.trades.length;
   const wins = state.trades.filter((trade) => trade.realizedPnlUsd > 0).length;
@@ -120,6 +137,17 @@ export default function TraderDashboard({
   const [busy, setBusy] = useState('');
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [storageError, setStorageError] = useState('');
+  const [operatorPasscode, setOperatorPasscode] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [operator, setOperator] = useState({
+    checking: true,
+    configured: false,
+    storageConfigured: false,
+    authenticated: false,
+    busy: '',
+    message: '',
+    error: ''
+  });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -148,6 +176,19 @@ export default function TraderDashboard({
     }
   }, [journalState, storageKey, storageLoaded]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/operator-session', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((status) => {
+        if (!cancelled) setOperator((current) => ({ ...current, ...status, checking: false }));
+      })
+      .catch(() => {
+        if (!cancelled) setOperator((current) => ({ ...current, checking: false, error: 'Operator status is unavailable.' }));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const report = useMemo(() => computeReport(journalState, initialConfig), [journalState, initialConfig]);
 
   function parseSetup() {
@@ -169,6 +210,74 @@ export default function TraderDashboard({
       throw new Error(data.errors ? data.errors.join('\n') : data.error || 'Request failed');
     }
     return data;
+  }
+
+  async function requestJson(url, options = {}) {
+    const response = await fetch(url, {
+      cache: 'no-store',
+      ...options,
+      headers: options.body ? { 'Content-Type': 'application/json', ...(options.headers || {}) } : options.headers
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  async function syncCloudJournal(localTrades = journalState.trades) {
+    setOperator((current) => ({ ...current, busy: 'sync', message: '', error: '' }));
+    try {
+      const cloud = await requestJson('/api/journal');
+      const trades = mergeTrades(cloud.trades || [], localTrades);
+      if (localTrades.length) {
+        await requestJson('/api/journal', {
+          method: 'POST',
+          body: JSON.stringify({ trades: localTrades.slice(-250) })
+        });
+      }
+      setJournalState(stateFromTrades(trades, initialConfig));
+      setOperator((current) => ({ ...current, busy: '', authenticated: true, message: `${trades.length} journal trades synchronized.`, error: '' }));
+    } catch (err) {
+      setOperator((current) => ({ ...current, busy: '', error: err.message, message: '' }));
+    }
+  }
+
+  async function handleOperatorSignIn(event) {
+    event.preventDefault();
+    setOperator((current) => ({ ...current, busy: 'signin', message: '', error: '' }));
+    try {
+      const status = await requestJson('/api/operator-session', {
+        method: 'POST',
+        body: JSON.stringify({ passcode: operatorPasscode })
+      });
+      setOperatorPasscode('');
+      setOperator((current) => ({ ...current, ...status, busy: '', authenticated: true }));
+      await syncCloudJournal();
+    } catch (err) {
+      setOperator((current) => ({ ...current, busy: '', error: err.message, message: '' }));
+    }
+  }
+
+  async function handleOperatorSignOut() {
+    setOperator((current) => ({ ...current, busy: 'signout', message: '', error: '' }));
+    try {
+      const status = await requestJson('/api/operator-session', { method: 'DELETE' });
+      setOperator((current) => ({ ...current, ...status, busy: '', message: 'Cloud journal locked.', error: '' }));
+    } catch (err) {
+      setOperator((current) => ({ ...current, busy: '', error: err.message }));
+    }
+  }
+
+  async function persistCloudTrade(trade) {
+    if (!operator.authenticated || !operator.storageConfigured) return;
+    try {
+      await requestJson('/api/journal', {
+        method: 'POST',
+        body: JSON.stringify({ trades: [trade] })
+      });
+      setOperator((current) => ({ ...current, message: 'New trade saved to the cloud journal.', error: '' }));
+    } catch (err) {
+      setOperator((current) => ({ ...current, error: `Browser save succeeded; cloud save failed: ${err.message}` }));
+    }
   }
 
   async function handlePlan() {
@@ -204,6 +313,7 @@ export default function TraderDashboard({
           realizedPnlUsd: Number((current.realizedPnlUsd + data.trade.realizedPnlUsd).toFixed(2)),
           lastUpdatedAt: new Date().toISOString()
         }, initialConfig));
+        void persistCloudTrade(data.trade);
       }
     } catch (err) {
       setError(err.message);
@@ -212,10 +322,25 @@ export default function TraderDashboard({
     }
   }
 
-  function resetJournal() {
+  async function resetJournal() {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    setOperator((current) => ({ ...current, busy: 'reset', message: '', error: '' }));
+    try {
+      if (operator.authenticated && operator.storageConfigured) {
+        await requestJson('/api/journal', { method: 'DELETE' });
+      }
+    } catch (err) {
+      setOperator((current) => ({ ...current, busy: '', error: `Journal was not reset: ${err.message}` }));
+      return;
+    }
     const empty = buildEmptyState(initialConfig);
     setJournalState(empty);
     window.localStorage.setItem(storageKey, JSON.stringify(empty));
+    setConfirmReset(false);
+    setOperator((current) => ({ ...current, busy: '', message: 'Journal reset complete.', error: '' }));
   }
 
   return (
@@ -277,11 +402,60 @@ export default function TraderDashboard({
         <article className="panel highlight-panel">
           <p className="eyebrow">Account guardrails</p>
           <div className="stat-grid">
-            <StatCard label="Balance" value={formatUsd(journalState.balanceUsd)} hint="Browser-local journal state" />
+            <StatCard label="Balance" value={formatUsd(journalState.balanceUsd)} hint={operator.authenticated && operator.storageConfigured ? 'Cloud and browser journal' : 'Browser-local journal state'} />
             <StatCard label="Floor" value={formatUsd(report.floorUsd)} hint="10% max drawdown floor" />
             <StatCard label="Room left" value={formatUsd(report.drawdownRoomUsd)} hint={report.locked ? 'Locked until reset' : 'Available before floor'} />
             <StatCard label="Win rate" value={`${report.winRate}%`} hint={`${report.totalTrades} journaled trades`} />
           </div>
+        </article>
+
+        <article className="panel cloud-journal-panel">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Operator access</p>
+              <h2>Cloud journal</h2>
+            </div>
+            <span className={operator.authenticated ? 'operator-state operator-state-good' : 'operator-state'}>
+              {operator.checking ? 'Checking…' : operator.authenticated ? 'Unlocked' : 'Locked'}
+            </span>
+          </div>
+          {!operator.configured || !operator.storageConfigured ? (
+            <p className="empty-copy">
+              Browser persistence remains active. Cloud sync will enable automatically after the project receives its database and operator-secret environment values.
+            </p>
+          ) : operator.authenticated ? (
+            <div className="operator-actions">
+              <p>Authorized for protected cross-device journal reads and writes.</p>
+              <div className="action-row">
+                <button className="secondary-button" disabled={Boolean(operator.busy)} onClick={() => syncCloudJournal()} type="button">
+                  {operator.busy === 'sync' ? 'Syncing…' : 'Sync now'}
+                </button>
+                <button className="ghost-button" disabled={Boolean(operator.busy)} onClick={handleOperatorSignOut} type="button">
+                  {operator.busy === 'signout' ? 'Locking…' : 'Lock cloud access'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="operator-form" onSubmit={handleOperatorSignIn}>
+              <label htmlFor={`${storageKey}-operator-passcode`}>Operator passcode</label>
+              <div>
+                <input
+                  autoComplete="current-password"
+                  id={`${storageKey}-operator-passcode`}
+                  maxLength="512"
+                  onChange={(event) => setOperatorPasscode(event.target.value)}
+                  required
+                  type="password"
+                  value={operatorPasscode}
+                />
+                <button className="secondary-button" disabled={Boolean(operator.busy)} type="submit">
+                  {operator.busy === 'signin' ? 'Unlocking…' : 'Unlock'}
+                </button>
+              </div>
+            </form>
+          )}
+          {operator.message ? <p className="live-inline-meta" role="status">{operator.message}</p> : null}
+          {operator.error ? <p className="live-inline-warning" role="alert">{operator.error}</p> : null}
         </article>
 
         <article className="panel">
@@ -340,6 +514,14 @@ export default function TraderDashboard({
                   <span>Filled at</span>
                   <strong>{replayResult.filledAt || 'Not filled'}</strong>
                 </div>
+                <div>
+                  <span>Max favorable</span>
+                  <strong>{formatUsd(replayResult.mfeUsd)} / {replayResult.mfePoints || 0} pts</strong>
+                </div>
+                <div>
+                  <span>Max adverse</span>
+                  <strong>{formatUsd(replayResult.maeUsd)} / {replayResult.maePoints || 0} pts</strong>
+                </div>
               </div>
               <pre>{JSON.stringify(replayResult, null, 2)}</pre>
             </div>
@@ -354,7 +536,9 @@ export default function TraderDashboard({
               <p className="eyebrow">Journal</p>
               <h2>Vercel-safe local persistence</h2>
             </div>
-            <button className="ghost-button danger" type="button" onClick={resetJournal}>Reset journal</button>
+            <button className="ghost-button danger" disabled={operator.busy === 'reset'} type="button" onClick={resetJournal}>
+              {operator.busy === 'reset' ? 'Resetting…' : confirmReset ? 'Confirm reset' : 'Reset journal'}
+            </button>
           </div>
           <div className="mini-grid journal-grid">
             <div>
@@ -383,7 +567,7 @@ export default function TraderDashboard({
                 </div>
                 <strong>{formatUsd(trade.realizedPnlUsd)}</strong>
               </article>
-            )) : <p className="empty-copy">No browser-saved trades yet. Use Replay + journal to build a local track record.</p>}
+            )) : <p className="empty-copy">No saved trades yet. Use Replay + journal to build a track record.</p>}
           </div>
         </article>
       </div>
