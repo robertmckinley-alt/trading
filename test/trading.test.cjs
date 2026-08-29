@@ -7,6 +7,7 @@ const test = require('node:test');
 const core = require('../lib/trader-core.cjs');
 const { saveLiveState } = require('../lib/live-trader.cjs');
 const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('../lib/live-status.cjs');
+const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -124,4 +125,60 @@ test('cloud journal validation rejects malformed and oversized batches before da
   assert.deepEqual(validateJournalEntries([{ id: 'trade-1', date: '2026-08-29' }]), [{ id: 'trade-1', date: '2026-08-29' }]);
   assert.throws(() => validateJournalEntries([{ date: '2026-08-29' }]), /non-empty id/);
   assert.throws(() => validateJournalEntries(Array.from({ length: 251 }, (_, index) => ({ id: String(index) }))), /up to 250/);
+});
+
+test('Telegram alerts require a token and destination without exposing either in the message', () => {
+  const config = getTelegramConfig({
+    TELEGRAM_BOT_TOKEN: '123456789:abcdefghijklmnopqrstuvwxyz_ABCDEF',
+    TELEGRAM_CHAT_ID: '-1001234567890'
+  });
+  const message = formatTelegramAlert({
+    type: 'trade-closed',
+    status: 'closed',
+    strategy: 'live-9am-sweep',
+    symbol: 'NQ',
+    side: 'long',
+    realizedPnlUsd: 125.5,
+    rMultiple: 1.25,
+    at: '2026-08-29T15:00:00.000Z'
+  });
+
+  assert.equal(config.ready, true);
+  assert.equal(config.validTokenFormat, true);
+  assert.match(message, /paper trade closed/);
+  assert.match(message, /Realized P&L: \$125\.50/);
+  assert.doesNotMatch(message, /123456789/);
+  assert.doesNotMatch(message, /-1001234567890/);
+});
+
+test('Telegram sender posts directly to sendMessage and skips incomplete configuration', async () => {
+  let request = null;
+  const fetchImpl = async (url, options) => {
+    request = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, result: { message_id: 42 } })
+    };
+  };
+  const env = {
+    TELEGRAM_BOT_TOKEN: '123456789:abcdefghijklmnopqrstuvwxyz_ABCDEF',
+    TELEGRAM_CHAT_ID: '987654321'
+  };
+
+  const result = await sendTelegramAlert({
+    type: 'watcher-health',
+    status: 'failed',
+    message: 'Live market data refresh failed.'
+  }, { env, fetchImpl });
+  const skipped = await sendTelegramAlert({ type: 'watcher-health' }, {
+    env: { TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN },
+    fetchImpl: () => assert.fail('fetch should not be called without a chat ID')
+  });
+
+  assert.equal(result.sent, true);
+  assert.equal(result.messageId, 42);
+  assert.match(request.url, /\/sendMessage$/);
+  assert.deepEqual(JSON.parse(request.options.body).chat_id, '987654321');
+  assert.deepEqual(skipped, { sent: false, reason: 'missing-chat-id' });
 });

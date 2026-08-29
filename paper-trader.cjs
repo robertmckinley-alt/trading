@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env.local'), quiet: true });
 const {
   createEmptyState,
   hydrateState,
@@ -28,6 +29,7 @@ const {
   signalKey,
   trackTradeLifecycle
 } = require('./lib/live-trader.cjs');
+const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
 
 const BASE = __dirname;
 const CONFIG_PATH = path.join(BASE, 'config.json');
@@ -109,34 +111,51 @@ function applyLiveProviderOverride(config, provider) {
   };
 }
 
+function reportTelegramAlertStatus() {
+  const telegram = getTelegramConfig();
+  if (!telegram.enabled) {
+    console.warn('Telegram alerts: disabled — TELEGRAM_BOT_TOKEN was not found in .env.local or the process environment.');
+    return;
+  }
+  if (!telegram.validTokenFormat) {
+    console.warn('Telegram alerts: disabled — TELEGRAM_BOT_TOKEN has an invalid format.');
+    return;
+  }
+  if (!telegram.chatId) {
+    console.warn('Telegram alerts: incomplete — add TELEGRAM_CHAT_ID (or TELEGRAM_CHANNEL_ID).');
+    return;
+  }
+  console.log('Telegram alerts: configured.');
+}
+
 async function sendWatcherAlert(state, event) {
-  const webhookUrl = process.env.TRADING_ALERT_WEBHOOK_URL;
-  if (!webhookUrl) return;
   const eventType = String(event.type || 'watcher');
   const dedupeKey = String(event.dedupeKey || event.status || eventType);
   if (state.live.alertKeys?.[eventType] === dedupeKey) return;
 
   try {
-    const token = process.env.TRADING_ALERT_WEBHOOK_TOKEN;
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({
-        source: 'doctortrades-watcher',
-        at: new Date().toISOString(),
-        ...event
-      }),
-      signal: AbortSignal.timeout(5000)
+    const result = await sendTelegramAlert({
+      ...event,
+      at: new Date().toISOString()
     });
-    if (!response.ok) throw new Error(`Alert webhook responded ${response.status}`);
+    if (!result.sent) {
+      if (result.reason === 'not-configured') return;
+      const messages = {
+        'invalid-token': 'Telegram alerts are disabled because TELEGRAM_BOT_TOKEN has an invalid format.',
+        'missing-chat-id': 'Telegram alerts require TELEGRAM_CHAT_ID (or TELEGRAM_CHANNEL_ID).'
+      };
+      const message = messages[result.reason] || 'Telegram alerts are not fully configured.';
+      if (state.live.lastAlertError !== message) {
+        console.error(`[${new Date().toISOString()}] ${message}`);
+      }
+      state.live.lastAlertError = message;
+      return;
+    }
     state.live.alertKeys = { ...(state.live.alertKeys || {}), [eventType]: dedupeKey };
     state.live.lastAlertAt = new Date().toISOString();
     state.live.lastAlertError = null;
-  } catch (error) {
-    state.live.lastAlertError = `Alert delivery failed: ${error.message}`;
+  } catch {
+    state.live.lastAlertError = 'Telegram alert delivery failed. Check the bot token, chat ID, and network access.';
     console.error(`[${new Date().toISOString()}] ${state.live.lastAlertError}`);
   }
 }
@@ -466,6 +485,7 @@ async function main() {
 
   if (command === 'watch-live') {
     const { intervalMs } = parseWatchOptions(rest);
+    reportTelegramAlertStatus();
     await runWatchLive({ ...applyLiveProviderOverride(config, provider), strategySlug }, state, intervalMs, statePath);
     return;
   }

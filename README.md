@@ -277,8 +277,9 @@ The table is created lazily by the app; `deploy/sql/001_cloud_journal.sql` is al
 - `GET /api/health` returns `200` only when the bridge and all watchers are healthy, otherwise `503` for an uptime monitor.
 - Vercel Web Analytics and Speed Insights are included in the root layout.
 - API routes emit structured request logs without setup or candle payloads.
-- Set `TRADING_ALERT_WEBHOOK_URL` on the VPS watcher to receive feed-failure, recovery, trade-opened, and trade-closed events. Add `TRADING_ALERT_WEBHOOK_TOKEN` when the receiver expects bearer authentication.
-- Example environment values live in `deploy/vercel.env.example`.
+- Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive feed-failure, recovery, trade-opened, and trade-closed alerts directly in Telegram. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
+- The watcher automatically loads `.env.local`, while the managed launcher also exports it before startup. Populated environment files are ignored by Git and the token is never written to watcher logs.
+- Example local, VPS, and Vercel values live in `.env.local.example`, `deploy/systemd/trading.env.example`, and `deploy/vercel.env.example` respectively.
 
 The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
 
