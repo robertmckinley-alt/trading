@@ -70,6 +70,7 @@ const snapshot = {
   realizedPnlUsd: state.realizedPnlUsd,
   openSignalKey: state.live?.openSignalKey || null,
   openTriggeredAt: state.live?.openTriggeredAt || null,
+  heartbeat: state.live?.heartbeat || null,
   signalHistoryCount: Array.isArray(state.live?.signalHistory) ? state.live.signalHistory.length : 0,
   trades: Array.isArray(state.trades) ? state.trades.length : 0
 };

@@ -203,6 +203,7 @@ Key live fields:
 - `live.baseUrl`: legacy Polygon market-data API base URL
 - `live.lookbackBars`: recent `1m` candles pulled per scan
 - `live.pollIntervalMs`: scan interval
+- `live.fetchTimeoutMs`: maximum time allowed for one Databento fetch
 - `live.sessionWindows`: `Asia` and `London` time windows used for range detection
 
 For a real feed:
@@ -239,6 +240,24 @@ LIVE_STATUS_SOURCE_URL=http://YOUR_VPS_PUBLIC_IP:3210/api/live-status
 ```
 
 in the Vercel project environment, then redeploy. Without that bridge URL, the Vercel app can only show local/manual state.
+
+For a private bridge, set the same long random `LIVE_STATUS_TOKEN` value on the VPS and in Vercel. The website then sends it as a bearer token. `GET /healthz` remains available for uptime checks without exposing strategy or account data.
+
+## Daily Reliability
+
+The watcher now polls once per minute by default, persists a health heartbeat after every poll, writes state atomically, and preserves open trades and consumed signals across ordinary restarts. Use `RESET_LIVE_STATE=1` only when you intentionally want to clear transient signal state.
+
+For a Linux VPS, the templates in `deploy/systemd` keep both watchers and the status bridge alive across crashes and reboots. Adjust `/opt/doctortrades/trading` if your checkout lives elsewhere, copy the environment example to `/etc/doctortrades/trading.env`, then install and enable:
+
+```bash
+sudo cp deploy/systemd/doctortrades-*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now doctortrades-watcher@live-9am-sweep
+sudo systemctl enable --now doctortrades-watcher@hourly-sweep-ifvg-bos
+sudo systemctl enable --now doctortrades-status
+```
+
+The dashboard treats a heartbeat older than three polling intervals as stale and keeps the last good remote snapshot for up to 15 minutes when the bridge briefly fails.
 
 The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
 

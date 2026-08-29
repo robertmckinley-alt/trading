@@ -9,89 +9,60 @@ import { normalizeConfig } from '../lib/trader-core.cjs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function readFile(relativePath) {
-  return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
-}
-
 export default async function HomePage() {
-  const config = normalizeConfig(JSON.parse(readFile('config.json')));
-  const sampleSetup = readFile('examples/lucid-sweep-short.setup.json');
-  const sampleCsv = readFile('examples/sample-nq-1m.csv');
+  const config = normalizeConfig(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8')));
+  const sampleSetup = fs.readFileSync(path.join(process.cwd(), 'examples', 'lucid-sweep-short.setup.json'), 'utf8');
+  const sampleCsv = fs.readFileSync(path.join(process.cwd(), 'examples', 'sample-nq-1m.csv'), 'utf8');
   const liveStatus = await getStrategySnapshots();
 
   return (
-    <main className="page-shell">
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">DoctorTrades NQ Sandbox</p>
-          <h1>Ship the clip strategy to Vercel without losing the trading logic.</h1>
-          <p className="hero-lede">
-            This web build keeps the exact paper-trader contract: 9:00 AM New York, mark Asia and London highs or lows,
-            wait for the sweep, drop to 1 minute, take the FVG reversal, stop at the swing extreme, and aim for the next draw on liquidity.
-          </p>
-          <div className="hero-badges">
-            <span>Bankroll {config.startingBalanceUsd.toLocaleString()} USD</span>
-            <span>Max drawdown {config.maxAccountDrawdownPercent}%</span>
-            <span>Per-trade cap {config.maxRiskPerTradeUsd} USD</span>
-          </div>
-          <div className="hero-actions">
-            <Link className="primary-link" href="/strategies/live-9am-sweep">
-              Open live strategy build
-            </Link>
-            <Link className="secondary-link" href="/strategies/hourly-sweep-ifvg-bos">
-              Open 1H sweep route
-            </Link>
+    <main className="page-shell" id="main-content">
+      <header className="app-header">
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">DT</span>
+          <div>
+            <strong>DoctorTrades</strong>
+            <span>NQ paper trading</span>
           </div>
         </div>
-        <div className="hero-card">
-          <p className="eyebrow">Deploy shape</p>
-          <ul className="hero-list">
-            <li>Next.js app router</li>
-            <li>Stateless server routes for plan and replay</li>
-            <li>Browser-local journal for Vercel-safe persistence</li>
-            <li>Same validated config and sample data from the CLI build</li>
-          </ul>
-        </div>
-      </section>
+        <nav className="app-nav" aria-label="Strategy navigation">
+          <Link href="/strategies/live-9am-sweep">9AM sweep</Link>
+          <Link href="/strategies/hourly-sweep-ifvg-bos">Hourly iFVG</Link>
+        </nav>
+      </header>
 
-      <section className="strategy-strip">
-        <article className="strategy-card">
-          <p className="eyebrow">Manual lab</p>
-          <h2>Replay and journal the 9AM strategy account.</h2>
-          <p className="strategy-copy">
-            Use the JSON and CSV editors below to validate entries, replay candles, and keep the same browser-local paper account used by the 9AM strategy route.
+      <section className="dashboard-intro">
+        <div>
+          <p className="eyebrow">Automated NQ paper strategies</p>
+          <h1>Trading performance, risk, and live status in one place.</h1>
+          <p>
+            Monitor both strategy accounts, inspect daily outcomes, and drill into every journaled trade without leaving the dashboard.
           </p>
-        </article>
-        <article className="strategy-card strategy-card-accent">
-          <p className="eyebrow">Always-on route</p>
-          <h2>Spin out the live watcher as its own page.</h2>
-          <p className="strategy-copy">
-            The live strategy page mirrors the same 9AM Asia or London sweep logic, but frames it around the VPS watcher and auto-detected signals.
-          </p>
-          <Link className="secondary-link" href="/strategies/live-9am-sweep">
-            View live strategy page
-          </Link>
-        </article>
-        <article className="strategy-card">
-          <p className="eyebrow">New clip route</p>
-          <h2>Break out the 1H sweep plus iFVG entry model.</h2>
-          <p className="strategy-copy">
-            The latest video uses hourly highs and lows, a 5-minute sweep, and a 1-minute BOS confirmation. This route keeps that flow separate from the 9AM session watcher.
-          </p>
-          <Link className="secondary-link" href="/strategies/hourly-sweep-ifvg-bos">
-            View 1H sweep route
-          </Link>
-        </article>
+        </div>
+        <dl className="risk-guardrails" aria-label="Account risk guardrails">
+          <div><dt>Allocated capital</dt><dd>${(config.startingBalanceUsd * 2).toLocaleString()}</dd></div>
+          <div><dt>Max drawdown</dt><dd>{config.maxAccountDrawdownPercent}% per account</dd></div>
+          <div><dt>Trade risk cap</dt><dd>${config.maxRiskPerTradeUsd.toLocaleString()}</dd></div>
+        </dl>
       </section>
 
       <LiveStrategyBoard initialData={liveStatus} />
 
-      <TraderDashboard
-        initialConfig={config}
-        initialSetupText={sampleSetup}
-        initialCsvText={sampleCsv}
-        storageKey="lucid-nq-paper-trader-live-9am-sweep-journal-v1"
-      />
+      <section className="manual-workspace" aria-labelledby="manual-workspace-title">
+        <div className="section-heading manual-workspace-head">
+          <div>
+            <span className="section-kicker">Replay lab</span>
+            <h2 id="manual-workspace-title">Validate a setup against one-minute candles</h2>
+          </div>
+          <p>Plans and journal entries stay in this browser.</p>
+        </div>
+        <TraderDashboard
+          initialConfig={config}
+          initialSetupText={sampleSetup}
+          initialCsvText={sampleCsv}
+          storageKey="lucid-nq-paper-trader-live-9am-sweep-journal-v1"
+        />
+      </section>
     </main>
   );
 }

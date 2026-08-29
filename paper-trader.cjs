@@ -64,7 +64,7 @@ function requireFile(filePath, label) {
 
 function parseWatchOptions(rest) {
   const fileArgs = [];
-  let intervalMs = 1000;
+  let intervalMs = null;
   let provider = null;
   let strategySlug = 'live-9am-sweep';
 
@@ -84,7 +84,7 @@ function parseWatchOptions(rest) {
     fileArgs.push(arg);
   }
 
-  if (!Number.isFinite(intervalMs) || intervalMs < 250) {
+  if (intervalMs !== null && (!Number.isFinite(intervalMs) || intervalMs < 250)) {
     throw new Error('watch interval must be at least 250ms');
   }
 
@@ -201,6 +201,16 @@ async function runWatchLive(config, state, intervalMs, statePath) {
   const tick = async () => {
     const { candles, metadata } = await fetchLiveCandles(config);
     const lastCandle = candles[candles.length - 1];
+    state.live.heartbeat = {
+      at: new Date().toISOString(),
+      ok: true,
+      pollIntervalMs: actualIntervalMs,
+      provider: metadata.provider,
+      ticker: metadata.ticker,
+      lastCandle: lastCandle || null,
+      error: null
+    };
+    saveLiveState(statePath, state);
     let summaryLines = [
       `Feed: ${metadata.provider} ${metadata.ticker}`,
       `Last candle: ${lastCandle ? `${lastCandle.timestamp} O:${lastCandle.open} H:${lastCandle.high} L:${lastCandle.low} C:${lastCandle.close}` : 'none'}`
@@ -314,6 +324,20 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     inFlight = true;
     try {
       await tick();
+    } catch (error) {
+      state.live.heartbeat = {
+        ...(state.live.heartbeat || {}),
+        at: new Date().toISOString(),
+        ok: false,
+        pollIntervalMs: actualIntervalMs,
+        error: error.message
+      };
+      try {
+        saveLiveState(statePath, state);
+      } catch {
+        // Preserve the original feed error in the watcher log.
+      }
+      throw error;
     } finally {
       inFlight = false;
     }
@@ -356,7 +380,7 @@ async function main() {
     const [setupPath, csvPath] = fileArgs;
     requireFile(setupPath, 'setup path');
     requireFile(csvPath, 'csv path');
-    runWatch(setupPath, csvPath, config, state, intervalMs);
+    runWatch(setupPath, csvPath, config, state, intervalMs || 1000);
     return;
   }
 

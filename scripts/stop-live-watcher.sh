@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
 PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
 HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
-RESET_LIVE_STATE="${RESET_LIVE_STATE:-1}"
+RESET_LIVE_STATE="${RESET_LIVE_STATE:-0}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
 mkdir -p "$RUNTIME_DIR"

@@ -1,0 +1,19 @@
+[Unit]
+Description=DoctorTrades paper watcher (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/doctortrades/trading
+EnvironmentFile=/etc/doctortrades/trading.env
+ExecStart=/usr/bin/node paper-trader.cjs watch-live --provider=databento --interval=60000 --strategy=%i
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

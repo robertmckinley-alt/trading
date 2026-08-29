@@ -19,7 +19,14 @@ function loadConfig() {
 
 export async function POST(request) {
   try {
+    const contentLength = Number(request.headers.get('content-length') || 0);
+    if (contentLength > 2_500_000) {
+      return NextResponse.json({ ok: false, error: 'Replay request is too large.' }, { status: 413 });
+    }
     const { setup, csvText, journalState, journalTrade = false } = await request.json();
+    if (typeof csvText !== 'string' || csvText.length > 2_000_000) {
+      return NextResponse.json({ ok: false, error: 'CSV input must be text under 2 MB.' }, { status: 400 });
+    }
     const config = loadConfig();
     const normalizedSetup = normalizeSetup(setup, config);
     const validation = validateSetup(normalizedSetup, config);

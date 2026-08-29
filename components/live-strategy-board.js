@@ -1,6 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+const timestampFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short'
+});
+
+const shortDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric'
+});
 
 function formatUsd(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
@@ -13,7 +29,12 @@ function formatPercent(value) {
 function formatStamp(value) {
   if (!value) return 'n/a';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : timestampFormatter.format(date);
+}
+
+function formatShortDate(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? value : shortDateFormatter.format(date);
 }
 
 function buildPortfolioTotals(strategies) {
@@ -153,9 +174,264 @@ function buildRecapForDate(strategies, date) {
   );
 }
 
+function buildDailySeries(strategies) {
+  let cumulativePnlUsd = 0;
+  return buildRecapDates(strategies)
+    .slice()
+    .sort()
+    .map((date) => {
+      const recap = buildRecapForDate(strategies, date);
+      cumulativePnlUsd += recap.realizedPnlUsd;
+      return {
+        ...recap,
+        cumulativePnlUsd: Math.round(cumulativePnlUsd * 100) / 100
+      };
+    });
+}
+
+function collectTrades(strategies) {
+  const trades = [];
+  const seen = new Set();
+
+  for (const strategy of strategies) {
+    for (const recap of strategy.journal?.dailyRecaps || []) {
+      for (const trade of recap.tradesList || []) {
+        const key = `${strategy.slug}:${trade.id || `${recap.date}:${trade.filledAt}:${trade.entry}`}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        trades.push({ ...trade, strategySlug: strategy.slug, date: recap.date });
+      }
+    }
+  }
+
+  return trades.sort((a, b) => String(a.filledAt || a.date).localeCompare(String(b.filledAt || b.date)));
+}
+
+function buildPerformanceAnalytics(strategies, dailySeries) {
+  const trades = collectTrades(strategies);
+  const wins = trades.filter((trade) => Number(trade.realizedPnlUsd || 0) > 0);
+  const losses = trades.filter((trade) => Number(trade.realizedPnlUsd || 0) < 0);
+  const grossProfit = wins.reduce((sum, trade) => sum + Number(trade.realizedPnlUsd || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + Number(trade.realizedPnlUsd || 0), 0));
+  const totalPnl = grossProfit - grossLoss;
+  const avgR = trades.length
+    ? trades.reduce((sum, trade) => sum + Number(trade.rMultiple || 0), 0) / trades.length
+    : 0;
+  let peak = 0;
+  let maxDrawdown = 0;
+  for (const day of dailySeries) {
+    peak = Math.max(peak, day.cumulativePnlUsd);
+    maxDrawdown = Math.max(maxDrawdown, peak - day.cumulativePnlUsd);
+  }
+
+  return {
+    expectancyUsd: trades.length ? totalPnl / trades.length : 0,
+    avgR,
+    maxDrawdown,
+    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
+    bestDay: dailySeries.length
+      ? dailySeries.reduce((best, day) => day.realizedPnlUsd > best.realizedPnlUsd ? day : best, dailySeries[0])
+      : null,
+    worstDay: dailySeries.length
+      ? dailySeries.reduce((worst, day) => day.realizedPnlUsd < worst.realizedPnlUsd ? day : worst, dailySeries[0])
+      : null
+  };
+}
+
+function PerformanceChart({ dailySeries }) {
+  const chartData = dailySeries.slice(-30);
+  if (!chartData.length) {
+    return (
+      <div className="chart-empty">
+        <strong>No performance history yet</strong>
+        <span>Daily realized PnL and the cumulative curve will appear after the first closed trade.</span>
+      </div>
+    );
+  }
+
+  const width = 760;
+  const height = 250;
+  const left = 44;
+  const right = 16;
+  const top = 20;
+  const bottom = 42;
+  const innerWidth = width - left - right;
+  const innerHeight = height - top - bottom;
+  const maxAbsoluteDaily = Math.max(1, ...chartData.map((day) => Math.abs(day.realizedPnlUsd)));
+  const cumulativeValues = chartData.map((day) => day.cumulativePnlUsd);
+  const cumulativeMin = Math.min(0, ...cumulativeValues);
+  const cumulativeMax = Math.max(0, ...cumulativeValues);
+  const cumulativeRange = Math.max(1, cumulativeMax - cumulativeMin);
+  const step = innerWidth / chartData.length;
+  const zeroY = top + (innerHeight / 2);
+  const linePoints = chartData.map((day, index) => {
+    const x = left + (step * index) + (step / 2);
+    const y = top + ((cumulativeMax - day.cumulativePnlUsd) / cumulativeRange) * innerHeight;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  return (
+    <div className="performance-chart-wrap">
+      <svg
+        className="performance-chart"
+        role="img"
+        aria-label="Daily realized profit and loss bars with cumulative profit and loss line"
+        viewBox={`0 0 ${width} ${height}`}
+      >
+        <line className="chart-zero" x1={left} x2={width - right} y1={zeroY} y2={zeroY} />
+        {chartData.map((day, index) => {
+          const magnitude = (Math.abs(day.realizedPnlUsd) / maxAbsoluteDaily) * ((innerHeight / 2) - 8);
+          const x = left + (step * index) + Math.max(2, step * 0.14);
+          const barWidth = Math.max(3, step * 0.72);
+          const y = day.realizedPnlUsd >= 0 ? zeroY - magnitude : zeroY;
+          return (
+            <rect
+              className={day.realizedPnlUsd >= 0 ? 'chart-bar chart-bar-positive' : 'chart-bar chart-bar-negative'}
+              height={Math.max(1, magnitude)}
+              key={day.date}
+              rx="2"
+              width={barWidth}
+              x={x}
+              y={y}
+            >
+              <title>{`${day.date}: ${formatUsd(day.realizedPnlUsd)}`}</title>
+            </rect>
+          );
+        })}
+        <polyline className="chart-line" fill="none" points={linePoints} />
+        {chartData.map((day, index) => {
+          const [x, y] = linePoints.split(' ')[index].split(',');
+          return (
+            <circle className="chart-point" cx={x} cy={y} key={`point-${day.date}`} r="3">
+              <title>{`Cumulative through ${day.date}: ${formatUsd(day.cumulativePnlUsd)}`}</title>
+            </circle>
+          );
+        })}
+        <text className="chart-axis-label" x="4" y={zeroY - 7}>daily</text>
+        <text className="chart-axis-label" x={left} y={height - 10}>{formatShortDate(chartData[0].date)}</text>
+        {chartData.length > 2 ? (
+          <text className="chart-axis-label" textAnchor="middle" x={left + (innerWidth / 2)} y={height - 10}>
+            {formatShortDate(chartData[Math.floor(chartData.length / 2)].date)}
+          </text>
+        ) : null}
+        <text className="chart-axis-label" textAnchor="end" x={width - right} y={height - 10}>
+          {formatShortDate(chartData.at(-1).date)}
+        </text>
+      </svg>
+      <div className="chart-legend" aria-hidden="true">
+        <span><i className="legend-bar" />Daily PnL</span>
+        <span><i className="legend-line" />Cumulative PnL</span>
+      </div>
+    </div>
+  );
+}
+
+function PerformancePanel({ strategies, dailySeries }) {
+  const analytics = buildPerformanceAnalytics(strategies, dailySeries);
+  const profitFactor = analytics.profitFactor === null
+    ? '—'
+    : Number.isFinite(analytics.profitFactor)
+      ? analytics.profitFactor.toFixed(2)
+      : '∞';
+
+  return (
+    <section className="performance-panel" aria-labelledby="performance-title">
+      <div className="section-heading">
+        <div>
+          <span className="section-kicker">Performance</span>
+          <h3 id="performance-title">Daily PnL and equity momentum</h3>
+        </div>
+        <p>Up to 30 trading days · bars show closed PnL</p>
+      </div>
+      <div className="performance-layout">
+        <PerformanceChart dailySeries={dailySeries} />
+        <dl className="analytics-list">
+          <div>
+            <dt>Profit factor</dt>
+            <dd>{profitFactor}</dd>
+          </div>
+          <div>
+            <dt>Expectancy / trade</dt>
+            <dd>{formatUsd(analytics.expectancyUsd)}</dd>
+          </div>
+          <div>
+            <dt>Average R</dt>
+            <dd>{analytics.avgR.toFixed(2)}R</dd>
+          </div>
+          <div>
+            <dt>Max drawdown</dt>
+            <dd>{formatUsd(analytics.maxDrawdown)}</dd>
+          </div>
+          <div>
+            <dt>Best day</dt>
+            <dd>{analytics.bestDay ? `${formatUsd(analytics.bestDay.realizedPnlUsd)} · ${formatShortDate(analytics.bestDay.date)}` : '—'}</dd>
+          </div>
+          <div>
+            <dt>Worst day</dt>
+            <dd>{analytics.worstDay ? `${formatUsd(analytics.worstDay.realizedPnlUsd)} · ${formatShortDate(analytics.worstDay.date)}` : '—'}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function DailyLedger({ dailySeries, activeDate, onDateChange }) {
+  const rows = dailySeries.slice().reverse().slice(0, 14);
+  return (
+    <section className="daily-ledger" aria-labelledby="daily-ledger-title">
+      <div className="section-heading">
+        <div>
+          <span className="section-kicker">Trade history</span>
+          <h3 id="daily-ledger-title">Trades by day</h3>
+        </div>
+        <p>Select a day to open its full trade detail.</p>
+      </div>
+      {rows.length ? (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Trades</th>
+                <th scope="col">W–L</th>
+                <th scope="col">Win rate</th>
+                <th scope="col">Avg R</th>
+                <th scope="col">Realized PnL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((day) => {
+                const winRate = day.trades ? (day.wins / day.trades) * 100 : 0;
+                const avgR = day.trades ? day.avgRTotal / day.trades : 0;
+                return (
+                  <tr className={day.date === activeDate ? 'is-selected' : ''} key={day.date}>
+                    <th scope="row">
+                      <button type="button" onClick={() => onDateChange(day.date)}>{day.date}</button>
+                    </th>
+                    <td>{day.trades}</td>
+                    <td>{day.wins}–{day.losses}</td>
+                    <td>{formatPercent(winRate)}</td>
+                    <td>{avgR.toFixed(2)}R</td>
+                    <td className={day.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>
+                      {formatUsd(day.realizedPnlUsd)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="empty-copy">No closed trading days yet.</p>
+      )}
+    </section>
+  );
+}
+
 function outcomeTone(strategy) {
   if (strategy.mode === 'paper-route') return 'neutral';
-  if (strategy.watcher?.isRunning && !strategy.live?.latestError) return 'good';
+  if ((strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning) && !strategy.live?.latestError) return 'good';
   if (strategy.live?.latestError) return 'warn';
   if (strategy.watcher?.hasLiveEvidence || strategy.watcher?.staleStatusHint) return 'warn';
   return 'neutral';
@@ -165,6 +441,12 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
   const daily = buildDailyTotals(strategies);
   const recapDates = buildRecapDates(strategies);
   const activeDate = selectedDate || recapDates[0] || daily.date || new Date().toISOString().slice(0, 10);
+  const chronologicalDates = recapDates.slice().sort();
+  const activeIndex = chronologicalDates.indexOf(activeDate);
+  const previousDate = activeIndex > 0 ? chronologicalDates[activeIndex - 1] : null;
+  const nextDate = activeIndex >= 0 && activeIndex < chronologicalDates.length - 1
+    ? chronologicalDates[activeIndex + 1]
+    : null;
   const selectedRecap = buildRecapForDate(strategies, activeDate);
   const selectedWinRate = selectedRecap.trades > 0 ? (selectedRecap.wins / selectedRecap.trades) * 100 : 0;
   const selectedAvgR = selectedRecap.trades > 0 ? selectedRecap.avgRTotal / selectedRecap.trades : 0;
@@ -184,12 +466,12 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
       <div className="daily-tracker-grid">
         <div className="daily-tracker-metric daily-tracker-primary">
           <span>Active PnL</span>
-          <strong>{formatUsd(daily.activePnlUsd)}</strong>
+          <strong className={daily.activePnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(daily.activePnlUsd)}</strong>
           <p>Realized plus open-position mark</p>
         </div>
         <div className="daily-tracker-metric">
           <span>Today realized</span>
-          <strong>{formatUsd(daily.realizedPnlUsd)}</strong>
+          <strong className={daily.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(daily.realizedPnlUsd)}</strong>
           <p>{daily.wins} wins / {daily.losses} losses</p>
         </div>
         <div className="daily-tracker-metric">
@@ -220,17 +502,27 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
       <div className="daily-recap">
         <div className="daily-recap-head">
           <div>
-            <span>Daily recap</span>
+            <span>Selected session</span>
             <strong>{activeDate}</strong>
           </div>
-          <label>
-            <span>Search date</span>
-            <input
-              type="date"
-              value={activeDate}
-              onChange={(event) => onDateChange(event.target.value)}
-            />
-          </label>
+          <div className="date-search-controls">
+            <button disabled={!previousDate} onClick={() => previousDate && onDateChange(previousDate)} type="button">
+              Previous
+            </button>
+            <label>
+              <span>Search trading date</span>
+              <input
+                max={chronologicalDates.at(-1)}
+                min={chronologicalDates[0]}
+                type="date"
+                value={activeDate}
+                onChange={(event) => onDateChange(event.target.value)}
+              />
+            </label>
+            <button disabled={!nextDate} onClick={() => nextDate && onDateChange(nextDate)} type="button">
+              Next
+            </button>
+          </div>
         </div>
 
         {recapDates.length ? (
@@ -251,12 +543,12 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
         <div className="daily-tracker-grid">
           <div className="daily-tracker-metric daily-tracker-primary">
             <span>Recap PnL</span>
-            <strong>{formatUsd(selectedRecap.activePnlUsd)}</strong>
+            <strong className={selectedRecap.activePnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(selectedRecap.activePnlUsd)}</strong>
             <p>{hasSelectedActivity ? `${selectedRecap.openTrades} open / ${selectedRecap.trades} closed` : 'No trades found for this date'}</p>
           </div>
           <div className="daily-tracker-metric">
             <span>Closed PnL</span>
-            <strong>{formatUsd(selectedRecap.realizedPnlUsd)}</strong>
+            <strong className={selectedRecap.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(selectedRecap.realizedPnlUsd)}</strong>
             <p>{selectedRecap.wins} wins / {selectedRecap.losses} losses</p>
           </div>
           <div className="daily-tracker-metric">
@@ -343,7 +635,7 @@ function PortfolioTotals({ strategies }) {
       <div className="portfolio-total-card portfolio-total-card-primary">
         <span>Combined balance</span>
         <strong>{formatUsd(totals.balanceUsd)}</strong>
-        <p>{formatUsd(totals.realizedPnlUsd)} realized across {formatUsd(totals.bankrollUsd)} allocated</p>
+        <p className={totals.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(totals.realizedPnlUsd)} realized across {formatUsd(totals.bankrollUsd)} allocated</p>
       </div>
       <div className="portfolio-total-card">
         <span>Total trades</span>
@@ -442,7 +734,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
 
       {strategy.mode === 'live-watcher' ? (
         <div className="live-status-strip">
-          <span className={`live-dot ${strategy.watcher?.isRunning ? 'live-dot-good' : 'live-dot-warn'}`} />
+          <span className={`live-dot ${(strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning) ? 'live-dot-good' : 'live-dot-warn'}`} />
           <strong>{strategy.watcher?.statusLabel || 'Unknown'}</strong>
           <span>PID {strategy.watcher?.pid || 'n/a'}</span>
         </div>
@@ -481,15 +773,39 @@ function StrategyCard({ strategy, isBridgeFallback }) {
 export default function LiveStrategyBoard({ initialData }) {
   const [data, setData] = useState(initialData);
   const [selectedDate, setSelectedDate] = useState('');
+  const [refreshState, setRefreshState] = useState({ busy: false, error: '' });
+
+  const refreshData = useCallback(async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    setRefreshState({ busy: true, error: '' });
+
+    try {
+      const response = await fetch('/api/live-status', { cache: 'no-store', signal: controller.signal });
+      const payload = await response.json();
+      if (!response.ok || !payload?.strategies) {
+        throw new Error(payload?.error || 'Status service did not return strategy data');
+      }
+      setData(payload);
+      setRefreshState({ busy: false, error: '' });
+    } catch (error) {
+      setRefreshState({
+        busy: false,
+        error: error.name === 'AbortError' ? 'Status refresh timed out. The last good snapshot is still shown.' : error.message
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function refresh() {
       try {
-        const response = await fetch('/api/live-status', { cache: 'no-store' });
+        const response = await fetch('/api/live-status', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
         const payload = await response.json();
-        if (!cancelled && payload?.strategies) {
+        if (!cancelled && response.ok && payload?.strategies) {
           setData(payload);
         }
       } catch {
@@ -498,37 +814,49 @@ export default function LiveStrategyBoard({ initialData }) {
     }
 
     refresh();
-    const timer = setInterval(refresh, 10000);
+    const timer = setInterval(refresh, 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
   }, []);
 
-  const strategies = Array.isArray(data?.strategies) ? data.strategies : [];
+  const strategies = useMemo(() => Array.isArray(data?.strategies) ? data.strategies : [], [data]);
   const isBridgeFallback = data?.source === 'remote-bridge-fallback';
+  const dailySeries = useMemo(() => buildDailySeries(strategies), [strategies]);
+  const activeDate = selectedDate || dailySeries.at(-1)?.date || buildDailyTotals(strategies).date || '';
+  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && (strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning)).length;
+  const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
 
   return (
     <section className="live-board">
       <div className="live-board-head">
         <div>
-          <p className="eyebrow">Main page visual</p>
-          <h2>Dashboard totals and current outcomes</h2>
+          <p className="eyebrow">Portfolio overview</p>
+          <h2>Daily trading control center</h2>
         </div>
         <div className="live-board-meta">
-          <span>Source: {isBridgeFallback ? 'fallback snapshot' : data?.source || 'unknown'}</span>
-          <span>Updated: {formatStamp(data?.generatedAt)}</span>
+          <span className={runningWatchers === watcherCount && watcherCount ? 'source-status source-status-good' : 'source-status source-status-warn'}>
+            {runningWatchers}/{watcherCount} watchers online
+          </span>
+          <span>{isBridgeFallback ? 'Fallback snapshot' : data?.source === 'remote-bridge-cache' ? 'Last good VPS snapshot' : data?.source === 'remote-bridge' ? 'Live VPS bridge' : 'Local runtime'} · {formatStamp(data?.generatedAt)}</span>
+          <button className="refresh-button" disabled={refreshState.busy} onClick={refreshData} type="button">
+            {refreshState.busy ? 'Refreshing…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
+      {refreshState.error ? <p className="live-inline-warning" role="status">{refreshState.error}</p> : null}
       {data?.error ? (
         <p className="live-inline-warning">
-          Bridge warning: remote status timed out, so this board is showing the local fallback snapshot. {data.error}
+          The live bridge is unavailable, so this board is showing the safest available fallback snapshot.
         </p>
       ) : null}
 
       <PortfolioTotals strategies={strategies} />
-      <DailyTracker strategies={strategies} selectedDate={selectedDate} onDateChange={setSelectedDate} />
+      <PerformancePanel strategies={strategies} dailySeries={dailySeries} />
+      <DailyLedger dailySeries={dailySeries} activeDate={activeDate} onDateChange={setSelectedDate} />
+      <DailyTracker strategies={strategies} selectedDate={activeDate} onDateChange={setSelectedDate} />
 
       <div className="live-board-grid">
         {strategies.map((strategy) => (

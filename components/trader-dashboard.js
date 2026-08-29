@@ -3,6 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 
 const DEFAULT_STORAGE_KEY = 'lucid-nq-paper-trader-journal-v1';
+const MAX_SETUP_CHARACTERS = 100_000;
+const MAX_CSV_CHARACTERS = 2_000_000;
+const timestampFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short'
+});
 
 const defaultSetup = {
   symbol: 'NQ',
@@ -78,6 +89,12 @@ function formatUsd(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
 }
 
+function formatStamp(value) {
+  if (!value) return 'Fresh slate';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : timestampFormatter.format(date);
+}
+
 function StatCard({ label, value, hint }) {
   return (
     <article className="stat-card">
@@ -101,24 +118,42 @@ export default function TraderDashboard({
   const [replayResult, setReplayResult] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
+  const [storageLoaded, setStorageLoaded] = useState(false);
+  const [storageError, setStorageError] = useState('');
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(storageKey);
-    if (!stored) return;
-    try {
-      setJournalState(hydrateState(JSON.parse(stored), initialConfig));
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem(storageKey);
+      if (stored) {
+        try {
+          setJournalState(hydrateState(JSON.parse(stored), initialConfig));
+        } catch {
+          window.localStorage.removeItem(storageKey);
+          setStorageError('The saved browser journal was unreadable, so a fresh journal was opened.');
+        }
+      }
+      setStorageLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [initialConfig, storageKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(journalState));
-  }, [journalState, storageKey]);
+    if (!storageLoaded) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(journalState));
+    } catch {
+      queueMicrotask(() => {
+        setStorageError('This browser could not save the journal. Export or copy important results before leaving.');
+      });
+    }
+  }, [journalState, storageKey, storageLoaded]);
 
   const report = useMemo(() => computeReport(journalState, initialConfig), [journalState, initialConfig]);
 
   function parseSetup() {
+    if (setupText.length > MAX_SETUP_CHARACTERS) {
+      throw new Error('Setup JSON is too large. Keep it under 100,000 characters.');
+    }
     const parsed = JSON.parse(setupText);
     return { ...defaultSetup, ...parsed, setup: { ...defaultSetup.setup, ...(parsed.setup || {}) } };
   }
@@ -155,6 +190,9 @@ export default function TraderDashboard({
     setBusy(saveTrade ? 'journal' : 'replay');
     setError('');
     try {
+      if (csvText.length > MAX_CSV_CHARACTERS) {
+        throw new Error('CSV input is too large. Keep it under 2 MB for browser replay.');
+      }
       const setup = parseSetup();
       const data = await postJson('/api/replay', { setup, csvText, journalState, journalTrade: saveTrade });
       setPlan(data.plan);
@@ -191,7 +229,14 @@ export default function TraderDashboard({
             </div>
             <button className="ghost-button" type="button" onClick={() => setSetupText(initialSetupText)}>Reload sample</button>
           </div>
-          <textarea value={setupText} onChange={(event) => setSetupText(event.target.value)} spellCheck="false" />
+          <label className="sr-only" htmlFor={`${storageKey}-setup`}>Trade setup JSON</label>
+          <textarea
+            id={`${storageKey}-setup`}
+            maxLength={MAX_SETUP_CHARACTERS}
+            value={setupText}
+            onChange={(event) => setSetupText(event.target.value)}
+            spellCheck="false"
+          />
         </article>
 
         <article className="panel">
@@ -202,7 +247,15 @@ export default function TraderDashboard({
             </div>
             <button className="ghost-button" type="button" onClick={() => setCsvText(initialCsvText)}>Reload sample</button>
           </div>
-          <textarea className="csv-box" value={csvText} onChange={(event) => setCsvText(event.target.value)} spellCheck="false" />
+          <label className="sr-only" htmlFor={`${storageKey}-csv`}>One-minute candle CSV</label>
+          <textarea
+            className="csv-box"
+            id={`${storageKey}-csv`}
+            maxLength={MAX_CSV_CHARACTERS}
+            value={csvText}
+            onChange={(event) => setCsvText(event.target.value)}
+            spellCheck="false"
+          />
         </article>
 
         <div className="action-row">
@@ -216,7 +269,8 @@ export default function TraderDashboard({
             {busy === 'journal' ? 'Journaling...' : 'Replay + journal'}
           </button>
         </div>
-        {error ? <p className="error-box">{error}</p> : null}
+        {error ? <p className="error-box" role="alert">{error}</p> : null}
+        {storageError ? <p className="live-inline-warning" role="status">{storageError}</p> : null}
       </div>
 
       <div className="results-stack">
@@ -317,7 +371,7 @@ export default function TraderDashboard({
             </div>
             <div>
               <span>Last update</span>
-              <strong>{journalState.lastUpdatedAt ? new Date(journalState.lastUpdatedAt).toLocaleString() : 'Fresh slate'}</strong>
+              <strong>{formatStamp(journalState.lastUpdatedAt)}</strong>
             </div>
           </div>
           <div className="trade-list">

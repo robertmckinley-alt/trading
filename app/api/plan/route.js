@@ -16,6 +16,10 @@ function loadConfig() {
 
 export async function POST(request) {
   try {
+    const contentLength = Number(request.headers.get('content-length') || 0);
+    if (contentLength > 250_000) {
+      return NextResponse.json({ ok: false, error: 'Plan request is too large.' }, { status: 413 });
+    }
     const { setup, journalState } = await request.json();
     const config = loadConfig();
     const normalizedSetup = normalizeSetup(setup, config);
