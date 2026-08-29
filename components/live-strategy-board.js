@@ -749,7 +749,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
       <StrategyOutcome strategy={strategy} isBridgeFallback={isBridgeFallback} />
 
       {strategy.mode === 'live-watcher' && strategy.live?.latestError ? (
-        <p className="live-inline-error">Latest runtime noise: {strategy.live.latestError.message}</p>
+        <p className="live-inline-error">Latest feed issue: {strategy.live.latestError.message}</p>
       ) : null}
       {strategy.mode === 'live-watcher' && strategy.watcher?.staleStatusHint ? (
         <p className="live-inline-warning">{strategy.watcher.staleStatusHint}</p>

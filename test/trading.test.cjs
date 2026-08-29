@@ -6,7 +6,7 @@ const test = require('node:test');
 
 const core = require('../lib/trader-core.cjs');
 const { saveLiveState } = require('../lib/live-trader.cjs');
-const { parseLiveStatus, summarizeJournal } = require('../lib/live-status.cjs');
+const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('../lib/live-status.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -66,4 +66,27 @@ test('live state writes atomically without leaving temporary files', () => {
 
   assert.equal(JSON.parse(fs.readFileSync(statePath, 'utf8')).live.heartbeat.ok, true);
   assert.deepEqual(fs.readdirSync(directory), ['state.json']);
+});
+
+test('remote snapshots do not expose bridge URLs or private watcher commands', () => {
+  const snapshot = sanitizeRemoteSnapshot({
+    remoteUrl: 'https://secret.example/status',
+    error: 'private bridge detail',
+    strategies: [{
+      live: {
+        latestError: {
+          at: '2026-08-29T12:00:00.000Z',
+          message: 'python3 /private/path/fetch.py --key-env DATABENTO_API_KEY'
+        }
+      }
+    }]
+  });
+
+  assert.equal(snapshot.remoteUrl, undefined);
+  assert.equal(snapshot.error, undefined);
+  assert.equal(snapshot.strategies[0].live.latestError.at, '2026-08-29T12:00:00.000Z');
+  assert.equal(
+    snapshot.strategies[0].live.latestError.message,
+    'Live data refresh failed. Check the private watcher logs on the VPS.'
+  );
 });
