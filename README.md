@@ -249,7 +249,7 @@ For a private bridge, set the same long random `LIVE_STATUS_TOKEN` value on the 
 
 The watcher now polls once per minute by default, persists a health heartbeat after every poll, writes state atomically, and preserves open trades and consumed signals across ordinary restarts. Use `RESET_LIVE_STATE=1` only when you intentionally want to clear transient signal state.
 
-For a Linux VPS, the templates in `deploy/systemd` keep both watchers and the status bridge alive across crashes and reboots. Adjust `/opt/doctortrades/trading` if your checkout lives elsewhere, copy the environment example to `/etc/doctortrades/trading.env`, then install and enable:
+For a Linux VPS, the service templates in `deploy/systemd` keep both watchers and the status bridge alive across crashes and reboots. Adjust `/opt/doctortrades/trading` if your checkout lives elsewhere, create a private `/etc/doctortrades/trading.env` file outside the repository, then install and enable:
 
 ```bash
 sudo cp deploy/systemd/doctortrades-*.service /etc/systemd/system/
@@ -279,7 +279,7 @@ The table is created lazily by the app; `deploy/sql/001_cloud_journal.sql` is al
 - API routes emit structured request logs without setup or candle payloads.
 - Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive feed-failure, recovery, trade-opened, and trade-closed alerts directly in Telegram. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
 - The watcher automatically loads `.env.local`, while the managed launcher also exports it before startup. Populated environment files are ignored by Git and the token is never written to watcher logs.
-- Example local, VPS, and Vercel values live in `.env.local.example`, `deploy/systemd/trading.env.example`, and `deploy/vercel.env.example` respectively.
+- All `.env` and `*.example` files are ignored by Git. Keep populated local and VPS environment files private and configure Vercel secrets in Project Settings.
 
 The managed starter refuses to launch a fake "live" process when `DATABENTO_API_KEY` is missing. If you intentionally want fixture replay mode, use:
 
