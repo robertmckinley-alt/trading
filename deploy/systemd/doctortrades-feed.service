@@ -1,16 +1,15 @@
 [Unit]
-Description=DoctorTrades paper watcher (%i)
-After=network-online.target doctortrades-feed.service
+Description=DoctorTrades Databento live OHLCV feed
+After=network-online.target
 Wants=network-online.target
-Requires=doctortrades-feed.service
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/doctortrades/trading
 EnvironmentFile=/etc/doctortrades/trading.env
-ExecStart=/usr/bin/node paper-trader.cjs watch-live --provider=databento-live --interval=60000 --strategy=%i
+ExecStart=/usr/bin/python3 scripts/databento-live-feed.py --output runtime/databento-live.json
 Restart=always
-RestartSec=10
+RestartSec=15
 TimeoutStopSec=30
 KillSignal=SIGTERM
 NoNewPrivileges=true

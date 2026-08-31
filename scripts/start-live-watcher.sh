@@ -7,6 +7,9 @@ PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
 LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.log}"
 HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
 HOURLY_LOG_FILE="${HOURLY_LOG_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.log}"
+FEED_PID_FILE="${FEED_PID_FILE:-$RUNTIME_DIR/databento-live-feed.pid}"
+FEED_LOG_FILE="${FEED_LOG_FILE:-$RUNTIME_DIR/databento-live-feed.log}"
+LIVE_CACHE_PATH="${LIVE_DATA_CACHE_PATH:-$RUNTIME_DIR/databento-live.json}"
 INTERVAL_MS="${INTERVAL_MS:-60000}"
 HOURLY_INTERVAL_MS="${HOURLY_INTERVAL_MS:-60000}"
 RESET_LIVE_STATE="${RESET_LIVE_STATE:-0}"
@@ -39,7 +42,7 @@ fi
 provider="${LIVE_DATA_PROVIDER:-}"
 if [[ -z "$provider" ]]; then
   if [[ -n "${DATABENTO_API_KEY:-}" ]]; then
-    provider="databento"
+    provider="databento-live"
   elif [[ "$ALLOW_MOCK" == "1" ]]; then
     provider="mock"
   else
@@ -49,10 +52,36 @@ if [[ -z "$provider" ]]; then
   fi
 fi
 
-if [[ "$provider" == "databento" && -z "${DATABENTO_API_KEY:-}" ]]; then
-  echo "LIVE_DATA_PROVIDER=databento but DATABENTO_API_KEY is not set." >&2
+if [[ "$provider" == "databento" ]]; then
+  provider="databento-live"
+fi
+
+if [[ "$provider" == "databento-live" && -z "${DATABENTO_API_KEY:-}" ]]; then
+  echo "LIVE_DATA_PROVIDER=databento-live but DATABENTO_API_KEY is not set." >&2
   exit 1
 fi
+
+start_live_feed() {
+  local existing_pid
+  existing_pid="$(find_existing_watcher_pid "$FEED_PID_FILE" "python3 scripts/databento-live-feed.py")"
+  if [[ -n "$existing_pid" ]]; then
+    echo "Stopping existing Databento live feed PID $existing_pid"
+    kill "$existing_pid"
+    sleep 1
+  fi
+  rm -f "$FEED_PID_FILE"
+  touch "$FEED_LOG_FILE"
+  nohup python3 scripts/databento-live-feed.py --output "$LIVE_CACHE_PATH" >>"$FEED_LOG_FILE" 2>&1 &
+  local feed_pid=$!
+  echo "$feed_pid" > "$FEED_PID_FILE"
+  sleep 2
+  if ! kill -0 "$feed_pid" 2>/dev/null; then
+    echo "Databento live feed failed to start. Check $FEED_LOG_FILE" >&2
+    exit 1
+  fi
+  echo "Started Databento live feed PID $feed_pid"
+  echo "Live cache: $LIVE_CACHE_PATH"
+}
 
 reset_state() {
   local state_path="$1"
@@ -103,6 +132,10 @@ start_watcher() {
   echo "Provider: $provider"
   echo "Log: $log_file"
 }
+
+if [[ "$provider" == "databento-live" ]]; then
+  start_live_feed
+fi
 
 start_watcher "9AM" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json" "$INTERVAL_MS"
 start_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json" "$HOURLY_INTERVAL_MS"

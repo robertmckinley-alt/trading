@@ -819,6 +819,7 @@ function StrategyOutcome({ strategy, isBridgeFallback }) {
 function StrategyCard({ strategy, isBridgeFallback }) {
   const tone = outcomeTone(strategy);
   const journal = strategy.journal || {};
+  const adaptive = strategy.live?.adaptive;
 
   return (
     <article className={`live-card live-card-${tone}`}>
@@ -857,6 +858,32 @@ function StrategyCard({ strategy, isBridgeFallback }) {
           <strong>{formatUsd(journal.realizedPnlUsd ?? 0)}</strong>
         </div>
       </div>
+
+      {strategy.mode === 'live-watcher' ? (
+        <div className="adaptive-bots" aria-label="Adaptive paper-trading bots">
+          <div className="adaptive-bots-head">
+            <strong>Adaptive guard</strong>
+            <span>{adaptive?.mode === 'paper-only-bounded' ? 'Paper only · risk cannot increase' : 'Waiting for live bars'}</span>
+          </div>
+          <div className="adaptive-bots-grid">
+            <div>
+              <span>Market regime</span>
+              <strong>{String(adaptive?.market?.regime || 'warming up').replaceAll('-', ' ')}</strong>
+              <small>{adaptive?.market?.status || 'waiting'}</small>
+            </div>
+            <div>
+              <span>Performance</span>
+              <strong>{adaptive?.performance?.sampleTrades || 0} trades learned</strong>
+              <small>{adaptive?.performance?.consecutiveLosses || 0} loss streak</small>
+            </div>
+            <div>
+              <span>Risk guard</span>
+              <strong>{adaptive?.risk ? `${Math.round(Number(adaptive.risk.riskMultiplier || 0) * 100)}% risk` : 'Standby'}</strong>
+              <small>{adaptive?.risk ? (adaptive.risk.allowed ? 'Clear to evaluate' : 'New trades paused') : 'No live decision yet'}</small>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {strategy.mode === 'live-watcher' ? (
         <div className="live-status-strip">

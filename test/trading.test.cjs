@@ -5,9 +5,10 @@ const path = require('node:path');
 const test = require('node:test');
 
 const core = require('../lib/trader-core.cjs');
-const { saveLiveState } = require('../lib/live-trader.cjs');
+const { fetchLiveCandles, normalizeStrategyConfig, saveLiveState } = require('../lib/live-trader.cjs');
 const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('../lib/live-status.cjs');
 const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
+const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bots.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -151,7 +152,7 @@ test('Telegram alerts require a token and destination without exposing either in
   assert.doesNotMatch(message, /-1001234567890/);
 });
 
-test('Telegram sender posts directly to sendMessage and skips incomplete configuration', async () => {
+test('Telegram sender posts trade events and filters every non-trade event', async () => {
   let request = null;
   const fetchImpl = async (url, options) => {
     request = { url, options };
@@ -167,11 +168,18 @@ test('Telegram sender posts directly to sendMessage and skips incomplete configu
   };
 
   const result = await sendTelegramAlert({
-    type: 'watcher-health',
-    status: 'failed',
-    message: 'Live market data refresh failed.'
+    type: 'trade-opened',
+    status: 'opened',
+    symbol: 'NQ',
+    side: 'long',
+    entry: 20000,
+    stop: 19990
   }, { env, fetchImpl });
-  const skipped = await sendTelegramAlert({ type: 'watcher-health' }, {
+  const filtered = await sendTelegramAlert({ type: 'watcher-health' }, {
+    env,
+    fetchImpl: () => assert.fail('fetch should not be called for watcher-health events')
+  });
+  const skipped = await sendTelegramAlert({ type: 'trade-closed' }, {
     env: { TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN },
     fetchImpl: () => assert.fail('fetch should not be called without a chat ID')
   });
@@ -180,5 +188,72 @@ test('Telegram sender posts directly to sendMessage and skips incomplete configu
   assert.equal(result.messageId, 42);
   assert.match(request.url, /\/sendMessage$/);
   assert.deepEqual(JSON.parse(request.options.body).chat_id, '987654321');
+  assert.deepEqual(filtered, { sent: false, reason: 'event-filtered' });
   assert.deepEqual(skipped, { sent: false, reason: 'missing-chat-id' });
+});
+
+test('Databento watcher accepts only fresh live-stream cache payloads', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctortrades-live-'));
+  const cachePath = path.join(directory, 'databento-live.json');
+  const timestamp = new Date(Date.now() - 30_000).toISOString();
+  fs.writeFileSync(cachePath, JSON.stringify({
+    mode: 'live',
+    provider: 'databento-live',
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    candles: [{ timestamp, open: 20000, high: 20005, low: 19995, close: 20002, volume: 10 }]
+  }));
+  const previousKey = process.env.DATABENTO_API_KEY;
+  process.env.DATABENTO_API_KEY = 'test-key';
+  try {
+    const config = { live: { provider: 'databento', liveCachePath: cachePath, maxLiveCandleAgeMinutes: 3 } };
+    assert.equal(normalizeStrategyConfig(config).provider, 'databento-live');
+    const result = await fetchLiveCandles(config);
+    assert.equal(result.metadata.provider, 'databento-live');
+    assert.equal(result.candles[0].close, 20002);
+
+    fs.writeFileSync(cachePath, JSON.stringify({
+      mode: 'historical',
+      provider: 'databento',
+      candles: [{ timestamp, open: 1, high: 1, low: 1, close: 1 }]
+    }));
+    await assert.rejects(() => fetchLiveCandles(config), /not marked as live-stream data/);
+  } finally {
+    if (previousKey === undefined) delete process.env.DATABENTO_API_KEY;
+    else process.env.DATABENTO_API_KEY = previousKey;
+  }
+});
+
+test('adaptive bots can only hold or reduce paper-trade risk', () => {
+  const now = Date.now();
+  const candles = Array.from({ length: 180 }, (_, index) => ({
+    timestamp: new Date(now - ((179 - index) * 60_000)).toISOString(),
+    open: 20000 + index,
+    high: 20002 + index,
+    low: 19998 + index,
+    close: 20001 + index
+  }));
+  const config = {
+    startingBalanceUsd: 50_000,
+    maxAccountDrawdownPercent: 10,
+    maxRiskPerTradeUsd: 250,
+    maxDailyLossUsd: 750
+  };
+  const state = {
+    balanceUsd: 49_500,
+    trades: [
+      { date: '2026-08-28', realizedPnlUsd: -100, rMultiple: -1 },
+      { date: '2026-08-29', realizedPnlUsd: -100, rMultiple: -1 }
+    ]
+  };
+  const decision = evaluateAdaptiveBots(candles, config, state);
+  const adjusted = applyAdaptiveRisk(config, decision);
+
+  assert.equal(decision.mode, 'paper-only-bounded');
+  assert.ok(decision.risk.riskMultiplier >= 0.5);
+  assert.ok(decision.risk.riskMultiplier <= 1);
+  assert.ok(adjusted.maxRiskPerTradeUsd <= config.maxRiskPerTradeUsd);
+  assert.ok(['market-regime', 'performance', 'risk-guard'].every((name) => (
+    [decision.market.name, decision.performance.name, decision.risk.name].includes(name)
+  )));
 });

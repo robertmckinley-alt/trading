@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-$ROOT_DIR/runtime}"
 PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
 HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
+FEED_PID_FILE="${FEED_PID_FILE:-$RUNTIME_DIR/databento-live-feed.pid}"
 RESET_LIVE_STATE="${RESET_LIVE_STATE:-0}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
@@ -51,6 +52,15 @@ stop_watcher() {
 
 stop_watcher "9AM" "live-9am-sweep" "$PID_FILE"
 stop_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE"
+
+feed_pid="$(find_existing_watcher_pid "$FEED_PID_FILE" "python3 scripts/databento-live-feed.py")"
+if [[ -n "$feed_pid" ]] && kill -0 "$feed_pid" 2>/dev/null; then
+  kill "$feed_pid"
+  echo "Stopped Databento live feed PID $feed_pid"
+else
+  echo "No running Databento live feed found"
+fi
+rm -f "$FEED_PID_FILE"
 
 if [[ "$RESET_LIVE_STATE" == "1" ]]; then
   cd "$ROOT_DIR"

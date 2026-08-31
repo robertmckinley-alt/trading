@@ -7,6 +7,9 @@ PID_FILE="${PID_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.pid}"
 LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/lucid-nq-paper-trader-watch.log}"
 HOURLY_PID_FILE="${HOURLY_PID_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.pid}"
 HOURLY_LOG_FILE="${HOURLY_LOG_FILE:-$RUNTIME_DIR/hourly-sweep-ifvg-bos-watch.log}"
+FEED_PID_FILE="${FEED_PID_FILE:-$RUNTIME_DIR/databento-live-feed.pid}"
+FEED_LOG_FILE="${FEED_LOG_FILE:-$RUNTIME_DIR/databento-live-feed.log}"
+LIVE_CACHE_PATH="${LIVE_DATA_CACHE_PATH:-$RUNTIME_DIR/databento-live.json}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.local}"
 
 find_existing_watcher_pid() {
@@ -35,6 +38,36 @@ fi
 echo "Repo: $ROOT_DIR"
 echo "DATABENTO_API_KEY=$([[ -n "${DATABENTO_API_KEY:-}" ]] && echo set || echo missing)"
 echo "LIVE_DATA_PROVIDER=${LIVE_DATA_PROVIDER:-auto}"
+
+feed_pid="$(find_existing_watcher_pid "$FEED_PID_FILE" "python3 scripts/databento-live-feed.py")"
+echo
+echo "=== Databento live feed ==="
+if [[ -n "$feed_pid" ]] && kill -0 "$feed_pid" 2>/dev/null; then
+  echo "PID: $feed_pid"
+  ps -fp "$feed_pid"
+else
+  echo "PID: not running"
+fi
+if [[ -f "$LIVE_CACHE_PATH" ]]; then
+  echo "Cache: $LIVE_CACHE_PATH"
+  CACHE_PATH="$LIVE_CACHE_PATH" node <<'EOF'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.env.CACHE_PATH, 'utf8'));
+console.log(JSON.stringify({
+  mode: payload.mode,
+  provider: payload.provider,
+  updatedAt: payload.updatedAt,
+  latestCandleAt: payload.latestCandleAt,
+  candles: Array.isArray(payload.candles) ? payload.candles.length : 0
+}, null, 2));
+EOF
+else
+  echo "Cache: not ready"
+fi
+if [[ -f "$FEED_LOG_FILE" ]]; then
+  echo "Recent feed log:"
+  tail -n 12 "$FEED_LOG_FILE"
+fi
 
 print_watcher() {
   local label="$1"
@@ -71,6 +104,7 @@ const snapshot = {
   openSignalKey: state.live?.openSignalKey || null,
   openTriggeredAt: state.live?.openTriggeredAt || null,
   heartbeat: state.live?.heartbeat || null,
+  adaptive: state.live?.adaptive || null,
   signalHistoryCount: Array.isArray(state.live?.signalHistory) ? state.live.signalHistory.length : 0,
   trades: Array.isArray(state.trades) ? state.trades.length : 0
 };

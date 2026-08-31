@@ -30,6 +30,7 @@ const {
   trackTradeLifecycle
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
+const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
 
 const BASE = __dirname;
 const CONFIG_PATH = path.join(BASE, 'config.json');
@@ -125,11 +126,12 @@ function reportTelegramAlertStatus() {
     console.warn('Telegram alerts: incomplete — add TELEGRAM_CHAT_ID (or TELEGRAM_CHANNEL_ID).');
     return;
   }
-  console.log('Telegram alerts: configured.');
+  console.log('Telegram trade alerts: configured (trade opened/closed only).');
 }
 
 async function sendWatcherAlert(state, event) {
   const eventType = String(event.type || 'watcher');
+  if (!['trade-opened', 'trade-closed'].includes(eventType)) return;
   const dedupeKey = String(event.dedupeKey || event.status || eventType);
   if (state.live.alertKeys?.[eventType] === dedupeKey) return;
 
@@ -252,7 +254,6 @@ async function runWatchLive(config, state, intervalMs, statePath) {
   const tick = async () => {
     const { candles, metadata } = await fetchLiveCandles(config);
     const lastCandle = candles[candles.length - 1];
-    const previousHeartbeat = state.live.heartbeat;
     state.live.heartbeat = {
       at: new Date().toISOString(),
       ok: true,
@@ -262,17 +263,8 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       lastCandle: lastCandle || null,
       error: null
     };
-    if (previousHeartbeat?.ok === false) {
-      await sendWatcherAlert(state, {
-        type: 'watcher-health',
-        status: 'recovered',
-        dedupeKey: 'recovered',
-        strategy: config.strategySlug,
-        provider: metadata.provider,
-        ticker: metadata.ticker,
-        message: 'Live market data refresh recovered.'
-      });
-    }
+    const adaptiveDecision = evaluateAdaptiveBots(candles, config, state);
+    state.live.adaptive = adaptiveDecision;
     saveLiveState(statePath, state);
     let summaryLines = [
       `Feed: ${metadata.provider} ${metadata.ticker}`,
@@ -285,6 +277,23 @@ async function runWatchLive(config, state, intervalMs, statePath) {
         : candles;
       const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false });
       summaryLines.push(formatOpenTradeSummary(state.live.openPlan, lifecycle));
+      if (lifecycle.filledAt) {
+        const adaptive = state.live.openPlan.adaptive;
+        await sendWatcherAlert(state, {
+          type: 'trade-opened',
+          status: 'opened',
+          dedupeKey: state.live.openSignalKey || lifecycle.filledAt,
+          strategy: config.strategySlug,
+          symbol: state.live.openPlan.setup.symbol,
+          side: state.live.openPlan.setup.side,
+          entry: state.live.openPlan.setup.entry,
+          stop: state.live.openPlan.setup.stop,
+          message: adaptive
+            ? `Paper entry filled at ${Math.round(adaptive.risk.riskMultiplier * 100)}% of configured risk (${adaptive.market.regime}).`
+            : 'Paper entry filled.'
+        });
+        saveLiveState(statePath, state);
+      }
       if (lifecycle.status === 'closed') {
         const trade = persistClosedTrade(statePath, state, config, state.live.openPlan, lifecycle);
         await sendWatcherAlert(state, {
@@ -356,7 +365,12 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 
     let plan;
     try {
-      plan = buildPlanFromSignal(signal, config, state);
+      if (!adaptiveDecision.risk.allowed) {
+        throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
+      }
+      const adaptiveConfig = applyAdaptiveRisk(config, adaptiveDecision);
+      plan = buildPlanFromSignal(signal, adaptiveConfig, state);
+      plan.adaptive = adaptiveDecision;
     } catch (error) {
       summaryLines.push(`No trade: ${error.message}`);
       const signature = JSON.stringify({
@@ -376,17 +390,6 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     state.live.openPlan = plan;
     state.live.openTriggeredAt = signal.triggerTimestamp;
     state.live.signalHistory.push(key);
-    await sendWatcherAlert(state, {
-      type: 'trade-opened',
-      status: 'opened',
-      dedupeKey: key,
-      strategy: config.strategySlug,
-      symbol: signal.symbol,
-      side: signal.side,
-      entry: signal.entry,
-      stop: signal.stop,
-      message: 'Paper trade signal opened.'
-    });
     saveLiveState(statePath, state);
     summaryLines.push(formatSignalSummary(signal, plan));
     const signature = JSON.stringify({
@@ -417,15 +420,6 @@ async function runWatchLive(config, state, intervalMs, statePath) {
         pollIntervalMs: actualIntervalMs,
         error: error.message
       };
-      await sendWatcherAlert(state, {
-        type: 'watcher-health',
-        status: 'failed',
-        dedupeKey: 'failed',
-        strategy: config.strategySlug,
-        provider: liveConfig.provider,
-        ticker: liveConfig.ticker,
-        message: 'Live market data refresh failed. Check the private watcher logs.'
-      });
       try {
         saveLiveState(statePath, state);
       } catch {

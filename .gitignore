@@ -3,7 +3,7 @@ node_modules/
 .vercel/
 runtime/
 *.log
-lib/__pycache__/
+__pycache__/
 
 # Private environment and credential files
 .env

@@ -14,7 +14,9 @@ The live mode now adds:
 - automatic `Asia` and `London` range detection from incoming `1m` candles
 - automatic post-`9AM` sweep detection
 - automatic `1m` `FVG` reversal signal generation
-- always-on polling mode that keeps one live paper trade open at a time and journals the close
+- one persistent Databento Live API stream shared by both watchers (no Historical API polling or fallback)
+- three bounded adaptive bots that classify market regime, learn from recent paper trades, and reduce or pause risk without ever increasing it
+- always-on monitoring that keeps one live paper trade open at a time and journals the close
 
 The account model is seeded at `50,000 USD` with a fixed `10%` max drawdown, so the account floor is `45,000 USD`. New plans automatically size off the smaller of your per-trade risk cap and the drawdown room left above that floor.
 
@@ -194,26 +196,28 @@ The live watcher reads its feed settings from `config.json` plus environment var
 
 Key live fields:
 
-- `live.provider`: `databento`, `mock`, or legacy `polygon-futures`
-- `live.ticker`: futures symbol to poll, for example `NQ.v.0` for the front-month continuous Nasdaq contract on Databento
+- `live.provider`: `databento-live`, `mock`, or legacy `polygon-futures` (`databento` is accepted as a live-only compatibility alias)
+- `live.ticker`: futures symbol to stream, for example `NQ.v.0` for the front-month continuous Nasdaq contract on Databento
 - `live.mockCsvPath`: fixture path used in mock mode
 - `live.apiKeyEnv`: env var name that stores the real market-data key
 - `live.dataset`: Databento dataset, default `GLBX.MDP3`
 - `live.schema`: Databento bar schema, default `ohlcv-1m`
 - `live.stypeIn`: Databento symbology type, default `continuous`
-- `live.pythonBin`: Python binary used for the Databento helper
+- `live.pythonBin`: Python binary used for the Databento live-stream process
+- `live.liveCachePath`: atomic JSON cache written by the one shared live-feed process
+- `live.maxLiveCandleAgeMinutes`: fail-closed freshness limit for new live bars
 - `live.baseUrl`: legacy Polygon market-data API base URL
 - `live.lookbackBars`: recent `1m` candles pulled per scan
 - `live.pollIntervalMs`: scan interval
-- `live.fetchTimeoutMs`: maximum time allowed for one Databento fetch
 - `live.sessionWindows`: `Asia` and `London` time windows used for range detection
 
-For a real feed:
+For a real feed, the API key must have an active live license for `GLBX.MDP3`:
 
 ```bash
 python3 -m pip install -r requirements-live.txt
 export DATABENTO_API_KEY=your_rotated_clean_key
 cd lucid-nq-paper-trader
+npm run trader:feed
 npm run trader:watch
 ```
 
@@ -247,13 +251,14 @@ For a private bridge, set the same long random `LIVE_STATUS_TOKEN` value on the 
 
 ## Daily Reliability
 
-The watcher now polls once per minute by default, persists a health heartbeat after every poll, writes state atomically, and preserves open trades and consumed signals across ordinary restarts. Use `RESET_LIVE_STATE=1` only when you intentionally want to clear transient signal state.
+The shared feed streams continuously while each watcher evaluates its live cache once per minute, persists a health heartbeat after every scan, writes state atomically, and preserves open trades and consumed signals across ordinary restarts. Use `RESET_LIVE_STATE=1` only when you intentionally want to clear transient signal state.
 
 For a Linux VPS, the service templates in `deploy/systemd` keep both watchers and the status bridge alive across crashes and reboots. Adjust `/opt/doctortrades/trading` if your checkout lives elsewhere, create a private `/etc/doctortrades/trading.env` file outside the repository, then install and enable:
 
 ```bash
 sudo cp deploy/systemd/doctortrades-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl enable --now doctortrades-feed
 sudo systemctl enable --now doctortrades-watcher@live-9am-sweep
 sudo systemctl enable --now doctortrades-watcher@hourly-sweep-ifvg-bos
 sudo systemctl enable --now doctortrades-status
@@ -277,7 +282,7 @@ The table is created lazily by the app; `deploy/sql/001_cloud_journal.sql` is al
 - `GET /api/health` returns `200` only when the bridge and all watchers are healthy, otherwise `503` for an uptime monitor.
 - Vercel Web Analytics and Speed Insights are included in the root layout.
 - API routes emit structured request logs without setup or candle payloads.
-- Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive feed-failure, recovery, trade-opened, and trade-closed alerts directly in Telegram. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
+- Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive only filled-trade and trade-closed alerts directly in Telegram. A detected setup does not alert until its paper entry actually fills. Feed failures, recoveries, idle scans, rejected/unfilled signals, and adaptive-bot decisions stay in private logs/dashboard state. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
 - The watcher automatically loads `.env.local`, while the managed launcher also exports it before startup. Populated environment files are ignored by Git and the token is never written to watcher logs.
 - All `.env` and `*.example` files are ignored by Git. Keep populated local and VPS environment files private and configure Vercel secrets in Project Settings.
 
@@ -288,7 +293,7 @@ cd lucid-nq-paper-trader
 ALLOW_MOCK=1 npm run trader:watch:start
 ```
 
-Each live tick:
+The live feed uses Databento's streaming client and rejects caches not explicitly marked `mode: live`; it never falls back to the Historical API. Each live tick:
 
 1. pulls the latest `1m` candles
 2. computes the `Asia` and `London` highs/lows
@@ -296,7 +301,8 @@ Each live tick:
 4. detects a sweep of one of those pools
 5. confirms a `1m` `FVG` reversal
 6. builds the paper-trade plan from the `50k` / `10%` drawdown model
-7. keeps tracking the trade until stop or targets finish it, then journals the result into `state.json`
+7. runs the market-regime, performance, and risk-guard bots; risk is bounded to 50–100% of the configured cap and the daily loss/account floor can pause new paper trades
+8. keeps tracking the trade until stop or targets finish it, then journals the result into `state.json`
 
 ## Git Launch
 
