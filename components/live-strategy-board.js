@@ -878,8 +878,8 @@ function StrategyCard({ strategy, isBridgeFallback }) {
             </div>
             <div>
               <span>Risk guard</span>
-              <strong>{adaptive?.risk ? `${Math.round(Number(adaptive.risk.riskMultiplier || 0) * 100)}% risk` : 'Standby'}</strong>
-              <small>{adaptive?.risk ? (adaptive.risk.allowed ? 'Clear to evaluate' : 'New trades paused') : 'No live decision yet'}</small>
+              <strong>{adaptive?.risk ? `${formatUsd(adaptive.risk.adjustedRiskUsd || 0)} budget` : 'Standby'}</strong>
+              <small>{adaptive?.risk ? (adaptive.risk.allowed ? `${formatUsd(adaptive.risk.riskFloorUsd || 0)} baseline · clear` : 'New trades paused') : 'No live decision yet'}</small>
             </div>
           </div>
         </div>

@@ -15,7 +15,7 @@ The live mode now adds:
 - automatic post-`9AM` sweep detection
 - automatic `1m` `FVG` reversal signal generation
 - one persistent Databento Live API stream shared by both watchers (no Historical API polling or fallback)
-- three bounded adaptive bots that classify market regime, learn from recent paper trades, and reduce or pause risk without ever increasing it
+- three bounded adaptive bots that classify market regime, learn from recent paper trades, and pause new trades at the daily-loss or account-floor limits; the configured adaptive risk baseline is currently `$250`
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
 
 The account model is seeded at `50,000 USD` with a fixed `10%` max drawdown, so the account floor is `45,000 USD`. New plans automatically size off the smaller of your per-trade risk cap and the drawdown room left above that floor.

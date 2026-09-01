@@ -3,6 +3,7 @@
   "startingBalanceUsd": 50000,
   "maxAccountDrawdownPercent": 10,
   "maxRiskPerTradeUsd": 250,
+  "adaptiveRiskFloorUsd": 250,
   "maxDailyLossUsd": 750,
   "tickSize": 0.25,
   "tickValueUsd": 5,
