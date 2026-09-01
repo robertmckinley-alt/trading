@@ -236,8 +236,8 @@ test('adaptive bots can only hold or reduce paper-trade risk', () => {
   const config = {
     startingBalanceUsd: 50_000,
     maxAccountDrawdownPercent: 10,
-    maxRiskPerTradeUsd: 250,
-    adaptiveRiskFloorUsd: 250,
+    maxRiskPerTradeUsd: 500,
+    adaptiveRiskFloorUsd: 500,
     maxDailyLossUsd: 750
   };
   const state = {
@@ -253,9 +253,9 @@ test('adaptive bots can only hold or reduce paper-trade risk', () => {
   assert.equal(decision.mode, 'paper-only-bounded');
   assert.ok(decision.risk.riskMultiplier >= 0.5);
   assert.ok(decision.risk.riskMultiplier <= 1);
-  assert.equal(decision.risk.riskFloorUsd, 250);
-  assert.equal(decision.risk.adjustedRiskUsd, 250);
-  assert.equal(adjusted.maxRiskPerTradeUsd, 250);
+  assert.equal(decision.risk.riskFloorUsd, 500);
+  assert.equal(decision.risk.adjustedRiskUsd, 500);
+  assert.equal(adjusted.maxRiskPerTradeUsd, 500);
   assert.ok(adjusted.maxRiskPerTradeUsd <= config.maxRiskPerTradeUsd);
   assert.ok(['market-regime', 'performance', 'risk-guard'].every((name) => (
     [decision.market.name, decision.performance.name, decision.risk.name].includes(name)
