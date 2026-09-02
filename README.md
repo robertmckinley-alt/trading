@@ -18,6 +18,7 @@ The live mode now adds:
 - one persistent Databento Live API stream shared by all five watchers (no Historical API polling or fallback)
 - five isolated paper strategy watchers sharing that one live stream: the two original setups, a 90-minute opening-range breakout, EMA 20/60 momentum, and bar-volume POC reversion
 - three bounded adaptive bots that classify market regime, learn from recent paper trades, and pause new trades at the daily-loss or account-floor limits; the configured adaptive risk baseline is currently `$500`
+- a shared `$2,500` simultaneous open-risk cap across all five paper accounts, enforced before a strategy can reserve a new plan
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
 - a research scorecard that requires sample size, trading-day, profit-factor, expectancy, average-R, and drawdown gates before labeling any strategy a paper candidate
 

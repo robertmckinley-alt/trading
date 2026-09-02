@@ -31,6 +31,7 @@ const {
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
+const { reservePortfolioRisk } = require('./lib/portfolio-risk.cjs');
 const { requireStrategyDefinition, runtimeFilesForStrategy } = require('./lib/strategy-registry.cjs');
 
 const BASE = __dirname;
@@ -369,6 +370,34 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       const adaptiveConfig = applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
       plan.adaptive = adaptiveDecision;
+      const portfolioDecision = reservePortfolioRisk({
+        rootDir: BASE,
+        config,
+        strategySlug: config.strategySlug,
+        proposedRiskUsd: plan.sizing.actualRiskUsd,
+        commit: (decision) => {
+          plan.portfolioRisk = {
+            capUsd: decision.capUsd,
+            reservedBeforeUsd: decision.reservedRiskUsd,
+            projectedRiskUsd: decision.projectedRiskUsd
+          };
+          const nextLiveState = {
+            ...state.live,
+            portfolioRisk: decision,
+            openSignalKey: key,
+            openPlan: plan,
+            openTriggeredAt: signal.triggerTimestamp,
+            signalHistory: [...state.live.signalHistory, key]
+          };
+          saveLiveState(statePath, { ...state, live: nextLiveState });
+          state.live = nextLiveState;
+        }
+      });
+      if (!portfolioDecision.allowed) {
+        state.live.portfolioRisk = portfolioDecision;
+        saveLiveState(statePath, state);
+        throw new Error(`Shared portfolio risk guard: ${portfolioDecision.reason}`);
+      }
     } catch (error) {
       summaryLines.push(`No trade: ${error.message}`);
       const signature = JSON.stringify({
@@ -384,11 +413,6 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       }
       return;
     }
-    state.live.openSignalKey = key;
-    state.live.openPlan = plan;
-    state.live.openTriggeredAt = signal.triggerTimestamp;
-    state.live.signalHistory.push(key);
-    saveLiveState(statePath, state);
     summaryLines.push(formatSignalSummary(signal, plan));
     const signature = JSON.stringify({
       mode: 'new-signal',

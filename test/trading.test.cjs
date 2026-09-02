@@ -17,6 +17,7 @@ const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('.
 const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bots.cjs');
 const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
+const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
 const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 
 const root = path.join(__dirname, '..');
@@ -278,6 +279,59 @@ test('strategy registry gives all five bots isolated runtime files', () => {
   assert.equal(new Set(paths).size, 5);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
+});
+
+test('shared portfolio guard caps simultaneous paper risk at $2,500', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctortrades-portfolio-'));
+  const config = { maxPortfolioOpenRiskUsd: 2500 };
+  for (const strategy of STRATEGIES.slice(0, 4)) {
+    const files = runtimeFilesForStrategy(directory, strategy.slug);
+    fs.writeFileSync(files.statePath, JSON.stringify({
+      live: { openPlan: { sizing: { actualRiskUsd: 500 } } }
+    }));
+  }
+
+  const before = getPortfolioRiskSnapshot(directory, config);
+  assert.equal(before.reservedRiskUsd, 2000);
+  assert.equal(before.availableRiskUsd, 500);
+
+  const fifth = STRATEGIES[4];
+  const allowed = reservePortfolioRisk({
+    rootDir: directory,
+    config,
+    strategySlug: fifth.slug,
+    proposedRiskUsd: 500,
+    commit: () => {
+      fs.writeFileSync(runtimeFilesForStrategy(directory, fifth.slug).statePath, JSON.stringify({
+        live: { openPlan: { sizing: { actualRiskUsd: 500 } } }
+      }));
+    }
+  });
+  assert.equal(allowed.allowed, true);
+  assert.equal(allowed.projectedRiskUsd, 2500);
+
+  const atCap = getPortfolioRiskSnapshot(directory, config);
+  assert.equal(atCap.status, 'cap-reached');
+  assert.equal(atCap.availableRiskUsd, 0);
+
+  const blocked = reservePortfolioRisk({
+    rootDir: directory,
+    config,
+    strategySlug: STRATEGIES[0].slug,
+    proposedRiskUsd: 100
+  });
+  assert.equal(blocked.allowed, false);
+  assert.match(blocked.reason, /already holds a \$500\.00 paper-risk reservation/);
+
+  fs.unlinkSync(runtimeFilesForStrategy(directory, fifth.slug).statePath);
+  const overCap = reservePortfolioRisk({
+    rootDir: directory,
+    config,
+    strategySlug: fifth.slug,
+    proposedRiskUsd: 600
+  });
+  assert.equal(overCap.allowed, false);
+  assert.match(overCap.reason, /above the \$2500\.00 cap/);
 });
 
 test('opening-range bot detects a fresh 90-minute NQ cash-session breakout', () => {

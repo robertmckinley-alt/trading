@@ -23,6 +23,12 @@ export async function GET() {
       source: snapshot.source,
       watchers: { healthy: watchers.length - unhealthy.length, total: watchers.length },
       unhealthyStrategies: unhealthy.map((strategy) => strategy.slug),
+      portfolioRisk: snapshot.portfolioRisk ? {
+        status: snapshot.portfolioRisk.status,
+        capUsd: snapshot.portfolioRisk.capUsd,
+        reservedRiskUsd: snapshot.portfolioRisk.reservedRiskUsd,
+        availableRiskUsd: snapshot.portfolioRisk.availableRiskUsd
+      } : null,
       latestDataAt,
       durationMs: Date.now() - startedAt
     };

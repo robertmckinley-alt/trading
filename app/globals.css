@@ -359,6 +359,24 @@ h3 {
 }
 
 .portfolio-total-card p { margin: 7px 0 0; color: var(--muted); font-size: 0.8rem; }
+.portfolio-risk-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 12px;
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--positive) 35%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--positive) 7%, var(--surface));
+}
+.portfolio-risk-strip span { display: block; color: var(--subtle); font-size: 0.78rem; }
+.portfolio-risk-strip strong { display: block; margin-top: 3px; font-size: 1rem; }
+.portfolio-risk-strip p { margin: 0; color: var(--muted); font-size: 0.82rem; text-align: end; }
+.portfolio-risk-strip-warn {
+  border-color: color-mix(in srgb, var(--negative) 35%, var(--line));
+  background: color-mix(in srgb, var(--negative) 7%, var(--surface));
+}
 .number-positive { color: var(--positive) !important; }
 .number-negative { color: var(--negative) !important; }
 
@@ -958,6 +976,8 @@ textarea {
   .live-board-head, .section-heading, .daily-tracker-head, .daily-recap-head { align-items: stretch; flex-direction: column; }
   .live-board-meta { justify-content: flex-start; }
   .live-board-meta { overflow-wrap: anywhere; }
+  .portfolio-risk-strip { align-items: flex-start; flex-direction: column; }
+  .portfolio-risk-strip p { text-align: start; }
   .refresh-button, .recap-date-button { min-height: 44px; }
   .section-heading > p { text-align: start; }
   .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel, .research-method, .strategy-detail-intro { grid-template-columns: 1fr; }

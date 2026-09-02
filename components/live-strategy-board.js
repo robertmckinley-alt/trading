@@ -816,6 +816,20 @@ function StrategyOutcome({ strategy, isBridgeFallback }) {
   );
 }
 
+function PortfolioRiskGuard({ risk }) {
+  if (!risk) return null;
+  const atCap = risk.status === 'cap-reached';
+  return (
+    <div className={`portfolio-risk-strip ${atCap ? 'portfolio-risk-strip-warn' : ''}`} aria-label="Shared portfolio risk guard">
+      <div>
+        <span>Shared open-risk guard</span>
+        <strong>{formatUsd(risk.reservedRiskUsd)} of {formatUsd(risk.capUsd)} reserved</strong>
+      </div>
+      <p>{formatUsd(risk.availableRiskUsd)} available · {Number(risk.utilizationPercent || 0).toFixed(1)}% utilized · paper only</p>
+    </div>
+  );
+}
+
 function ResearchScorecard({ research }) {
   const evaluation = research?.evaluation;
   if (!evaluation) return null;
@@ -1057,6 +1071,7 @@ export default function LiveStrategyBoard({ initialData }) {
       ) : null}
 
       <PortfolioTotals strategies={strategies} />
+      <PortfolioRiskGuard risk={data?.portfolioRisk} />
       <PerformancePanel strategies={strategies} dailySeries={dailySeries} />
       <DailyLedger dailySeries={dailySeries} activeDate={activeDate} onDateChange={setSelectedDate} />
       <DailyTracker strategies={strategies} selectedDate={activeDate} onDateChange={setSelectedDate} />

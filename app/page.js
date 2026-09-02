@@ -37,13 +37,14 @@ export default async function HomePage() {
           <p className="eyebrow">Five-bot NQ paper research network</p>
           <h1>Compare strategies under the same risk rules.</h1>
           <p>
-            Every bot receives the same live feed, $500 risk cap, daily loss guard, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
+            Every bot receives the same live feed, $500 per-trade cap, $2,500 shared open-risk guard, daily loss protection, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
           </p>
         </div>
         <dl className="risk-guardrails" aria-label="Account risk guardrails">
           <div><dt>Paper allocation</dt><dd>${(config.startingBalanceUsd * STRATEGIES.length).toLocaleString()}</dd></div>
           <div><dt>Max drawdown</dt><dd>{config.maxAccountDrawdownPercent}% per account</dd></div>
           <div><dt>Trade risk cap</dt><dd>${config.maxRiskPerTradeUsd.toLocaleString()}</dd></div>
+          <div><dt>Network risk cap</dt><dd>${config.maxPortfolioOpenRiskUsd.toLocaleString()}</dd></div>
         </dl>
       </section>
 
