@@ -7,6 +7,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/docker start openclaw-anwx-openclaw-1
+ExecStartPre=/usr/bin/docker exec openclaw-anwx-openclaw-1 /bin/bash -lc "pkill -TERM -f '^node paper-trader.cjs watch-live.*--strategy=%i' || true"
 ExecStart=/usr/bin/docker exec -w /data/.openclaw/workspace/lucid-nq-paper-trader openclaw-anwx-openclaw-1 /bin/bash -lc "set -a; . ./.env.local; set +a; if [ '%i' = 'live-9am-sweep' ]; then log_file=runtime/lucid-nq-paper-trader-watch.log; else log_file=runtime/%i-watch.log; fi; exec node paper-trader.cjs watch-live --provider=databento-live --interval=60000 --strategy=%i >> \"$log_file\" 2>&1"
 ExecStartPost=/usr/bin/docker exec -w /data/.openclaw/workspace/lucid-nq-paper-trader openclaw-anwx-openclaw-1 /bin/bash -lc "if [ '%i' = 'live-9am-sweep' ]; then pid_file=runtime/lucid-nq-paper-trader-watch.pid; else pid_file=runtime/%i-watch.pid; fi; pgrep -n -f '^node paper-trader.cjs watch-live.*--strategy=%i' > \"$pid_file\""
 ExecStop=/usr/bin/docker exec openclaw-anwx-openclaw-1 /bin/bash -lc "pkill -TERM -f '^node paper-trader.cjs watch-live.*--strategy=%i' || true"
