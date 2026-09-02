@@ -16,6 +16,7 @@ const {
 const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('../lib/live-status.cjs');
 const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bots.cjs');
+const { synchronizeStrategyLearning } = require('../lib/strategy-learning.cjs');
 const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
 const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
 const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
@@ -247,7 +248,7 @@ test('adaptive bots can only hold or reduce paper-trade risk', () => {
     startingBalanceUsd: 50_000,
     maxAccountDrawdownPercent: 10,
     maxRiskPerTradeUsd: 500,
-    adaptiveRiskFloorUsd: 500,
+    adaptiveRiskFloorUsd: 250,
     maxDailyLossUsd: 750
   };
   const state = {
@@ -263,13 +264,69 @@ test('adaptive bots can only hold or reduce paper-trade risk', () => {
   assert.equal(decision.mode, 'paper-only-bounded');
   assert.ok(decision.risk.riskMultiplier >= 0.5);
   assert.ok(decision.risk.riskMultiplier <= 1);
-  assert.equal(decision.risk.riskFloorUsd, 500);
-  assert.equal(decision.risk.adjustedRiskUsd, 500);
-  assert.equal(adjusted.maxRiskPerTradeUsd, 500);
+  assert.equal(decision.risk.riskFloorUsd, 250);
+  assert.equal(decision.risk.adjustedRiskUsd, 325);
+  assert.equal(adjusted.maxRiskPerTradeUsd, 325);
   assert.ok(adjusted.maxRiskPerTradeUsd <= config.maxRiskPerTradeUsd);
   assert.ok(['market-regime', 'performance', 'risk-guard'].every((name) => (
     [decision.market.name, decision.performance.name, decision.risk.name].includes(name)
   )));
+});
+
+test('every closed paper trade creates one auditable learning update', () => {
+  const firstTwoTrades = [
+    { id: 'trade-1', date: '2026-08-28', createdAt: '2026-08-28T15:00:00.000Z', realizedPnlUsd: -100, rMultiple: -1 },
+    { id: 'trade-2', date: '2026-08-29', createdAt: '2026-08-29T15:00:00.000Z', realizedPnlUsd: -75, rMultiple: -0.75 }
+  ];
+  const learned = synchronizeStrategyLearning(firstTwoTrades, {
+    strategySlug: 'nq-opening-range-breakout',
+    now: '2026-08-29T16:00:00.000Z'
+  });
+
+  assert.equal(learned.version, 2);
+  assert.equal(learned.tradesLearned, 2);
+  assert.equal(learned.changeLog.length, 2);
+  assert.equal(learned.lastTradeId, 'trade-2');
+  assert.equal(learned.adjustment.riskMultiplier, 0.65);
+  assert.equal(learned.controls.entryRulesLocked, true);
+  assert.equal(learned.controls.paperOnly, true);
+  assert.ok(learned.changeLog.every((event) => event.entryRulesChanged === false));
+
+  const duplicateSync = synchronizeStrategyLearning(firstTwoTrades, {
+    previous: learned,
+    strategySlug: 'nq-opening-range-breakout',
+    now: '2026-08-29T16:01:00.000Z'
+  });
+  assert.equal(duplicateSync.version, 2);
+  assert.equal(duplicateSync.changeLog.length, 2);
+
+  const restored = synchronizeStrategyLearning([
+    ...firstTwoTrades,
+    { id: 'trade-3', date: '2026-08-30', createdAt: '2026-08-30T15:00:00.000Z', realizedPnlUsd: 250, rMultiple: 2.5 }
+  ], {
+    previous: duplicateSync,
+    strategySlug: 'nq-opening-range-breakout',
+    now: '2026-08-30T16:00:00.000Z'
+  });
+  assert.equal(restored.version, 3);
+  assert.equal(restored.changeLog.length, 3);
+  assert.equal(restored.changeLog.at(-1).action, 'risk-restored');
+  assert.equal(restored.adjustment.riskMultiplier, 1);
+});
+
+test('negative rolling expectancy can reduce risk without changing strategy rules', () => {
+  const trades = Array.from({ length: 5 }, (_, index) => ({
+    id: `negative-${index + 1}`,
+    date: `2026-08-${20 + index}`,
+    realizedPnlUsd: index % 2 === 0 ? -100 : 50,
+    rMultiple: index % 2 === 0 ? -1 : 0.5
+  }));
+  const learned = synchronizeStrategyLearning(trades, { strategySlug: 'test-strategy' });
+
+  assert.equal(learned.rolling.expectancyUsd, -40);
+  assert.equal(learned.adjustment.riskMultiplier, 0.75);
+  assert.equal(learned.adjustment.entryRulesChanged, false);
+  assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
 test('strategy registry gives all five bots isolated runtime files', () => {

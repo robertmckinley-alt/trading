@@ -31,6 +31,7 @@ const {
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
+const { synchronizeStrategyLearning } = require('./lib/strategy-learning.cjs');
 const { reservePortfolioRisk } = require('./lib/portfolio-risk.cjs');
 const { requireStrategyDefinition, runtimeFilesForStrategy } = require('./lib/strategy-registry.cjs');
 
@@ -241,6 +242,13 @@ function persistClosedTrade(statePath, state, config, plan, lifecycle) {
   state.live.openSignalKey = null;
   state.live.openPlan = null;
   state.live.openTriggeredAt = null;
+  state.learning = synchronizeStrategyLearning(state.trades, {
+    previous: state.learning,
+    strategySlug: config.strategySlug
+  });
+  if (state.live.adaptive) {
+    state.live.adaptive.learning = state.learning;
+  }
   return trade;
 }
 
@@ -264,6 +272,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     };
     const adaptiveDecision = evaluateAdaptiveBots(candles, config, state);
     state.live.adaptive = adaptiveDecision;
+    state.learning = adaptiveDecision.learning;
     saveLiveState(statePath, state);
     let summaryLines = [
       `Feed: ${metadata.provider} ${metadata.ticker}`,
@@ -304,7 +313,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
           side: trade.side,
           realizedPnlUsd: trade.realizedPnlUsd,
           rMultiple: trade.rMultiple,
-          message: 'Paper trade closed and journaled.'
+          message: `Paper trade closed and journaled. Learning v${state.learning.version}: next paper-risk ceiling ${Math.round(state.learning.adjustment.riskMultiplier * 100)}% (${state.learning.adjustment.reason})`
         });
         summaryLines.push(`Closed and journaled: ${trade.id} PnL ${trade.realizedPnlUsd}`);
         saveLiveState(statePath, state);

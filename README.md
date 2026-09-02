@@ -17,7 +17,9 @@ The live mode now adds:
 - automatic `1m` `FVG` reversal signal generation
 - one persistent Databento Live API stream shared by all five watchers (no Historical API polling or fallback)
 - five isolated paper strategy watchers sharing that one live stream: the two original setups, a 90-minute opening-range breakout, EMA 20/60 momentum, and bar-volume POC reversion
-- three bounded adaptive bots that classify market regime, learn from recent paper trades, and pause new trades at the daily-loss or account-floor limits; the configured adaptive risk baseline is currently `$500`
+- a versioned learning loop that updates after every closed paper trade, records rolling expectancy, profit factor, average R, drawdown, and streaks, and keeps an audit log of any next-trade risk adjustment
+- bounded adaptive controls that classify market regime and pause new trades at the daily-loss or account-floor limits; the approved risk range is `$250` to `$500` per paper trade, and no adaptive decision can exceed the `$500` cap
+- locked entry rules: the learning loop can recommend an offline review, but it cannot silently rewrite a strategy or move it to live money
 - a shared `$2,500` simultaneous open-risk cap across all five paper accounts, enforced before a strategy can reserve a new plan
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
 - a research scorecard that requires sample size, trading-day, profit-factor, expectancy, average-R, and drawdown gates before labeling any strategy a paper candidate
@@ -291,7 +293,7 @@ The table is created lazily by the app; `deploy/sql/001_cloud_journal.sql` is al
 - `GET /api/health` returns `200` only when the bridge and all watchers are healthy, otherwise `503` for an uptime monitor.
 - Vercel Web Analytics and Speed Insights are included in the root layout.
 - API routes emit structured request logs without setup or candle payloads.
-- Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive only filled-trade and trade-closed alerts directly in Telegram. A detected setup does not alert until its paper entry actually fills. Feed failures, recoveries, idle scans, rejected/unfilled signals, and adaptive-bot decisions stay in private logs/dashboard state. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
+- Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to `.env.local` (or the VPS environment file) to receive only filled-trade and trade-closed alerts directly in Telegram. A detected setup does not alert until its paper entry actually fills. The close alert includes the new learning version and next-trade risk ceiling; feed failures, recoveries, idle scans, and rejected/unfilled signals stay in private logs/dashboard state. `TELEGRAM_CHANNEL_ID` can be used instead of `TELEGRAM_CHAT_ID`; forum topics can also set `TELEGRAM_MESSAGE_THREAD_ID`.
 - The watcher automatically loads `.env.local`, while the managed launcher also exports it before startup. Populated environment files are ignored by Git and the token is never written to watcher logs.
 - All `.env` and `*.example` files are ignored by Git. Keep populated local and VPS environment files private and configure Vercel secrets in Project Settings.
 

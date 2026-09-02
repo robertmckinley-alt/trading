@@ -881,6 +881,9 @@ function StrategyCard({ strategy, isBridgeFallback }) {
   const tone = outcomeTone(strategy);
   const journal = strategy.journal || {};
   const adaptive = strategy.live?.adaptive;
+  const learning = strategy.live?.learning || adaptive?.learning;
+  const rollingLearning = learning?.rolling;
+  const latestLearningEvent = learning?.changeLog?.at(-1);
 
   return (
     <article className={`live-card live-card-${tone}`}>
@@ -927,7 +930,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
         <div className="adaptive-bots" aria-label="Adaptive paper-trading bots">
           <div className="adaptive-bots-head">
             <strong>Adaptive guard</strong>
-            <span>{adaptive?.mode === 'paper-only-bounded' ? 'Paper only · risk cannot increase' : 'Waiting for live bars'}</span>
+            <span>{adaptive?.mode === 'paper-only-bounded' ? 'Paper only · never above the $500 cap' : 'Waiting for live bars'}</span>
           </div>
           <div className="adaptive-bots-grid">
             <div>
@@ -937,14 +940,28 @@ function StrategyCard({ strategy, isBridgeFallback }) {
             </div>
             <div>
               <span>Performance</span>
-              <strong>{adaptive?.performance?.sampleTrades || 0} trades learned</strong>
-              <small>{adaptive?.performance?.consecutiveLosses || 0} loss streak</small>
+              <strong>{rollingLearning?.sampleTrades || 0}-trade rolling view</strong>
+              <small>{rollingLearning?.sampleTrades ? `${Number(rollingLearning.winRate || 0).toFixed(1)}% wins · ${Number(rollingLearning.avgR || 0).toFixed(2)}R avg` : 'Waiting for a closed trade'}</small>
             </div>
             <div>
               <span>Risk guard</span>
               <strong>{adaptive?.risk ? `${formatUsd(adaptive.risk.adjustedRiskUsd || 0)} budget` : 'Standby'}</strong>
-              <small>{adaptive?.risk ? (adaptive.risk.allowed ? `${formatUsd(adaptive.risk.riskFloorUsd || 0)} baseline · clear` : 'New trades paused') : 'No live decision yet'}</small>
+              <small>{adaptive?.risk ? (adaptive.risk.allowed ? `${formatUsd(adaptive.risk.riskFloorUsd || 0)} floor · clear` : 'New trades paused') : 'No live decision yet'}</small>
             </div>
+            <div>
+              <span>Learning loop</span>
+              <strong>{learning ? `${learning.tradesLearned || 0} updates · v${learning.version || 0}` : 'Standby'}</strong>
+              <small>{String(learning?.stage || 'collecting data').replaceAll('-', ' ')}</small>
+            </div>
+          </div>
+          <div className="adaptive-bots-note" aria-live="polite">
+            <strong>{latestLearningEvent ? `Last action: ${latestLearningEvent.action.replaceAll('-', ' ')}` : 'Rules stay fixed while evidence builds'}</strong>
+            <span>
+              {latestLearningEvent
+                ? `${Math.round(Number(latestLearningEvent.nextRiskMultiplier || 1) * 100)}% next-risk ceiling after a ${latestLearningEvent.outcome}. Entry rules unchanged.`
+                : 'Every closed paper trade will add a versioned learning record and may adjust only the next-trade risk ceiling.'}
+            </span>
+            {learning?.recommendations?.[0] ? <small>{learning.recommendations[0]}</small> : null}
           </div>
         </div>
       ) : null}
