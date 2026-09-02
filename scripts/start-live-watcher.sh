@@ -22,7 +22,7 @@ find_existing_watcher_pid() {
   if [[ -f "$pid_file" ]]; then
     local pid
     pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    if [[ -n "$pid" ]] && { kill -0 "$pid" 2>/dev/null || ps -p "$pid" >/dev/null 2>&1; }; then
       echo "$pid"
       return 0
     fi
@@ -32,6 +32,12 @@ find_existing_watcher_pid() {
 
 cd "$ROOT_DIR"
 mkdir -p "$RUNTIME_DIR"
+if [[ -f "$ENV_FILE" && ! -r "$ENV_FILE" ]]; then
+  echo "Env file exists but is not readable by $(id -un): $ENV_FILE" >&2
+  echo "Fix ownership/permissions, for example: sudo chown $(id -un):$(id -gn) '$ENV_FILE' && chmod 600 '$ENV_FILE'" >&2
+  exit 1
+fi
+
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
