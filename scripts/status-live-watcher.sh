@@ -121,3 +121,6 @@ EOF
 
 print_watcher "9AM Asia/London Sweep" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json"
 print_watcher "1H Sweep + iFVG + 1M BOS" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json"
+print_watcher "NQ Opening Range Breakout" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid" "$RUNTIME_DIR/nq-opening-range-breakout-watch.log" "$ROOT_DIR/state-nq-opening-range-breakout.json"
+print_watcher "EMA 20/60 Momentum" "ema-20-60-momentum" "$RUNTIME_DIR/ema-20-60-momentum-watch.pid" "$RUNTIME_DIR/ema-20-60-momentum-watch.log" "$ROOT_DIR/state-ema-20-60-momentum.json"
+print_watcher "Volume POC Reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume-poc-reversion-watch.pid" "$RUNTIME_DIR/volume-poc-reversion-watch.log" "$ROOT_DIR/state-volume-poc-reversion.json"

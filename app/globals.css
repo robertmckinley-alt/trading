@@ -618,6 +618,91 @@ tbody th button {
 .live-card-good { border-color: #abefc6; }
 .live-card-warn { border-color: #fedf89; }
 
+.research-scorecard {
+  display: grid;
+  gap: 12px;
+  padding-block: 14px;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.research-scorecard-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.research-scorecard-head > div { display: grid; gap: 2px; }
+.research-scorecard-head span,
+.research-metrics dt { color: var(--subtle); font-size: 0.74rem; }
+.research-scorecard-head > span { font-weight: 700; }
+
+.research-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--line-soft);
+}
+
+.research-metrics > div { min-width: 0; padding: 10px; background: var(--surface-subtle); }
+.research-metrics dt, .research-metrics dd { margin: 0; }
+.research-metrics dd { margin-top: 2px; overflow-wrap: anywhere; font-size: 0.82rem; font-weight: 700; }
+.research-gates { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.research-gate {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--subtle);
+  background: var(--surface-subtle);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.research-gate-pass { color: var(--positive); background: var(--positive-soft); }
+.research-scorecard p { margin: 0; color: var(--muted); font-size: 0.78rem; }
+.research-scorecard a, .research-source { color: var(--accent); font-size: 0.76rem; font-weight: 700; }
+
+.research-method,
+.strategy-detail-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: 40px;
+  align-items: start;
+  margin-block: 28px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.research-method p,
+.strategy-detail-intro p { max-width: 72ch; margin: 0; color: var(--muted); text-wrap: pretty; }
+.research-steps { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; background: var(--line-soft); }
+.research-steps li { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 12px; padding: 13px 14px; background: var(--surface-subtle); }
+.research-steps span { color: var(--muted); font-size: 0.82rem; }
+
+.strategy-detail-intro { margin-top: 34px; }
+.strategy-research-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; background: var(--line-soft); }
+.strategy-research-facts > div { min-width: 0; padding: 12px; background: var(--surface-subtle); }
+.strategy-research-facts dt { color: var(--subtle); font-size: 0.74rem; }
+.strategy-research-facts dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 0.82rem; font-weight: 700; }
+
+.research-disclaimer {
+  margin: -12px 0 28px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 0.82rem;
+}
+
 .live-inline-meta,
 .strategy-copy,
 .hero-lede,
@@ -875,7 +960,8 @@ textarea {
   .live-board-meta { overflow-wrap: anywhere; }
   .refresh-button, .recap-date-button { min-height: 44px; }
   .section-heading > p { text-align: start; }
-  .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel { grid-template-columns: 1fr; }
+  .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel, .research-method, .strategy-detail-intro { grid-template-columns: 1fr; }
+  .research-method, .strategy-detail-intro { gap: 22px; padding: 20px; }
   .portfolio-total-card + .portfolio-total-card,
   .portfolio-total-card:nth-child(3),
   .daily-tracker-metric + .daily-tracker-metric { border-inline-start: 0; border-top: 1px solid var(--line-soft); }
@@ -906,6 +992,8 @@ textarea {
   .adaptive-bots-grid > div + div { border-inline-start: 0; border-top: 1px solid var(--line-soft); }
   .adaptive-bots-head { align-items: flex-start; flex-direction: column; }
   .adaptive-bots-head span { text-align: start; }
+  .research-metrics, .strategy-research-facts { grid-template-columns: 1fr 1fr; }
+  .research-steps li { grid-template-columns: 1fr; gap: 3px; }
 }
 
 @media (prefers-color-scheme: dark) {

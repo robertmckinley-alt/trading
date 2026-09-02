@@ -816,6 +816,53 @@ function StrategyOutcome({ strategy, isBridgeFallback }) {
   );
 }
 
+function ResearchScorecard({ research }) {
+  const evaluation = research?.evaluation;
+  if (!evaluation) return null;
+  const gateLabels = {
+    sampleSize: '50 trades',
+    tradingDays: '20 days',
+    profitFactor: 'PF ≥ 1.20',
+    positiveExpectancy: '+ expectancy',
+    positiveAverageR: '+ average R',
+    drawdownContained: 'DD ≤ $1,500'
+  };
+  const profitFactor = evaluation.profitFactor === null
+    ? evaluation.wins > 0 && evaluation.losses === 0 ? '∞' : '—'
+    : Number(evaluation.profitFactor).toFixed(2);
+
+  return (
+    <div className="research-scorecard" aria-label={`${research.stage || 'Research'} evaluation`}>
+      <div className="research-scorecard-head">
+        <div>
+          <span>Evidence status</span>
+          <strong>{evaluation.status}</strong>
+        </div>
+        <span>{evaluation.passedGates}/{evaluation.totalGates} gates</span>
+      </div>
+      <dl className="research-metrics">
+        <div><dt>Sample</dt><dd>{evaluation.trades} trades / {evaluation.tradingDays} days</dd></div>
+        <div><dt>Profit factor</dt><dd>{profitFactor}</dd></div>
+        <div><dt>Expectancy</dt><dd>{formatUsd(evaluation.expectancyUsd)}</dd></div>
+        <div><dt>Max drawdown</dt><dd>{formatUsd(evaluation.maxDrawdownUsd)}</dd></div>
+      </dl>
+      <div className="research-gates" aria-label="Research qualification gates">
+        {Object.entries(evaluation.gates).map(([key, passed]) => (
+          <span className={passed ? 'research-gate research-gate-pass' : 'research-gate'} key={key}>
+            {passed ? '✓' : '—'} {gateLabels[key] || key}
+          </span>
+        ))}
+      </div>
+      <p>{research.evidenceLabel}</p>
+      {research.source?.url ? (
+        <a href={research.source.url} rel="noreferrer" target="_blank">
+          {research.source.label} · {research.source.license}
+        </a>
+      ) : <span className="research-source">{research.source?.label || 'Internal baseline'}</span>}
+    </div>
+  );
+}
+
 function StrategyCard({ strategy, isBridgeFallback }) {
   const tone = outcomeTone(strategy);
   const journal = strategy.journal || {};
@@ -825,7 +872,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
     <article className={`live-card live-card-${tone}`}>
       <div className="live-card-head">
         <div>
-          <p className="eyebrow">Strategy</p>
+          <p className="eyebrow">{strategy.research?.stage || 'Strategy'}</p>
           <h3>{strategy.name}</h3>
           <p className="live-inline-meta">{strategy.paperAccountLabel}</p>
         </div>
@@ -838,6 +885,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
         <span>{formatUsd(strategy.bankrollUsd)} bankroll</span>
         <span>{strategy.maxDrawdownPercent}% max DD</span>
         <span>{strategy.ticker}</span>
+        <span>Paper only</span>
       </div>
 
       <div className="live-mini-grid">
@@ -858,6 +906,8 @@ function StrategyCard({ strategy, isBridgeFallback }) {
           <strong>{formatUsd(journal.realizedPnlUsd ?? 0)}</strong>
         </div>
       </div>
+
+      <ResearchScorecard research={strategy.research} />
 
       {strategy.mode === 'live-watcher' ? (
         <div className="adaptive-bots" aria-label="Adaptive paper-trading bots">

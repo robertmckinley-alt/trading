@@ -5,10 +5,19 @@ const path = require('node:path');
 const test = require('node:test');
 
 const core = require('../lib/trader-core.cjs');
-const { fetchLiveCandles, normalizeStrategyConfig, saveLiveState } = require('../lib/live-trader.cjs');
+const {
+  detectEmaMomentumSignal,
+  detectOpeningRangeBreakoutSignal,
+  detectVolumePocReversionSignal,
+  fetchLiveCandles,
+  normalizeStrategyConfig,
+  saveLiveState
+} = require('../lib/live-trader.cjs');
 const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('../lib/live-status.cjs');
 const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bots.cjs');
+const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
+const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -260,4 +269,101 @@ test('adaptive bots can only hold or reduce paper-trade risk', () => {
   assert.ok(['market-regime', 'performance', 'risk-guard'].every((name) => (
     [decision.market.name, decision.performance.name, decision.risk.name].includes(name)
   )));
+});
+
+test('strategy registry gives all five bots isolated runtime files', () => {
+  assert.equal(STRATEGIES.length, 5);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 5);
+  const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
+  assert.equal(new Set(paths).size, 5);
+  assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
+  assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
+});
+
+test('opening-range bot detects a fresh 90-minute NQ cash-session breakout', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const start = Date.parse('2026-09-02T13:30:00.000Z');
+  const candles = Array.from({ length: 90 }, (_, index) => ({
+    timestamp: new Date(start + (index * 60_000)).toISOString(),
+    open: 20_000,
+    high: 20_010,
+    low: 19_990,
+    close: 20_000,
+    volume: 100
+  }));
+  candles.push({ timestamp: '2026-09-02T15:00:00.000Z', open: 20_000, high: 20_005, low: 19_998, close: 20_001, volume: 100 });
+  candles.push({ timestamp: '2026-09-02T15:01:00.000Z', open: 20_001, high: 20_014, low: 20_000, close: 20_012, volume: 140 });
+
+  const signal = detectOpeningRangeBreakoutSignal(candles, { ...config, strategySlug: 'nq-opening-range-breakout' }, { trades: [] });
+  assert.equal(signal.found, true);
+  assert.equal(signal.setup.side, 'long');
+  assert.equal(signal.setup.setup.entryModel, 'opening-range-breakout');
+  assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+  const plan = core.buildTradePlan(core.normalizeSetup(signal.setup, config), config, core.createEmptyState(config));
+  assert.ok(plan.sizing.actualRiskUsd <= 500);
+});
+
+test('EMA bot detects a completed 15-minute 20/60 bullish crossover', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const start = Date.parse('2026-09-01T22:45:00.000Z');
+  const candles = [];
+  for (let bar = 0; bar < 62; bar += 1) {
+    const close = bar === 61 ? 20_010 : 20_000;
+    for (let minute = 0; minute < 15; minute += 1) {
+      candles.push({
+        timestamp: new Date(start + (((bar * 15) + minute) * 60_000)).toISOString(),
+        open: close,
+        high: close + 1,
+        low: close - 1,
+        close,
+        volume: 100
+      });
+    }
+  }
+
+  const signal = detectEmaMomentumSignal(candles, { ...config, strategySlug: 'ema-20-60-momentum' }, { trades: [] });
+  assert.equal(signal.found, true);
+  assert.equal(signal.setup.side, 'long');
+  assert.equal(signal.setup.setup.entryTimeframe, 'M15');
+  assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+});
+
+test('volume POC bot requires both distance and high-volume exhaustion', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const start = Date.parse('2026-09-02T13:30:00.000Z');
+  const candles = Array.from({ length: 60 }, (_, index) => ({
+    timestamp: new Date(start + (index * 60_000)).toISOString(),
+    open: 20_000,
+    high: 20_001,
+    low: 19_999,
+    close: 20_000,
+    volume: 100
+  }));
+  candles.push({
+    timestamp: '2026-09-02T14:30:00.000Z',
+    open: 20_010,
+    high: 20_015,
+    low: 20_008,
+    close: 20_009,
+    volume: 200
+  });
+
+  const signal = detectVolumePocReversionSignal(candles, { ...config, strategySlug: 'volume-poc-reversion' }, { trades: [] });
+  assert.equal(signal.found, true);
+  assert.equal(signal.setup.side, 'short');
+  assert.equal(signal.metadata.poc, 20_000);
+  assert.ok(signal.metadata.volumeRatio > 1.3);
+  assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+});
+
+test('research scorecard only promotes a strategy after every paper gate passes', () => {
+  const trades = Array.from({ length: 50 }, (_, index) => ({
+    date: `2026-08-${String((index % 25) + 1).padStart(2, '0')}`,
+    realizedPnlUsd: index % 5 === 0 ? -100 : 100,
+    rMultiple: index % 5 === 0 ? -1 : 1
+  }));
+  const evaluation = evaluateStrategyJournal({ trades });
+  assert.equal(evaluation.status, 'Paper candidate');
+  assert.equal(evaluation.passedGates, evaluation.totalGates);
+  assert.equal(evaluation.execution, 'paper-only');
 });

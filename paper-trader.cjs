@@ -31,15 +31,13 @@ const {
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
+const { requireStrategyDefinition, runtimeFilesForStrategy } = require('./lib/strategy-registry.cjs');
 
 const BASE = __dirname;
 const CONFIG_PATH = path.join(BASE, 'config.json');
 
 function statePathForStrategy(strategySlug) {
-  if (strategySlug === 'hourly-sweep-ifvg-bos') {
-    return path.join(BASE, 'state-hourly-sweep-ifvg-bos.json');
-  }
-  return path.join(BASE, 'state.json');
+  return runtimeFilesForStrategy(BASE, strategySlug).statePath;
 }
 
 function loadConfig() {
@@ -450,6 +448,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 async function main() {
   const { command, rest } = parseArgs(process.argv);
   const { provider, strategySlug } = parseWatchOptions(rest);
+  requireStrategyDefinition(strategySlug);
   const statePath = statePathForStrategy(strategySlug);
   const config = loadConfig();
   const state = loadState(config, statePath);

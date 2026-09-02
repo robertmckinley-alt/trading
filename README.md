@@ -1,9 +1,10 @@
 # DoctorTrades NQ Paper Trader
 
-This folder now contains both:
+This folder contains:
 
 1. a local CLI paper trader
 2. a Vercel-ready Next.js web app
+3. a five-bot, paper-only NQ strategy research network
 
 Both are built around the literal flow spoken in the DoctorTrades clip: at `9:00 AM` New York time, mark the `Asia` and `London` highs/lows, wait for one of those pools to get swept, drop to the `1m` chart, take the `FVG` reversal back to the other side, set the stop at the swing extreme, and target the next draw on liquidity.
 
@@ -14,9 +15,13 @@ The live mode now adds:
 - automatic `Asia` and `London` range detection from incoming `1m` candles
 - automatic post-`9AM` sweep detection
 - automatic `1m` `FVG` reversal signal generation
-- one persistent Databento Live API stream shared by both watchers (no Historical API polling or fallback)
+- one persistent Databento Live API stream shared by all five watchers (no Historical API polling or fallback)
+- five isolated paper strategy watchers sharing that one live stream: the two original setups, a 90-minute opening-range breakout, EMA 20/60 momentum, and bar-volume POC reversion
 - three bounded adaptive bots that classify market regime, learn from recent paper trades, and pause new trades at the daily-loss or account-floor limits; the configured adaptive risk baseline is currently `$500`
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
+- a research scorecard that requires sample size, trading-day, profit-factor, expectancy, average-R, and drawdown gates before labeling any strategy a paper candidate
+
+See [STRATEGY_RESEARCH.md](./STRATEGY_RESEARCH.md) for source provenance, license decisions, rejected candidates, and the limits of every adaptation.
 
 The account model is seeded at `50,000 USD` with a fixed `10%` max drawdown, so the account floor is `45,000 USD`. New plans automatically size off the smaller of your per-trade risk cap and the drawdown room left above that floor.
 
@@ -84,7 +89,7 @@ Important persistence note:
 - when `DATABASE_URL` and `TRADING_ADMIN_TOKEN` are configured, an authenticated operator can synchronize journal history across devices
 - the CLI still writes durable local trades into `state.json`
 - the always-on live watcher should run on your VPS, not inside Vercel
-- the main page can now show both strategy cards plus outcomes, but Vercel needs a live status bridge to read the VPS watcher
+- the main page shows all five strategy accounts plus outcomes, but Vercel needs a live status bridge to read the VPS watchers
 
 ## Setup Format
 
@@ -261,6 +266,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now doctortrades-feed
 sudo systemctl enable --now doctortrades-watcher@live-9am-sweep
 sudo systemctl enable --now doctortrades-watcher@hourly-sweep-ifvg-bos
+sudo systemctl enable --now doctortrades-watcher@nq-opening-range-breakout
+sudo systemctl enable --now doctortrades-watcher@ema-20-60-momentum
+sudo systemctl enable --now doctortrades-watcher@volume-poc-reversion
 sudo systemctl enable --now doctortrades-status
 ```
 
