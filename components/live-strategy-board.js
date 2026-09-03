@@ -818,14 +818,24 @@ function StrategyOutcome({ strategy, isBridgeFallback }) {
 
 function PortfolioRiskGuard({ risk }) {
   if (!risk) return null;
-  const atCap = risk.status === 'cap-reached';
+  const atCap = ['cap-reached', 'family-cap-reached'].includes(risk.status);
   return (
-    <div className={`portfolio-risk-strip ${atCap ? 'portfolio-risk-strip-warn' : ''}`} aria-label="Shared portfolio risk guard">
-      <div>
-        <span>Shared open-risk guard</span>
-        <strong>{formatUsd(risk.reservedRiskUsd)} of {formatUsd(risk.capUsd)} reserved</strong>
+    <div className="portfolio-risk-stack" aria-label="Shared portfolio and strategy-family risk guards">
+      <div className={`portfolio-risk-strip ${atCap ? 'portfolio-risk-strip-warn' : ''}`}>
+        <div>
+          <span>Shared open-risk guard</span>
+          <strong>{formatUsd(risk.reservedRiskUsd)} of {formatUsd(risk.capUsd)} reserved</strong>
+        </div>
+        <p>{formatUsd(risk.availableRiskUsd)} available · {Number(risk.utilizationPercent || 0).toFixed(1)}% utilized · paper only</p>
       </div>
-      <p>{formatUsd(risk.availableRiskUsd)} available · {Number(risk.utilizationPercent || 0).toFixed(1)}% utilized · paper only</p>
+      <div className="family-risk-list" aria-label="Correlated strategy family limits">
+        {(risk.families || []).map((family) => (
+          <div className={family.status === 'cap-reached' ? 'family-risk-item family-risk-item-warn' : 'family-risk-item'} key={family.family}>
+            <span>{family.name}</span>
+            <strong>{formatUsd(family.reservedRiskUsd)} / {formatUsd(family.capUsd)}</strong>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -884,6 +894,10 @@ function StrategyCard({ strategy, isBridgeFallback }) {
   const learning = strategy.live?.learning || adaptive?.learning;
   const rollingLearning = learning?.rolling;
   const latestLearningEvent = learning?.changeLog?.at(-1);
+  const council = strategy.live?.researchCouncil;
+  const setupReview = council?.roles?.find((item) => item.name === 'Setup detector');
+  const riskReview = council?.roles?.find((item) => item.name === 'Risk veto');
+  const amdContext = strategy.live?.researchContext?.amdContext;
 
   return (
     <article className={`live-card live-card-${tone}`}>
@@ -902,6 +916,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
         <span>{formatUsd(strategy.bankrollUsd)} bankroll</span>
         <span>{strategy.maxDrawdownPercent}% max DD</span>
         <span>{strategy.ticker}</span>
+        {strategy.strategyFamilyName ? <span>{strategy.strategyFamilyName}</span> : null}
         <span>Paper only</span>
       </div>
 
@@ -927,10 +942,10 @@ function StrategyCard({ strategy, isBridgeFallback }) {
       <ResearchScorecard research={strategy.research} />
 
       {strategy.mode === 'live-watcher' ? (
-        <div className="adaptive-bots" aria-label="Adaptive paper-trading bots">
+        <div className="adaptive-bots" aria-label="Paper research and risk council">
           <div className="adaptive-bots-head">
-            <strong>Adaptive guard</strong>
-            <span>{adaptive?.mode === 'paper-only-bounded' ? 'Paper only · never above the $500 cap' : 'Waiting for live bars'}</span>
+            <strong>Research &amp; risk council</strong>
+            <span>{council?.mode === 'advisory-only' ? 'Advisory only · fixed entry rules' : 'Waiting for live bars'}</span>
           </div>
           <div className="adaptive-bots-grid">
             <div>
@@ -953,6 +968,16 @@ function StrategyCard({ strategy, isBridgeFallback }) {
               <strong>{learning ? `${learning.tradesLearned || 0} updates · v${learning.version || 0}` : 'Standby'}</strong>
               <small>{String(learning?.stage || 'collecting data').replaceAll('-', ' ')}</small>
             </div>
+            <div>
+              <span>Signal review</span>
+              <strong>{String(setupReview?.status || 'standby').replaceAll('-', ' ')}</strong>
+              <small>{council?.evidence?.conclusion ? String(council.evidence.conclusion).replaceAll('-', ' ') : 'No qualified signal yet'}</small>
+            </div>
+            <div>
+              <span>Independent veto</span>
+              <strong>{String(riskReview?.status || 'standby').replaceAll('-', ' ')}</strong>
+              <small>{council?.canPlaceTrades === false ? 'Council cannot place or resize trades' : 'Waiting for risk review'}</small>
+            </div>
           </div>
           <div className="adaptive-bots-note" aria-live="polite">
             <strong>{latestLearningEvent ? `Last action: ${latestLearningEvent.action.replaceAll('-', ' ')}` : 'Rules stay fixed while evidence builds'}</strong>
@@ -963,6 +988,12 @@ function StrategyCard({ strategy, isBridgeFallback }) {
             </span>
             {learning?.recommendations?.[0] ? <small>{learning.recommendations[0]}</small> : null}
           </div>
+          {amdContext ? (
+            <div className="adaptive-bots-note">
+              <strong>Asia / London context: {String(amdContext.classification || 'unknown').replaceAll('-', ' ')}</strong>
+              <span>{amdContext.reason} This is logged for comparison and does not change the entry rule yet.</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

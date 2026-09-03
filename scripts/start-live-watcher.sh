@@ -148,3 +148,4 @@ start_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_F
 start_watcher "NQ opening range" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid" "$RUNTIME_DIR/nq-opening-range-breakout-watch.log" "$ROOT_DIR/state-nq-opening-range-breakout.json" "$INTERVAL_MS"
 start_watcher "EMA momentum" "ema-20-60-momentum" "$RUNTIME_DIR/ema-20-60-momentum-watch.pid" "$RUNTIME_DIR/ema-20-60-momentum-watch.log" "$ROOT_DIR/state-ema-20-60-momentum.json" "$INTERVAL_MS"
 start_watcher "volume POC reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume-poc-reversion-watch.pid" "$RUNTIME_DIR/volume-poc-reversion-watch.log" "$ROOT_DIR/state-volume-poc-reversion.json" "$INTERVAL_MS"
+start_watcher "15-minute opening-range retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.log" "$ROOT_DIR/state-nq-15m-opening-range-retest.json" "$INTERVAL_MS"

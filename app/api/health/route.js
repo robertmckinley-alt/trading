@@ -27,7 +27,13 @@ export async function GET() {
         status: snapshot.portfolioRisk.status,
         capUsd: snapshot.portfolioRisk.capUsd,
         reservedRiskUsd: snapshot.portfolioRisk.reservedRiskUsd,
-        availableRiskUsd: snapshot.portfolioRisk.availableRiskUsd
+        availableRiskUsd: snapshot.portfolioRisk.availableRiskUsd,
+        families: snapshot.portfolioRisk.families?.map((family) => ({
+          family: family.family,
+          status: family.status,
+          capUsd: family.capUsd,
+          reservedRiskUsd: family.reservedRiskUsd
+        })) || []
       } : null,
       latestDataAt,
       durationMs: Date.now() - startedAt

@@ -33,6 +33,7 @@ const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
 const { synchronizeStrategyLearning } = require('./lib/strategy-learning.cjs');
 const { reservePortfolioRisk } = require('./lib/portfolio-risk.cjs');
+const { applyRiskDecision, buildResearchCouncilReview } = require('./lib/research-council.cjs');
 const { requireStrategyDefinition, runtimeFilesForStrategy } = require('./lib/strategy-registry.cjs');
 
 const BASE = __dirname;
@@ -338,6 +339,13 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     }
 
     const signal = detectSignalFromCandles(candles, config, state);
+    state.live.researchContext = signal.metadata || null;
+    state.live.researchCouncil = buildResearchCouncilReview({
+      signal,
+      adaptiveDecision,
+      feedMetadata: metadata
+    });
+    saveLiveState(statePath, state);
     if (!signal.found) {
       summaryLines.push(`No trade: ${signal.reason}`);
       const signature = JSON.stringify({
@@ -374,6 +382,8 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     let plan;
     try {
       if (!adaptiveDecision.risk.allowed) {
+        state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, adaptiveDecision.risk);
+        saveLiveState(statePath, state);
         throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
       }
       const adaptiveConfig = applyAdaptiveRisk(config, adaptiveDecision);
@@ -385,6 +395,8 @@ async function runWatchLive(config, state, intervalMs, statePath) {
         strategySlug: config.strategySlug,
         proposedRiskUsd: plan.sizing.actualRiskUsd,
         commit: (decision) => {
+          const researchCouncil = applyRiskDecision(state.live.researchCouncil, decision);
+          plan.researchCouncil = researchCouncil;
           plan.portfolioRisk = {
             capUsd: decision.capUsd,
             reservedBeforeUsd: decision.reservedRiskUsd,
@@ -393,6 +405,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
           const nextLiveState = {
             ...state.live,
             portfolioRisk: decision,
+            researchCouncil,
             openSignalKey: key,
             openPlan: plan,
             openTriggeredAt: signal.triggerTimestamp,
@@ -404,6 +417,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       });
       if (!portfolioDecision.allowed) {
         state.live.portfolioRisk = portfolioDecision;
+        state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, portfolioDecision);
         saveLiveState(statePath, state);
         throw new Error(`Shared portfolio risk guard: ${portfolioDecision.reason}`);
       }
@@ -481,9 +495,13 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 async function main() {
   const { command, rest } = parseArgs(process.argv);
   const { provider, strategySlug } = parseWatchOptions(rest);
-  requireStrategyDefinition(strategySlug);
+  const strategyDefinition = requireStrategyDefinition(strategySlug);
   const statePath = statePathForStrategy(strategySlug);
-  const config = loadConfig();
+  const config = {
+    ...loadConfig(),
+    strategySlug,
+    strategyFamily: strategyDefinition.strategyFamily
+  };
   const state = loadState(config, statePath);
 
   if (!command) {

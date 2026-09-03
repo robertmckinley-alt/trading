@@ -4,6 +4,12 @@
   "maxAccountDrawdownPercent": 10,
   "maxRiskPerTradeUsd": 500,
   "maxPortfolioOpenRiskUsd": 2500,
+  "maxStrategyFamilyOpenRiskUsd": {
+    "liquidity-reversal": 750,
+    "cash-breakout": 750,
+    "trend-momentum": 500,
+    "value-reversion": 500
+  },
   "adaptiveRiskFloorUsd": 250,
   "maxDailyLossUsd": 750,
   "tickSize": 0.25,
@@ -32,6 +38,16 @@
     "stopBufferTicks": 1,
     "maxSignalAgeBars": 15,
     "maxTradesPerDay": 1,
+    "openingRangeRetest": {
+      "rangeStart": "09:30",
+      "rangeEnd": "09:45",
+      "entryEnd": "11:30",
+      "maxRetestBars": 10,
+      "retestToleranceTicks": 2,
+      "orderFlowIntervalMinutes": 5,
+      "orderFlowFastEma": 8,
+      "orderFlowSlowEma": 21
+    },
     "sessionWindows": {
       "asia": { "start": "20:00", "end": "01:59" },
       "london": { "start": "02:00", "end": "07:59" }

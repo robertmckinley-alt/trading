@@ -4,7 +4,7 @@ This folder contains:
 
 1. a local CLI paper trader
 2. a Vercel-ready Next.js web app
-3. a five-bot, paper-only NQ strategy research network
+3. a six-bot, paper-only NQ strategy research network
 
 Both are built around the literal flow spoken in the DoctorTrades clip: at `9:00 AM` New York time, mark the `Asia` and `London` highs/lows, wait for one of those pools to get swept, drop to the `1m` chart, take the `FVG` reversal back to the other side, set the stop at the swing extreme, and target the next draw on liquidity.
 
@@ -15,12 +15,13 @@ The live mode now adds:
 - automatic `Asia` and `London` range detection from incoming `1m` candles
 - automatic post-`9AM` sweep detection
 - automatic `1m` `FVG` reversal signal generation
-- one persistent Databento Live API stream shared by all five watchers (no Historical API polling or fallback)
-- five isolated paper strategy watchers sharing that one live stream: the two original setups, a 90-minute opening-range breakout, EMA 20/60 momentum, and bar-volume POC reversion
+- one persistent Databento Live API stream shared by all six watchers (no Historical API polling or fallback)
+- six isolated paper strategy watchers sharing that one live stream: the two original setups, a 90-minute opening-range breakout, EMA 20/60 momentum, bar-volume POC reversion, and a 15-minute opening-range break-and-retest
 - a versioned learning loop that updates after every closed paper trade, records rolling expectancy, profit factor, average R, drawdown, and streaks, and keeps an audit log of any next-trade risk adjustment
 - bounded adaptive controls that classify market regime and pause new trades at the daily-loss or account-floor limits; the approved risk range is `$250` to `$500` per paper trade, and no adaptive decision can exceed the `$500` cap
 - locked entry rules: the learning loop can recommend an offline review, but it cannot silently rewrite a strategy or move it to live money
-- a shared `$2,500` simultaneous open-risk cap across all five paper accounts, enforced before a strategy can reserve a new plan
+- a shared `$2,500` simultaneous open-risk cap across all six paper accounts plus smaller correlated-strategy family caps, enforced before a strategy can reserve a new plan
+- an advisory-only research council that records feed health, setup evidence, market regime, risk-veto status, and post-trade learning without changing entry rules or gaining order authority
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
 - a research scorecard that requires sample size, trading-day, profit-factor, expectancy, average-R, and drawdown gates before labeling any strategy a paper candidate
 
@@ -92,7 +93,7 @@ Important persistence note:
 - when `DATABASE_URL` and `TRADING_ADMIN_TOKEN` are configured, an authenticated operator can synchronize journal history across devices
 - the CLI still writes durable local trades into `state.json`
 - the always-on live watcher should run on your VPS, not inside Vercel
-- the main page shows all five strategy accounts plus outcomes, but Vercel needs a live status bridge to read the VPS watchers
+- the main page shows all six strategy accounts plus outcomes, but Vercel needs a live status bridge to read the VPS watchers
 
 ## Setup Format
 
@@ -272,6 +273,7 @@ sudo systemctl enable --now doctortrades-watcher@hourly-sweep-ifvg-bos
 sudo systemctl enable --now doctortrades-watcher@nq-opening-range-breakout
 sudo systemctl enable --now doctortrades-watcher@ema-20-60-momentum
 sudo systemctl enable --now doctortrades-watcher@volume-poc-reversion
+sudo systemctl enable --now doctortrades-watcher@nq-15m-opening-range-retest
 sudo systemctl enable --now doctortrades-status
 ```
 

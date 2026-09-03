@@ -377,6 +377,15 @@ h3 {
   border-color: color-mix(in srgb, var(--negative) 35%, var(--line));
   background: color-mix(in srgb, var(--negative) 7%, var(--surface));
 }
+
+.portfolio-risk-stack { display: grid; gap: 1px; margin-top: 12px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: var(--radius-md); background: var(--line-soft); }
+.portfolio-risk-stack .portfolio-risk-strip { margin-top: 0; border: 0; border-radius: 0; }
+.family-risk-list { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line-soft); }
+.family-risk-item { flex: 1 1 190px; min-width: 0; padding: 10px 14px; background: var(--surface-subtle); }
+.family-risk-item span, .family-risk-item strong { display: block; }
+.family-risk-item span { color: var(--subtle); font-size: 0.72rem; }
+.family-risk-item strong { margin-top: 2px; font-size: 0.82rem; }
+.family-risk-item-warn { color: var(--warning); background: var(--warning-soft); }
 .number-positive { color: var(--positive) !important; }
 .number-negative { color: var(--negative) !important; }
 
@@ -700,6 +709,24 @@ tbody th button {
   background: var(--surface);
 }
 
+.shadow-research {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 32px;
+  align-items: start;
+  margin-block: 28px;
+  padding: 24px 28px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+.shadow-research p { max-width: 72ch; margin: 8px 0 0; color: var(--muted); text-wrap: pretty; }
+.shadow-research-facts { display: grid; gap: 1px; margin: 0; background: var(--line-soft); }
+.shadow-research-facts > div { padding: 10px 12px; background: var(--surface); }
+.shadow-research-facts dt, .shadow-research-facts dd { margin: 0; }
+.shadow-research-facts dt { color: var(--subtle); font-size: 0.72rem; }
+.shadow-research-facts dd { margin-top: 2px; font-size: 0.82rem; font-weight: 700; }
+
 .research-method p,
 .strategy-detail-intro p { max-width: 72ch; margin: 0; color: var(--muted); text-wrap: pretty; }
 .research-steps { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; background: var(--line-soft); }
@@ -993,7 +1020,7 @@ textarea {
   .portfolio-risk-strip p { text-align: start; }
   .refresh-button, .recap-date-button { min-height: 44px; }
   .section-heading > p { text-align: start; }
-  .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel, .research-method, .strategy-detail-intro { grid-template-columns: 1fr; }
+  .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel, .research-method, .strategy-detail-intro, .shadow-research { grid-template-columns: 1fr; }
   .research-method, .strategy-detail-intro { gap: 22px; padding: 20px; }
   .portfolio-total-card + .portfolio-total-card,
   .portfolio-total-card:nth-child(3),

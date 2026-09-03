@@ -8,6 +8,8 @@ const core = require('../lib/trader-core.cjs');
 const {
   detectEmaMomentumSignal,
   detectOpeningRangeBreakoutSignal,
+  detectOpeningRangeRetestSignal,
+  computeAmdContext,
   detectVolumePocReversionSignal,
   fetchLiveCandles,
   normalizeStrategyConfig,
@@ -19,6 +21,7 @@ const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bot
 const { synchronizeStrategyLearning } = require('../lib/strategy-learning.cjs');
 const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
 const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
+const { applyRiskDecision, buildResearchCouncilReview } = require('../lib/research-council.cjs');
 const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 
 const root = path.join(__dirname, '..');
@@ -329,13 +332,51 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
-test('strategy registry gives all five bots isolated runtime files', () => {
-  assert.equal(STRATEGIES.length, 5);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 5);
+test('strategy registry gives all six bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 6);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 6);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 5);
+  assert.equal(new Set(paths).size, 6);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
+  assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
+  assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
+});
+
+test('strategy-family guard prevents correlated paper positions from stacking', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctortrades-family-risk-'));
+  const config = {
+    maxPortfolioOpenRiskUsd: 2500,
+    maxStrategyFamilyOpenRiskUsd: { 'liquidity-reversal': 750 }
+  };
+  const first = STRATEGIES.find((strategy) => strategy.slug === 'live-9am-sweep');
+  const second = STRATEGIES.find((strategy) => strategy.slug === 'hourly-sweep-ifvg-bos');
+  fs.writeFileSync(runtimeFilesForStrategy(directory, first.slug).statePath, JSON.stringify({
+    live: { openPlan: { sizing: { actualRiskUsd: 500 } } }
+  }));
+
+  const blocked = reservePortfolioRisk({
+    rootDir: directory,
+    config,
+    strategySlug: second.slug,
+    proposedRiskUsd: 300
+  });
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.projectedFamilyRiskUsd, 800);
+  assert.match(blocked.reason, /Liquidity reversal family.*above its \$750\.00 cap/);
+});
+
+test('Asia/London context records which side London swept without changing entries', () => {
+  const sessionRanges = {
+    asia: { high: 20_010, low: 19_990, start: '2026-09-02T00:00:00.000Z', end: '2026-09-02T05:59:00.000Z' },
+    london: { high: 20_005, low: 19_985, start: '2026-09-02T06:00:00.000Z', end: '2026-09-02T11:59:00.000Z' }
+  };
+  const context = computeAmdContext([
+    { timestamp: '2026-09-02T06:30:00.000Z', high: 20_005, low: 19_985 }
+  ], sessionRanges);
+  assert.equal(context.classification, 'asia-low-swept');
+  assert.equal(context.supportsLong, true);
+  assert.equal(context.supportsShort, false);
 });
 
 test('shared portfolio guard caps simultaneous paper risk at $2,500', () => {
@@ -412,6 +453,60 @@ test('opening-range bot detects a fresh 90-minute NQ cash-session breakout', () 
   assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
   const plan = core.buildTradePlan(core.normalizeSetup(signal.setup, config), config, core.createEmptyState(config));
   assert.ok(plan.sizing.actualRiskUsd <= 500);
+});
+
+test('15-minute opening-range bot waits for a break, retest, and aligned order flow', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const candles = [];
+  const premarketStart = Date.parse('2026-09-02T11:30:00.000Z');
+  for (let index = 0; index < 120; index += 1) {
+    const close = 19_980 + (index * 0.1);
+    candles.push({
+      timestamp: new Date(premarketStart + (index * 60_000)).toISOString(),
+      open: close - 0.1,
+      high: close + 0.4,
+      low: close - 0.4,
+      close,
+      volume: 100
+    });
+  }
+  const openStart = Date.parse('2026-09-02T13:30:00.000Z');
+  for (let index = 0; index < 15; index += 1) {
+    candles.push({
+      timestamp: new Date(openStart + (index * 60_000)).toISOString(),
+      open: 20_000,
+      high: 20_010,
+      low: 19_990,
+      close: 20_000,
+      volume: 120
+    });
+  }
+  candles.push({ timestamp: '2026-09-02T13:45:00.000Z', open: 20_009, high: 20_013, low: 20_008, close: 20_012, volume: 180 });
+  candles.push({ timestamp: '2026-09-02T13:46:00.000Z', open: 20_012, high: 20_012.5, low: 20_009.75, close: 20_011, volume: 150 });
+
+  const signal = detectOpeningRangeRetestSignal(candles, { ...config, strategySlug: 'nq-15m-opening-range-retest' }, { trades: [] });
+  assert.equal(signal.found, true, signal.reason);
+  assert.equal(signal.setup.side, 'long');
+  assert.equal(signal.setup.setup.entryModel, 'opening-range-breakout-retest');
+  assert.equal(signal.metadata.retestBars, 1);
+  assert.equal(signal.metadata.orderFlow.aligned, true);
+  assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+});
+
+test('research council remains advisory and records a deterministic risk veto', () => {
+  const review = buildResearchCouncilReview({
+    signal: { found: true, setup: { side: 'long', setup: { entryModel: 'opening-range-breakout-retest' } }, metadata: {} },
+    adaptiveDecision: {
+      market: { status: 'active', reason: 'Balanced market.' },
+      risk: { allowed: true, reason: 'Clear.' },
+      learning: { tradesLearned: 0 }
+    },
+    feedMetadata: { provider: 'databento-live', ticker: 'NQ.v.0' }
+  });
+  const vetoed = applyRiskDecision(review, { allowed: false, reason: 'Family risk cap reached.' });
+  assert.equal(vetoed.canPlaceTrades, false);
+  assert.equal(vetoed.canIncreaseRisk, false);
+  assert.equal(vetoed.roles.find((item) => item.name === 'Risk veto').status, 'vetoed');
 });
 
 test('EMA bot detects a completed 15-minute 20/60 bullish crossover', () => {

@@ -55,6 +55,7 @@ stop_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE"
 stop_watcher "NQ opening range" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid"
 stop_watcher "EMA momentum" "ema-20-60-momentum" "$RUNTIME_DIR/ema-20-60-momentum-watch.pid"
 stop_watcher "volume POC reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume-poc-reversion-watch.pid"
+stop_watcher "15-minute opening-range retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid"
 
 feed_pid="$(find_existing_watcher_pid "$FEED_PID_FILE" "python3 scripts/databento-live-feed.py")"
 if [[ -n "$feed_pid" ]] && kill -0 "$feed_pid" 2>/dev/null; then
@@ -75,7 +76,8 @@ for (const filename of [
   'state-hourly-sweep-ifvg-bos.json',
   'state-nq-opening-range-breakout.json',
   'state-ema-20-60-momentum.json',
-  'state-volume-poc-reversion.json'
+  'state-volume-poc-reversion.json',
+  'state-nq-15m-opening-range-retest.json'
 ]) {
   const statePath = path.join(process.cwd(), filename);
   if (!fs.existsSync(statePath)) continue;

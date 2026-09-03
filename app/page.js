@@ -34,10 +34,10 @@ export default async function HomePage() {
 
       <section className="dashboard-intro">
         <div>
-          <p className="eyebrow">Five-bot NQ paper research network</p>
+          <p className="eyebrow">Six-bot NQ paper research network</p>
           <h1>Compare strategies under the same risk rules.</h1>
           <p>
-            Every bot receives the same live feed, $500 per-trade cap, $2,500 shared open-risk guard, daily loss protection, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
+            Every bot receives the same live feed, $500 per-trade cap, $2,500 shared open-risk guard, correlated-strategy family limits, daily loss protection, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
           </p>
         </div>
         <dl className="risk-guardrails" aria-label="Account risk guardrails">
@@ -65,6 +65,21 @@ export default async function HomePage() {
           <li><strong>Forward test</strong><span>Use the shared live feed and identical cost model.</span></li>
           <li><strong>Keep or retire</strong><span>Score every result; never hide failed strategies.</span></li>
         </ol>
+      </section>
+
+      <section className="shadow-research" aria-labelledby="shadow-research-title">
+        <div>
+          <span className="section-kicker">Shadow research</span>
+          <h2 id="shadow-research-title">Power of Three stays observational until its rules are exact.</h2>
+          <p>
+            The video concept is being treated as accumulation, manipulation, and distribution context—not as an executable strategy. It cannot open trades until trend, confirmation, stop, target, timeframe, and session rules are specified and tested.
+          </p>
+        </div>
+        <dl className="shadow-research-facts">
+          <div><dt>Execution</dt><dd>Disabled</dd></div>
+          <div><dt>Current use</dt><dd>Context tagging</dd></div>
+          <div><dt>Promotion path</dt><dd>Rule spec → replay → forward paper</dd></div>
+        </dl>
       </section>
 
       <section className="manual-workspace" aria-labelledby="manual-workspace-title">

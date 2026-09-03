@@ -41,6 +41,7 @@ export default async function ResearchStrategyPage({ params }) {
           <div><dt>Stage</dt><dd>{strategy.researchStage}</dd></div>
           <div><dt>Evidence</dt><dd>{strategy.evidenceLabel}</dd></div>
           <div><dt>Activation</dt><dd>{strategy.activationTime}</dd></div>
+          <div><dt>Risk family</dt><dd>{strategy.strategyFamilyName}</dd></div>
           <div><dt>License</dt><dd>{strategy.source.license}</dd></div>
         </dl>
       </section>
