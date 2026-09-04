@@ -30,8 +30,12 @@ const {
   buildResearchLab,
   performanceMetrics,
   reviewEvidence,
+  reviewBacktestEvidence,
   splitChronologically
 } = require('../lib/research-lab.cjs');
+const { runStrategyBacktest } = require('../lib/backtest-engine.cjs');
+const { historicalWindow, parseDatabentoJson } = require('../lib/historical-data.cjs');
+const { remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -113,6 +117,74 @@ test('research lab reads closed journal entries without altering live strategy s
   assert.equal(lab.summary.closedTrades, 2);
   assert.equal(lab.reports[0].review.execution, 'paper-only');
   assert.deepEqual(snapshot, before);
+});
+
+test('Databento historical records normalize fixed prices and timestamps', () => {
+  const candles = parseDatabentoJson([
+    JSON.stringify({ ts_event: '2026-08-01T14:30:00.000Z', open: 23000000000000, high: 23001000000000, low: 22999000000000, close: 23000500000000, volume: 10, instrument_id: 42 }),
+    JSON.stringify({ ts_event: '2026-08-01T14:31:00.000Z', open: 23000.5, high: 23002, low: 23000, close: 23001.5, volume: 12, instrument_id: 42 })
+  ].join('\n'));
+
+  assert.equal(candles.length, 2);
+  assert.equal(candles[0].open, 23000);
+  assert.equal(candles[0].instrumentId, 42);
+  assert.equal(candles[1].close, 23001.5);
+});
+
+test('historical backtest window defaults to the prior 60 calendar days', () => {
+  const window = historicalWindow(60, new Date('2026-09-04T12:34:56.000Z'));
+  assert.equal(window.days, 60);
+  assert.equal(window.end, '2026-09-04T12:14:00.000Z');
+  assert.equal(window.start, '2026-07-06T12:14:00.000Z');
+});
+
+test('remote backtest URL derives from the existing private live bridge', () => {
+  assert.deepEqual(remoteBacktestUrls({ LIVE_STATUS_SOURCE_URL: 'https://private.example/api/live-status' }), ['https://private.example/api/backtest']);
+});
+
+test('60-day backtest fills only after the signal candle and reaches its separate 50-trade gate', () => {
+  const candles = [];
+  for (let day = 0; day < 60; day += 1) {
+    const first = new Date(Date.UTC(2026, 0, day + 1, 15, 0));
+    const second = new Date(first.getTime() + 60_000);
+    candles.push({ timestamp: first.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: second.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+  }
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  let sequence = 0;
+  const definition = { slug: 'test-strategy', name: 'Test strategy', strategyFamily: 'test', strategyFamilyName: 'Test' };
+  const result = runStrategyBacktest(candles, config, definition, {
+    detectSignal(context) {
+      const trigger = context.at(-2);
+      const date = trigger.timestamp.slice(0, 10);
+      return {
+        found: true,
+        triggerTimestamp: trigger.timestamp,
+        sweepTimestamp: trigger.timestamp,
+        setup: { symbol: 'NQ', date, session: 'Test', side: 'long', entry: 100, stop: 99, targets: [101], thesis: 'test', setup: {} }
+      };
+    },
+    buildPlan(signal) {
+      return { setup: signal.setup, sizing: { maxContracts: 1, actualRiskUsd: 100 }, targets: [], triggerTimestamp: signal.triggerTimestamp };
+    },
+    replay(plan, future) {
+      assert.ok(future.every((candle) => Date.parse(candle.timestamp) > Date.parse(plan.triggerTimestamp)));
+      const pnl = sequence % 2 === 0 ? 100 : -50;
+      sequence += 1;
+      return { status: 'closed', contracts: 1, filledAt: future[0].timestamp, exitReason: pnl > 0 ? 'target' : 'stop-loss', finalExitPrice: 100, realizedPnlUsd: pnl, rMultiple: pnl / 100, targetsHit: [], mfePoints: 1, maePoints: 1, mfeUsd: 20, maeUsd: -20 };
+    }
+  });
+
+  assert.equal(result.trades.length, 60);
+  assert.equal(result.review.recommendation, 'ADVANCE TO FORWARD TEST');
+  assert.equal(result.review.evidenceType, 'historical-simulated');
+  assert.ok(result.trades.every((trade) => trade.evidenceType === 'historical-simulated'));
+});
+
+test('historical recommendations never use the forward-paper promotion label', () => {
+  const review = reviewBacktestEvidence(researchTrades(60));
+  assert.equal(review.recommendation, 'ADVANCE TO FORWARD TEST');
+  assert.notEqual(review.recommendation, 'PAPER CANDIDATE');
 });
 
 test('sample setup builds and replays through the shared trading engine', () => {

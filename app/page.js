@@ -28,6 +28,7 @@ export default async function HomePage() {
         </div>
         <nav className="app-nav" aria-label="Strategy navigation">
           <Link href="/research">Research Lab</Link>
+          <Link href="/backtests">Backtest Results</Link>
           <Link href="#strategy-network">Strategy network</Link>
           <Link href="#research-method">Research method</Link>
         </nav>

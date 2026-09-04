@@ -46,6 +46,7 @@ export default async function ResearchPage() {
         </Link>
         <nav className="app-nav" aria-label="Research navigation">
           <Link href="/">Dashboard</Link>
+          <Link href="/backtests">Backtest Results</Link>
           <Link href="#strategy-reviews">Strategy reviews</Link>
           <Link href="#memory">Research memory</Link>
         </nav>
