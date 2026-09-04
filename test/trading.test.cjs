@@ -121,14 +121,15 @@ test('research lab reads closed journal entries without altering live strategy s
 
 test('Databento historical records normalize fixed prices and timestamps', () => {
   const candles = parseDatabentoJson([
-    JSON.stringify({ ts_event: '2026-08-01T14:30:00.000Z', open: 23000000000000, high: 23001000000000, low: 22999000000000, close: 23000500000000, volume: 10, instrument_id: 42 }),
+    JSON.stringify({ hd: { ts_event: '1788445800000000000', instrument_id: 42004177 }, open: '29343000000000', high: '29360500000000', low: '29338750000000', close: '29356000000000', volume: '1427' }),
     JSON.stringify({ ts_event: '2026-08-01T14:31:00.000Z', open: 23000.5, high: 23002, low: 23000, close: 23001.5, volume: 12, instrument_id: 42 })
   ].join('\n'));
 
   assert.equal(candles.length, 2);
-  assert.equal(candles[0].open, 23000);
-  assert.equal(candles[0].instrumentId, 42);
-  assert.equal(candles[1].close, 23001.5);
+  assert.equal(candles[0].close, 23001.5);
+  assert.equal(candles[1].timestamp, '2026-09-03T14:30:00.000Z');
+  assert.equal(candles[1].open, 29343);
+  assert.equal(candles[1].instrumentId, 42004177);
 });
 
 test('historical backtest window defaults to the prior 60 calendar days', () => {
