@@ -24,8 +24,96 @@ const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
 const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
 const { applyRiskDecision, buildResearchCouncilReview } = require('../lib/research-council.cjs');
 const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
+const {
+  auditCandles,
+  auditResearchTrades,
+  buildResearchLab,
+  performanceMetrics,
+  reviewEvidence,
+  splitChronologically
+} = require('../lib/research-lab.cjs');
 
 const root = path.join(__dirname, '..');
+
+function researchTrades(count, pnlForIndex = (index) => index % 2 === 0 ? 100 : -50) {
+  return Array.from({ length: count }, (_, index) => {
+    const at = new Date(Date.UTC(2026, 0, index + 1, 15));
+    return {
+      id: `research-${index + 1}`,
+      date: at.toISOString().slice(0, 10),
+      createdAt: at.toISOString(),
+      realizedPnlUsd: pnlForIndex(index),
+      rMultiple: pnlForIndex(index) / 100,
+      side: index % 2 ? 'short' : 'long',
+      session: 'New York',
+      exitReason: pnlForIndex(index) > 0 ? 'target' : 'stop'
+    };
+  });
+}
+
+test('research lab uses an ordered 70/30 split and computes auditable metrics', () => {
+  const trades = researchTrades(60);
+  const split = splitChronologically([...trades].reverse());
+  const metrics = performanceMetrics(trades);
+
+  assert.equal(split.training.length, 42);
+  assert.equal(split.holdout.length, 18);
+  assert.equal(split.training[0].id, 'research-1');
+  assert.equal(split.holdout[0].id, 'research-43');
+  assert.equal(metrics.trades, 60);
+  assert.equal(metrics.winRate, 50);
+  assert.equal(metrics.netPnlUsd, 1500);
+  assert.equal(metrics.profitFactor, 2);
+  assert.equal(metrics.expectancyUsd, 25);
+});
+
+test('research reviewer promotes positive holdout evidence and rejects failed holdouts', () => {
+  const candidate = reviewEvidence(researchTrades(60));
+  const failedHoldout = reviewEvidence(researchTrades(60, (index) => index < 42 ? 100 : -100));
+
+  assert.equal(candidate.verdict, 'PAPER CANDIDATE');
+  assert.equal(candidate.gates.lockedHoldout, true);
+  assert.equal(candidate.holdout.trades, 18);
+  assert.equal(failedHoldout.verdict, 'REJECT');
+  assert.ok(failedHoldout.redFlags.includes('Locked holdout expectancy is not positive.'));
+});
+
+test('research data audits catch malformed trades and candle gaps', () => {
+  const tradeAudit = auditResearchTrades([
+    { id: 'duplicate', date: '2026-01-01', realizedPnlUsd: 10 },
+    { id: 'duplicate', date: 'not-a-date', realizedPnlUsd: 'missing' }
+  ]);
+  const candleAudit = auditCandles([
+    { timestamp: '2026-01-01T14:00:00.000Z', open: 100, high: 102, low: 99, close: 101 },
+    { timestamp: '2026-01-01T14:03:00.000Z', open: 101, high: 103, low: 100, close: 102 }
+  ]);
+
+  assert.equal(tradeAudit.ok, false);
+  assert.equal(tradeAudit.errors, 3);
+  assert.equal(candleAudit.ok, true);
+  assert.equal(candleAudit.warnings, 1);
+  assert.equal(candleAudit.issues[0].code, 'time-gap');
+});
+
+test('research lab reads closed journal entries without altering live strategy state', () => {
+  const trades = researchTrades(2);
+  const snapshot = {
+    source: 'test',
+    strategies: [{
+      slug: STRATEGIES[0].slug,
+      name: STRATEGIES[0].name,
+      strategyFamilyName: STRATEGIES[0].strategyFamilyName,
+      journal: { dailyRecaps: [{ date: trades[0].date, tradesList: trades }] },
+      live: { activeTrade: { status: 'open', unrealizedPnlUsd: 250 } }
+    }]
+  };
+  const before = structuredClone(snapshot);
+  const lab = buildResearchLab(snapshot);
+
+  assert.equal(lab.summary.closedTrades, 2);
+  assert.equal(lab.reports[0].review.execution, 'paper-only');
+  assert.deepEqual(snapshot, before);
+});
 
 test('sample setup builds and replays through the shared trading engine', () => {
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
