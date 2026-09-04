@@ -13,7 +13,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const { getLocalStrategySnapshots } = require('../lib/live-status.cjs');
-const { executeBacktest } = require('../lib/backtest-service.cjs');
+const { readBacktestResult, runBacktestWorker } = require('../lib/backtest-worker.cjs');
 
 const port = Number(process.env.LIVE_STATUS_PORT || 3210);
 const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
@@ -41,20 +41,13 @@ function readRequestJson(req) {
   });
 }
 
-function saveBacktestResult(result) {
-  fs.mkdirSync(path.dirname(backtestCachePath), { recursive: true });
-  const temporaryPath = `${backtestCachePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporaryPath, JSON.stringify(result));
-  fs.renameSync(temporaryPath, backtestCachePath);
-}
-
-function refreshBacktestCache() {
+function refreshBacktestCache(days = 60) {
   if (!process.env.DATABENTO_API_KEY) return Promise.resolve(null);
   if (backtestRefreshPromise) return backtestRefreshPromise;
-  backtestRefreshPromise = executeBacktest({ days: 60 })
+  console.log(`[${new Date().toISOString()}] starting ${days}-day backtest refresh in worker`);
+  backtestRefreshPromise = runBacktestWorker({ days, cachePath: backtestCachePath })
     .then((result) => {
-      saveBacktestResult(result);
-      console.log(`[${new Date().toISOString()}] refreshed 60-day backtest cache`);
+      console.log(`[${new Date().toISOString()}] refreshed ${days}-day backtest cache`);
       return result;
     })
     .catch((error) => {
@@ -88,8 +81,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/backtest' && req.method === 'POST') {
     try {
       const body = await readRequestJson(req);
-      const result = await executeBacktest({ days: body.days || 60 });
-      saveBacktestResult(result);
+      const result = await refreshBacktestCache(body.days || 60);
       sendJson(res, 200, { ok: true, result });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
@@ -104,7 +96,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 202, { ok: false, pending: true, error: 'The first 60-day backtest is still being prepared.' });
         return;
       }
-      sendJson(res, 200, { ok: true, result: JSON.parse(fs.readFileSync(backtestCachePath, 'utf8')) });
+      sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath) });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
     }

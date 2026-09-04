@@ -36,6 +36,7 @@ const {
 const { checkpointsForDay, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
 const { historicalWindow, parseDatabentoJson } = require('../lib/historical-data.cjs');
 const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
+const { readBacktestResult, saveBacktestResult } = require('../lib/backtest-worker.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -160,6 +161,17 @@ test('cached backtest results use the existing private bridge token', async () =
   assert.equal(request.url, 'https://private.example/api/backtest-results');
   assert.equal(request.options.headers.authorization, 'Bearer private-token');
   assert.equal(result.evidenceClass, 'historical-simulated');
+});
+
+test('backtest worker cache writes atomically and remains readable', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctortrades-backtest-'));
+  const cachePath = path.join(directory, 'backtest-results.json');
+  const result = { generatedAt: '2026-09-04T18:27:49.006Z', strategies: [] };
+
+  saveBacktestResult(cachePath, result);
+
+  assert.deepEqual(readBacktestResult(cachePath), result);
+  assert.deepEqual(fs.readdirSync(directory), ['backtest-results.json']);
 });
 
 test('historical strategies are evaluated inside their actual entry windows', () => {
