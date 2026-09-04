@@ -33,7 +33,7 @@ const {
   reviewBacktestEvidence,
   splitChronologically
 } = require('../lib/research-lab.cjs');
-const { runStrategyBacktest } = require('../lib/backtest-engine.cjs');
+const { checkpointsForDay, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
 const { historicalWindow, parseDatabentoJson } = require('../lib/historical-data.cjs');
 const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 
@@ -160,6 +160,20 @@ test('cached backtest results use the existing private bridge token', async () =
   assert.equal(request.url, 'https://private.example/api/backtest-results');
   assert.equal(request.options.headers.authorization, 'Bearer private-token');
   assert.equal(result.evidenceClass, 'historical-simulated');
+});
+
+test('historical strategies are evaluated inside their actual entry windows', () => {
+  const records = Array.from({ length: 961 }, (_, minute) => ({ minute }));
+  const retest = checkpointsForDay('nq-15m-opening-range-retest', records).map((record) => record.minute);
+  const breakout = checkpointsForDay('nq-opening-range-breakout', records).map((record) => record.minute);
+  const nineAm = checkpointsForDay('live-9am-sweep', records).map((record) => record.minute);
+
+  assert.equal(retest[0], 585);
+  assert.equal(retest.at(-1), 690);
+  assert.equal(breakout[0], 660);
+  assert.equal(breakout.at(-1), 930);
+  assert.equal(nineAm[0], 540);
+  assert.equal(nineAm.at(-1), 960);
 });
 
 test('60-day backtest fills only after the signal candle and reaches its separate 50-trade gate', () => {
