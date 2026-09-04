@@ -477,7 +477,11 @@ function PerformancePanel({ strategies, dailySeries }) {
       ? analytics.recoveryFactor.toFixed(2)
       : '∞';
   const streakLabel = analytics.streaks.currentCount
-    ? `${analytics.streaks.currentCount} ${analytics.streaks.currentType}${analytics.streaks.currentCount === 1 ? '' : 's'}`
+    ? countLabel(
+        analytics.streaks.currentCount,
+        analytics.streaks.currentType,
+        analytics.streaks.currentType === 'loss' ? 'losses' : `${analytics.streaks.currentType}s`
+      )
     : '—';
 
   return (
