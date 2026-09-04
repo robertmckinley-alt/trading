@@ -35,7 +35,7 @@ const {
 } = require('../lib/research-lab.cjs');
 const { runStrategyBacktest } = require('../lib/backtest-engine.cjs');
 const { historicalWindow, parseDatabentoJson } = require('../lib/historical-data.cjs');
-const { remoteBacktestUrls } = require('../lib/backtest-service.cjs');
+const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -140,6 +140,25 @@ test('historical backtest window defaults to the prior 60 calendar days', () => 
 
 test('remote backtest URL derives from the existing private live bridge', () => {
   assert.deepEqual(remoteBacktestUrls({ LIVE_STATUS_SOURCE_URL: 'https://private.example/api/live-status' }), ['https://private.example/api/backtest']);
+  assert.deepEqual(remoteBacktestResultUrls({ LIVE_STATUS_SOURCE_URL: 'https://private.example/api/live-status' }), ['https://private.example/api/backtest-results']);
+});
+
+test('cached backtest results use the existing private bridge token', async () => {
+  let request;
+  const result = await getCachedBacktest({
+    env: {
+      LIVE_STATUS_SOURCE_URL: 'https://private.example/api/live-status',
+      LIVE_STATUS_TOKEN: 'private-token'
+    },
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return { ok: true, json: async () => ({ ok: true, result: { evidenceClass: 'historical-simulated' } }) };
+    }
+  });
+
+  assert.equal(request.url, 'https://private.example/api/backtest-results');
+  assert.equal(request.options.headers.authorization, 'Bearer private-token');
+  assert.equal(result.evidenceClass, 'historical-simulated');
 });
 
 test('60-day backtest fills only after the signal candle and reaches its separate 50-trade gate', () => {

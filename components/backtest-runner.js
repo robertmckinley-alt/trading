@@ -70,7 +70,13 @@ export default function BacktestRunner() {
     }
     if (saved) Promise.resolve(saved).then(setResult);
     requestJson('/api/backtest')
-      .then(setAccess)
+      .then((data) => {
+        setAccess(data);
+        if (data.result) {
+          setResult(data.result);
+          try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional cache */ }
+        }
+      })
       .catch((err) => setError(err.message))
       .finally(() => setAccess((current) => ({ ...current, checking: false })));
   }, []);
@@ -118,7 +124,7 @@ export default function BacktestRunner() {
           <p>The engine downloads one-minute candles, evaluates signals without future candles, begins fills on the next candle, applies commissions and slippage, and reserves the newest 30% of trades as holdout evidence.</p>
         </div>
         {access.checking ? <p role="status">Checking backtest access…</p> : !access.operatorConfigured ? (
-          <p className="live-inline-warning">Operator access must be configured before paid historical data can run.</p>
+          <p className="live-inline-meta">Results refresh automatically once per day on the private data server. The latest completed report appears below.</p>
         ) : !access.authenticated ? (
           <form className="operator-form backtest-unlock" onSubmit={unlock}>
             <label htmlFor="backtest-passcode">Operator passcode</label>

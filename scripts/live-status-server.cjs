@@ -18,6 +18,9 @@ const { executeBacktest } = require('../lib/backtest-service.cjs');
 const port = Number(process.env.LIVE_STATUS_PORT || 3210);
 const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
 const statusToken = process.env.LIVE_STATUS_TOKEN || '';
+const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname, '..', 'runtime', 'backtest-results.json');
+const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
+let backtestRefreshPromise = null;
 
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -36,6 +39,30 @@ function readRequestJson(req) {
     });
     req.on('error', reject);
   });
+}
+
+function saveBacktestResult(result) {
+  fs.mkdirSync(path.dirname(backtestCachePath), { recursive: true });
+  const temporaryPath = `${backtestCachePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(result));
+  fs.renameSync(temporaryPath, backtestCachePath);
+}
+
+function refreshBacktestCache() {
+  if (!process.env.DATABENTO_API_KEY) return Promise.resolve(null);
+  if (backtestRefreshPromise) return backtestRefreshPromise;
+  backtestRefreshPromise = executeBacktest({ days: 60 })
+    .then((result) => {
+      saveBacktestResult(result);
+      console.log(`[${new Date().toISOString()}] refreshed 60-day backtest cache`);
+      return result;
+    })
+    .catch((error) => {
+      console.error(`[${new Date().toISOString()}] backtest refresh failed: ${error.message}`);
+      return null;
+    })
+    .finally(() => { backtestRefreshPromise = null; });
+  return backtestRefreshPromise;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -62,7 +89,22 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readRequestJson(req);
       const result = await executeBacktest({ days: body.days || 60 });
+      saveBacktestResult(result);
       sendJson(res, 200, { ok: true, result });
+    } catch (error) {
+      sendJson(res, 503, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (pathname === '/api/backtest-results' && req.method === 'GET') {
+    try {
+      if (!fs.existsSync(backtestCachePath)) {
+        void refreshBacktestCache();
+        sendJson(res, 202, { ok: false, pending: true, error: 'The first 60-day backtest is still being prepared.' });
+        return;
+      }
+      sendJson(res, 200, { ok: true, result: JSON.parse(fs.readFileSync(backtestCachePath, 'utf8')) });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
     }
@@ -89,4 +131,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Live status server listening on http://${host}:${port}/api/live-status`);
+  void refreshBacktestCache();
+  setInterval(() => { void refreshBacktestCache(); }, backtestRefreshMs).unref();
 });

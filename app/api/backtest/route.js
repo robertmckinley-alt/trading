@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { backtestConfigured, executeBacktest } from '../../../lib/backtest-service.cjs';
+import { backtestConfigured, executeBacktest, getCachedBacktest } from '../../../lib/backtest-service.cjs';
 import { isOperatorAuthConfigured, isOperatorRequest, isTrustedMutationOrigin } from '../../../lib/operator-auth.mjs';
 import { createRequestLog } from '../../../lib/request-log.mjs';
 
@@ -7,12 +7,14 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request) {
+  const result = await getCachedBacktest();
   return NextResponse.json({
     ok: true,
     configured: backtestConfigured(),
     operatorConfigured: isOperatorAuthConfigured(),
     authenticated: isOperatorRequest(request),
-    defaultDays: 60
+    defaultDays: 60,
+    result
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 

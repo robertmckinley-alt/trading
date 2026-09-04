@@ -258,6 +258,8 @@ in the Vercel project environment, then redeploy. Without that bridge URL, the V
 
 For a private bridge, set the same long random `LIVE_STATUS_TOKEN` value on the VPS and in Vercel. The website then sends it as a bearer token. `GET /healthz` remains available for uptime checks without exposing strategy or account data.
 
+The same status service also prepares a 60-calendar-day NQ backtest when it starts and refreshes the cached report every 24 hours. It uses the VPS `DATABENTO_API_KEY`, exposes the protected report at `GET /api/backtest-results`, and lets the Vercel `/backtests` page display results without allowing public visitors to start paid historical-data requests. Set `BACKTEST_REFRESH_MS` only when a different refresh interval is required; values shorter than one hour are rejected.
+
 ## Daily Reliability
 
 The shared feed streams continuously while each watcher evaluates its live cache once per minute, persists a health heartbeat after every scan, writes state atomically, and preserves open trades and consumed signals across ordinary restarts. Use `RESET_LIVE_STATE=1` only when you intentionally want to clear transient signal state.
