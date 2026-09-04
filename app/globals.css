@@ -390,6 +390,7 @@ h3 {
 .number-negative { color: var(--negative) !important; }
 
 .performance-panel,
+.performance-calendar,
 .daily-ledger,
 .daily-tracker,
 .panel,
@@ -402,7 +403,7 @@ h3 {
   background: var(--surface);
 }
 
-.performance-panel, .daily-ledger, .daily-tracker { padding: 22px; }
+.performance-panel, .performance-calendar, .daily-ledger, .daily-tracker { padding: 22px; }
 .section-heading { align-items: end; margin-bottom: 18px; }
 
 .section-heading > p {
@@ -494,6 +495,58 @@ h3 {
 .breakdown-card h4 { margin: 0 0 9px; font-size: 0.85rem; }
 .breakdown-card table { min-width: 520px; font-size: 0.78rem; }
 .breakdown-card th, .breakdown-card td { padding: 9px 10px; }
+
+.history-actions { display: flex; justify-content: flex-end; margin-block: -2px; }
+
+.performance-calendar {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.calendar-weekdays { margin-bottom: 7px; color: var(--subtle); font-size: 0.7rem; text-align: center; }
+
+.calendar-day {
+  min-width: 0;
+  min-height: 62px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  color: var(--ink);
+  background: var(--surface-subtle);
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.calendar-day span { color: var(--subtle); font-size: 0.7rem; }
+.calendar-day strong { overflow: hidden; font-size: 0.78rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
+.calendar-day-positive.calendar-day-low { background: color-mix(in srgb, var(--positive) 10%, var(--surface)); }
+.calendar-day-positive.calendar-day-medium { background: color-mix(in srgb, var(--positive) 21%, var(--surface)); }
+.calendar-day-positive.calendar-day-high { background: color-mix(in srgb, var(--positive) 34%, var(--surface)); }
+.calendar-day-negative.calendar-day-low { background: color-mix(in srgb, var(--negative) 9%, var(--surface)); }
+.calendar-day-negative.calendar-day-medium { background: color-mix(in srgb, var(--negative) 18%, var(--surface)); }
+.calendar-day-negative.calendar-day-high { background: color-mix(in srgb, var(--negative) 28%, var(--surface)); }
+.calendar-day-flat { background: var(--surface-subtle); }
+.calendar-day-empty { opacity: 0.45; cursor: default; }
+.calendar-day-active { outline: 2px solid var(--accent); outline-offset: 1px; }
+.calendar-day:not(:disabled):hover { border-color: var(--accent); }
+
+.calendar-legend { display: flex; justify-content: flex-end; gap: 14px; margin-top: 10px; color: var(--subtle); font-size: 0.72rem; }
+.calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.calendar-key { width: 9px; height: 9px; border-radius: 2px; background: var(--surface-subtle); }
+.calendar-key-positive { background: var(--positive); }
+.calendar-key-negative { background: var(--negative); }
 
 .table-scroll { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius-md); }
 
@@ -1031,7 +1084,7 @@ textarea {
   .date-search-controls input { width: 100%; }
   .recap-trade-main, .recap-trade-facts { grid-template-columns: 1fr 1fr; }
   .analytics-breakdowns { grid-template-columns: 1fr; }
-  .performance-panel, .daily-ledger, .daily-tracker, .panel, .live-card, .hero-copy, .hero-card, .strategy-card { padding: 17px; }
+  .performance-panel, .performance-calendar, .daily-ledger, .daily-tracker, .panel, .live-card, .hero-copy, .hero-card, .strategy-card { padding: 17px; }
 }
 
 @media (max-width: 520px) {
@@ -1045,6 +1098,9 @@ textarea {
   .stat-card:nth-child(n + 3) { border-top: 1px solid var(--line-soft); }
   .analytics-list > div:nth-child(4) { border-inline-start: 1px solid var(--line-soft); }
   .performance-chart { min-height: 180px; }
+  .calendar-weekdays, .calendar-grid { gap: 4px; }
+  .calendar-day { min-height: 52px; padding: 6px; }
+  .calendar-day strong { font-size: 0.68rem; }
   .chart-legend { justify-content: flex-start; }
   .action-row > * { flex: 1 1 100%; }
   .operator-form > div { grid-template-columns: 1fr; }

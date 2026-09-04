@@ -37,6 +37,47 @@ function formatShortDate(value) {
   return Number.isNaN(date.getTime()) ? value : shortDateFormatter.format(date);
 }
 
+function countLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${Number(count) === 1 ? singular : plural}`;
+}
+
+function csvCell(value) {
+  const text = Array.isArray(value) ? value.join(' | ') : String(value ?? '');
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadTradeCsv(strategies) {
+  const trades = collectTrades(strategies);
+  if (!trades.length) return;
+
+  const columns = [
+    ['Date', (trade) => trade.date],
+    ['Strategy', (trade) => trade.strategyName],
+    ['Symbol', (trade) => trade.symbol],
+    ['Side', (trade) => trade.side],
+    ['Session', (trade) => trade.session],
+    ['Entry', (trade) => trade.entry],
+    ['Stop', (trade) => trade.stop],
+    ['Exit', (trade) => trade.finalExitPrice],
+    ['Realized PnL', (trade) => Number(trade.realizedPnlUsd || 0).toFixed(2)],
+    ['R Multiple', (trade) => Number(trade.rMultiple || 0).toFixed(2)],
+    ['Exit Reason', (trade) => trade.exitReason],
+    ['Filled At', (trade) => trade.filledAt],
+    ['Targets Hit', (trade) => trade.targetsHit],
+    ['Thesis', (trade) => trade.thesis]
+  ];
+  const csv = [
+    columns.map(([heading]) => csvCell(heading)).join(','),
+    ...trades.map((trade) => columns.map(([, read]) => csvCell(read(trade))).join(','))
+  ].join('\n');
+  const blobUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `doctortrades-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(blobUrl);
+}
+
 function buildPortfolioTotals(strategies) {
   return strategies.reduce(
     (totals, strategy) => {
@@ -555,6 +596,66 @@ function DailyLedger({ dailySeries, activeDate, onDateChange }) {
   );
 }
 
+function PerformanceCalendar({ dailySeries, activeDate, onDateChange }) {
+  if (!dailySeries.length) return null;
+
+  const byDate = new Map(dailySeries.map((day) => [day.date, day]));
+  const latestDate = new Date(`${dailySeries.at(-1).date}T12:00:00Z`);
+  const latestDay = latestDate.getUTCDay();
+  const calendarEnd = new Date(latestDate);
+  calendarEnd.setUTCDate(calendarEnd.getUTCDate() + (6 - latestDay));
+  const calendarStart = new Date(calendarEnd);
+  calendarStart.setUTCDate(calendarStart.getUTCDate() - 41);
+  const dates = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+  const maxAbsolutePnl = Math.max(1, ...dailySeries.map((day) => Math.abs(day.realizedPnlUsd)));
+
+  return (
+    <section className="performance-calendar" aria-labelledby="performance-calendar-title">
+      <div className="section-heading">
+        <div>
+          <span className="section-kicker">Calendar view</span>
+          <h3 id="performance-calendar-title">Six-week PnL heatmap</h3>
+        </div>
+        <p>Choose a recorded day to open its trades.</p>
+      </div>
+      <div className="calendar-weekdays" aria-hidden="true">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day}>{day}</span>)}
+      </div>
+      <div className="calendar-grid">
+        {dates.map((date) => {
+          const day = byDate.get(date);
+          const pnl = Number(day?.realizedPnlUsd || 0);
+          const tone = !day ? 'empty' : pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'flat';
+          const strength = day ? Math.abs(pnl) / maxAbsolutePnl : 0;
+          const intensity = strength >= 0.66 ? 'high' : strength >= 0.33 ? 'medium' : 'low';
+          return (
+            <button
+              aria-label={day ? `${date}, ${formatUsd(pnl)}, ${countLabel(day.trades, 'trade')}` : `${date}, no data`}
+              className={`calendar-day calendar-day-${tone} calendar-day-${intensity}${date === activeDate ? ' calendar-day-active' : ''}`}
+              disabled={!day}
+              key={date}
+              onClick={() => day && onDateChange(date)}
+              type="button"
+            >
+              <span>{Number(date.slice(-2))}</span>
+              <strong>{day ? (pnl === 0 ? '$0' : `${pnl > 0 ? '+' : '-'}$${Math.round(Math.abs(pnl))}`) : '—'}</strong>
+            </button>
+          );
+        })}
+      </div>
+      <div className="calendar-legend" aria-hidden="true">
+        <span><i className="calendar-key calendar-key-negative" />Loss</span>
+        <span><i className="calendar-key calendar-key-flat" />Flat</span>
+        <span><i className="calendar-key calendar-key-positive" />Profit</span>
+      </div>
+    </section>
+  );
+}
+
 function outcomeTone(strategy) {
   if (strategy.mode === 'paper-route') return 'neutral';
   if ((strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning) && !strategy.live?.latestError) return 'good';
@@ -598,7 +699,7 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
         <div className="daily-tracker-metric">
           <span>Today realized</span>
           <strong className={daily.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(daily.realizedPnlUsd)}</strong>
-          <p>{daily.wins} wins / {daily.losses} losses</p>
+          <p>{countLabel(daily.wins, 'win')} / {countLabel(daily.losses, 'loss', 'losses')}</p>
         </div>
         <div className="daily-tracker-metric">
           <span>Open unrealized</span>
@@ -619,7 +720,7 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
             <div className="daily-strategy-row" key={strategy.slug}>
               <span>{strategy.paperAccountLabel}</span>
               <strong>{formatUsd(item.activePnlUsd || 0)}</strong>
-              <p>{item.trades || 0} trades / {item.openTradeStatus || 'no open trade'}</p>
+              <p>{countLabel(item.trades || 0, 'trade')} / {item.openTradeStatus || 'no open trade'}</p>
             </div>
           );
         })}
@@ -675,7 +776,7 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
           <div className="daily-tracker-metric">
             <span>Closed PnL</span>
             <strong className={selectedRecap.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(selectedRecap.realizedPnlUsd)}</strong>
-            <p>{selectedRecap.wins} wins / {selectedRecap.losses} losses</p>
+            <p>{countLabel(selectedRecap.wins, 'win')} / {countLabel(selectedRecap.losses, 'loss', 'losses')}</p>
           </div>
           <div className="daily-tracker-metric">
             <span>Win rate</span>
@@ -694,7 +795,7 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
             <div className="daily-strategy-row" key={row.slug}>
               <span>{row.name}</span>
               <strong>{formatUsd(row.activePnlUsd)}</strong>
-              <p>{row.trades} trades / {row.openTradeStatus || 'no open trade'}</p>
+              <p>{countLabel(row.trades, 'trade')} / {row.openTradeStatus || 'no open trade'}</p>
             </div>
           ))}
         </div>
@@ -766,7 +867,7 @@ function PortfolioTotals({ strategies }) {
       <div className="portfolio-total-card">
         <span>Total trades</span>
         <strong>{totals.trades}</strong>
-        <p>{totals.wins} wins / {totals.losses} losses</p>
+        <p>{countLabel(totals.wins, 'win')} / {countLabel(totals.losses, 'loss', 'losses')}</p>
       </div>
       <div className="portfolio-total-card">
         <span>Win rate</span>
@@ -1121,6 +1222,17 @@ export default function LiveStrategyBoard({ initialData }) {
       <PortfolioTotals strategies={strategies} />
       <PortfolioRiskGuard risk={data?.portfolioRisk} />
       <PerformancePanel strategies={strategies} dailySeries={dailySeries} />
+      <div className="history-actions">
+        <button
+          className="secondary-button"
+          disabled={!collectTrades(strategies).length}
+          onClick={() => downloadTradeCsv(strategies)}
+          type="button"
+        >
+          Export all trades (.csv)
+        </button>
+      </div>
+      <PerformanceCalendar dailySeries={dailySeries} activeDate={activeDate} onDateChange={setSelectedDate} />
       <DailyLedger dailySeries={dailySeries} activeDate={activeDate} onDateChange={setSelectedDate} />
       <DailyTracker strategies={strategies} selectedDate={activeDate} onDateChange={setSelectedDate} />
 
