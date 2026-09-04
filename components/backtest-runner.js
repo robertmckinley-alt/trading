@@ -48,7 +48,7 @@ function BacktestCard({ strategy }) {
         <strong>Recommendation notes</strong>
         {review.redFlags.length ? <ul>{review.redFlags.map((flag) => <li key={flag}>{flag}</li>)}</ul> : <p>Historical gates passed. Advance to forward paper testing, not live capital.</p>}
       </div>
-      <p className="backtest-fill-note">{strategy.signals} signals · {strategy.notFilled} unfilled · {strategy.rolloverDaysSkipped} rollover days skipped</p>
+      <p className="backtest-fill-note">{strategy.signals} signals · {strategy.rejectedSignals || 0} rejected by risk limits · {strategy.notFilled} unfilled · {strategy.rolloverDaysSkipped} rollover days skipped</p>
     </article>
   );
 }

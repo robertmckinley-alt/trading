@@ -233,6 +233,45 @@ test('historical recommendations never use the forward-paper promotion label', (
   assert.notEqual(review.recommendation, 'PAPER CANDIDATE');
 });
 
+test('an untradeable signal does not abort the remaining historical sessions', () => {
+  const candles = [];
+  for (let day = 0; day < 3; day += 1) {
+    const first = new Date(Date.UTC(2026, 0, day + 1, 15));
+    const second = new Date(first.getTime() + 60_000);
+    candles.push({ timestamp: first.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: second.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+  }
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  let plans = 0;
+  const result = runStrategyBacktest(candles, config, {
+    slug: 'test-strategy',
+    name: 'Test strategy',
+    strategyFamily: 'test',
+    strategyFamilyName: 'Test'
+  }, {
+    detectSignal(context) {
+      const trigger = context.at(-2);
+      return {
+        found: true,
+        triggerTimestamp: trigger.timestamp,
+        setup: { symbol: 'NQ', date: trigger.timestamp.slice(0, 10), session: 'Test', side: 'long', entry: 100, stop: 99, targets: [101], thesis: 'test', setup: {} }
+      };
+    },
+    buildPlan(signal) {
+      plans += 1;
+      if (plans === 1) throw new Error('No trade: minimum 1-contract risk exceeds the strategy limit');
+      return { setup: signal.setup, sizing: { maxContracts: 1, actualRiskUsd: 100 }, targets: [], triggerTimestamp: signal.triggerTimestamp };
+    },
+    replay(plan, future) {
+      return { status: 'closed', contracts: 1, filledAt: future[0].timestamp, exitReason: 'target', finalExitPrice: 101, realizedPnlUsd: 100, rMultiple: 1, targetsHit: [], mfePoints: 1, maePoints: 0, mfeUsd: 20, maeUsd: 0 };
+    }
+  });
+
+  assert.equal(result.signals, 3);
+  assert.equal(result.rejectedSignals, 1);
+  assert.equal(result.trades.length, 2);
+});
+
 test('sample setup builds and replays through the shared trading engine', () => {
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
   const setup = core.normalizeSetup(core.loadJson(path.join(root, 'examples', 'lucid-sweep-short.setup.json')), config);
