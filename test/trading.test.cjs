@@ -10,6 +10,7 @@ const {
   detectOpeningRangeBreakoutSignal,
   detectOpeningRangeRetestSignal,
   computeAmdContext,
+  detectSignalFromCandles,
   detectVolumePocReversionSignal,
   fetchLiveCandles,
   normalizeStrategyConfig,
@@ -377,6 +378,22 @@ test('Asia/London context records which side London swept without changing entri
   assert.equal(context.classification, 'asia-low-swept');
   assert.equal(context.supportsLong, true);
   assert.equal(context.supportsShort, false);
+});
+
+test('hourly watcher reports its daily cap without requiring Asia/London context', () => {
+  const config = {
+    ...core.loadJson(path.join(root, 'config.json')),
+    strategySlug: 'hourly-sweep-ifvg-bos'
+  };
+  const result = detectSignalFromCandles([
+    { timestamp: '2026-09-03T14:00:00.000Z', open: 20_000, high: 20_010, low: 19_990, close: 20_005 }
+  ], config, {
+    trades: [{ date: '2026-09-03' }]
+  });
+
+  assert.equal(result.found, false);
+  assert.match(result.reason, /Daily trade cap already reached/);
+  assert.equal(result.metadata.tradingDate, '2026-09-03');
 });
 
 test('shared portfolio guard caps simultaneous paper risk at $2,500', () => {
