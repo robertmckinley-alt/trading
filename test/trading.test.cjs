@@ -8,6 +8,7 @@ const core = require('../lib/trader-core.cjs');
 const {
   detectEmaMomentumSignal,
   detectOpeningRangeBreakoutSignal,
+  detectOpeningRangeCloseSignal,
   detectOpeningRangeRetestSignal,
   computeAmdContext,
   detectSignalFromCandles,
@@ -628,13 +629,14 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
-test('strategy registry gives all six bots isolated runtime files and risk families', () => {
-  assert.equal(STRATEGIES.length, 6);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 6);
+test('strategy registry gives all seven bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 7);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 7);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 6);
+  assert.equal(new Set(paths).size, 7);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
+  assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });
@@ -803,6 +805,34 @@ test('15-minute opening-range bot waits for a break, retest, and aligned order f
   assert.equal(signal.metadata.retestBars, 1);
   assert.equal(signal.metadata.orderFlow.aligned, true);
   assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+});
+
+test('15-minute ORB close bot accepts a strong close and rejects a wick-heavy break', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const start = Date.parse('2026-09-02T13:30:00.000Z');
+  const opening = Array.from({ length: 15 }, (_, index) => ({
+    timestamp: new Date(start + (index * 60_000)).toISOString(),
+    open: 20_000, high: 20_010, low: 19_990, close: 20_000, volume: 100
+  }));
+  const strongBreak = Array.from({ length: 15 }, (_, index) => ({
+    timestamp: new Date(start + ((15 + index) * 60_000)).toISOString(),
+    open: 20_004 + (index * 0.6), high: 20_006 + (index * 0.8), low: 20_003 + (index * 0.6), close: 20_005 + (index * 0.75), volume: 140
+  }));
+  const clock = { timestamp: '2026-09-02T14:00:00.000Z', open: 20_016, high: 20_017, low: 20_015, close: 20_016, volume: 80 };
+  const signal = detectOpeningRangeCloseSignal([...opening, ...strongBreak, clock], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
+  assert.equal(signal.found, true, signal.reason);
+  assert.equal(signal.setup.side, 'long');
+  assert.equal(signal.setup.setup.entryModel, 'opening-range-close-confirmation');
+  assert.equal(signal.triggerTimestamp, strongBreak.at(-1).timestamp);
+  assert.ok(signal.metadata.bodyFraction >= 0.5);
+  assert.ok(signal.metadata.breakoutWickFraction <= 0.25);
+  assert.equal(core.validateSetup(core.normalizeSetup(signal.setup, config), config).valid, true);
+
+  const wickBreak = strongBreak.map((candle, index) => index === 14
+    ? { ...candle, high: 20_040, close: 20_011 }
+    : candle);
+  const rejected = detectOpeningRangeCloseSignal([...opening, ...wickBreak, clock], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
+  assert.equal(rejected.found, false);
 });
 
 test('research council remains advisory and records a deterministic risk veto', () => {

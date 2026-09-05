@@ -48,6 +48,15 @@
       "orderFlowFastEma": 8,
       "orderFlowSlowEma": 21
     },
+    "openingRangeClose": {
+      "rangeStart": "09:30",
+      "rangeEnd": "09:45",
+      "entryEnd": "11:30",
+      "barMinutes": 15,
+      "minimumBodyFraction": 0.5,
+      "maximumBreakoutWickFraction": 0.25,
+      "maximumStopPoints": 20
+    },
     "sessionWindows": {
       "asia": { "start": "20:00", "end": "01:59" },
       "london": { "start": "02:00", "end": "07:59" }
