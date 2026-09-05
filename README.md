@@ -258,7 +258,7 @@ in the Vercel project environment, then redeploy. Without that bridge URL, the V
 
 For a private bridge, set the same long random `LIVE_STATUS_TOKEN` value on the VPS and in Vercel. The website then sends it as a bearer token. `GET /healthz` remains available for uptime checks without exposing strategy or account data.
 
-The same status service also prepares a 60-calendar-day NQ backtest when it starts and refreshes the cached report every 24 hours. It uses the VPS `DATABENTO_API_KEY`, exposes the protected report at `GET /api/backtest-results`, and lets the Vercel `/backtests` page display results without allowing public visitors to start paid historical-data requests. Set `BACKTEST_REFRESH_MS` only when a different refresh interval is required; values shorter than one hour are rejected.
+The same status service also prepares a 2026 year-to-date NQ backtest when it starts and refreshes the cached report every 24 hours. Historical candles are requested from Databento in 30-day chunks, merged, and deduplicated before replay. It uses the VPS `DATABENTO_API_KEY`, exposes the protected report at `GET /api/backtest-results`, and lets the Vercel `/backtests` page display results without allowing public visitors to start paid historical-data requests. Set `BACKTEST_YEAR` to change the research year. Set `BACKTEST_REFRESH_MS` only when a different refresh interval is required; values shorter than one hour are rejected.
 
 ## Daily Reliability
 

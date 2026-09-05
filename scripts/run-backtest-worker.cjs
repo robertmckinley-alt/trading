@@ -5,7 +5,7 @@ const { saveBacktestResult } = require('../lib/backtest-worker.cjs');
 
 async function main() {
   try {
-    const result = await executeBacktest({ days: workerData.days });
+    const result = await executeBacktest({ days: workerData.days, year: workerData.year });
     saveBacktestResult(workerData.cachePath, result);
     parentPort.postMessage({ ok: true });
   } catch (error) {

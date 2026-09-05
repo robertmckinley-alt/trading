@@ -34,7 +34,7 @@ const {
   splitChronologically
 } = require('../lib/research-lab.cjs');
 const { checkpointsForDay, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
-const { historicalWindow, parseDatabentoJson } = require('../lib/historical-data.cjs');
+const { fetchDatabentoHistoricalCandles, historicalWindow, historicalYearWindow, parseDatabentoJson, splitHistoricalWindow } = require('../lib/historical-data.cjs');
 const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 const { readBacktestResult, saveBacktestResult } = require('../lib/backtest-worker.cjs');
 
@@ -138,6 +138,56 @@ test('historical backtest window defaults to the prior 60 calendar days', () => 
   assert.equal(window.days, 60);
   assert.equal(window.end, '2026-09-04T12:14:00.000Z');
   assert.equal(window.start, '2026-07-06T12:14:00.000Z');
+});
+
+test('2026 backtest window runs from January 1 through the delayed current minute', () => {
+  const window = historicalYearWindow(2026, new Date('2026-09-05T12:34:56.000Z'));
+  assert.equal(window.year, 2026);
+  assert.equal(window.start, '2026-01-01T00:00:00.000Z');
+  assert.equal(window.end, '2026-09-05T12:14:00.000Z');
+  assert.equal(window.days, 248);
+});
+
+test('year-to-date history is split into bounded contiguous requests', () => {
+  const chunks = splitHistoricalWindow({
+    start: '2026-01-01T00:00:00.000Z',
+    end: '2026-03-15T12:00:00.000Z'
+  }, 30);
+
+  assert.equal(chunks.length, 3);
+  assert.equal(chunks[0].start, '2026-01-01T00:00:00.000Z');
+  assert.equal(chunks[0].end, chunks[1].start);
+  assert.equal(chunks[1].end, chunks[2].start);
+  assert.equal(chunks.at(-1).end, '2026-03-15T12:00:00.000Z');
+});
+
+test('historical service merges candles returned from every bounded request', async () => {
+  const calls = [];
+  const result = await fetchDatabentoHistoricalCandles({
+    apiKey: 'test-key',
+    window: { start: '2026-01-01T00:00:00.000Z', end: '2026-03-15T12:00:00.000Z', year: 2026, days: 74 },
+    chunkDays: 30,
+    fetchImpl: async (requestUrl) => {
+      const url = new URL(requestUrl);
+      calls.push(url);
+      return {
+        ok: true,
+        text: async () => JSON.stringify({
+          ts_event: url.searchParams.get('start'),
+          open: 20_000,
+          high: 20_001,
+          low: 19_999,
+          close: 20_000.5,
+          volume: 10
+        })
+      };
+    }
+  });
+
+  assert.equal(calls.length, 3);
+  assert.equal(result.candles.length, 3);
+  assert.equal(result.window.year, 2026);
+  assert.ok(calls.every((url) => url.searchParams.get('schema') === 'ohlcv-1m'));
 });
 
 test('remote backtest URL derives from the existing private live bridge', () => {

@@ -20,6 +20,7 @@ const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
 const statusToken = process.env.LIVE_STATUS_TOKEN || '';
 const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname, '..', 'runtime', 'backtest-results.json');
 const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
+const backtestYear = Number(process.env.BACKTEST_YEAR || 2026);
 let backtestRefreshPromise = null;
 
 function sendJson(res, status, payload) {
@@ -41,13 +42,14 @@ function readRequestJson(req) {
   });
 }
 
-function refreshBacktestCache(days = 60) {
+function refreshBacktestCache(options = { year: backtestYear }) {
   if (!process.env.DATABENTO_API_KEY) return Promise.resolve(null);
   if (backtestRefreshPromise) return backtestRefreshPromise;
-  console.log(`[${new Date().toISOString()}] starting ${days}-day backtest refresh in worker`);
-  backtestRefreshPromise = runBacktestWorker({ days, cachePath: backtestCachePath })
+  const label = options.year ? `${options.year} year-to-date` : `${options.days || 60}-day`;
+  console.log(`[${new Date().toISOString()}] starting ${label} backtest refresh in worker`);
+  backtestRefreshPromise = runBacktestWorker({ ...options, cachePath: backtestCachePath })
     .then((result) => {
-      console.log(`[${new Date().toISOString()}] refreshed ${days}-day backtest cache`);
+      console.log(`[${new Date().toISOString()}] refreshed ${label} backtest cache`);
       return result;
     })
     .catch((error) => {
@@ -81,7 +83,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/backtest' && req.method === 'POST') {
     try {
       const body = await readRequestJson(req);
-      const result = await refreshBacktestCache(body.days || 60);
+      const result = await refreshBacktestCache(body.year ? { year: body.year } : { days: body.days || 60 });
       sendJson(res, 200, { ok: true, result });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
@@ -93,7 +95,7 @@ const server = http.createServer(async (req, res) => {
     try {
       if (!fs.existsSync(backtestCachePath)) {
         void refreshBacktestCache();
-        sendJson(res, 202, { ok: false, pending: true, error: 'The first 60-day backtest is still being prepared.' });
+        sendJson(res, 202, { ok: false, pending: true, error: `The first ${backtestYear} year-to-date backtest is still being prepared.` });
         return;
       }
       sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath) });
@@ -123,6 +125,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Live status server listening on http://${host}:${port}/api/live-status`);
-  void refreshBacktestCache();
-  setInterval(() => { void refreshBacktestCache(); }, backtestRefreshMs).unref();
+  void refreshBacktestCache({ year: backtestYear });
+  setInterval(() => { void refreshBacktestCache({ year: backtestYear }); }, backtestRefreshMs).unref();
 });

@@ -13,7 +13,7 @@ export async function GET(request) {
     configured: backtestConfigured(),
     operatorConfigured: isOperatorAuthConfigured(),
     authenticated: isOperatorRequest(request),
-    defaultDays: 60,
+    defaultYear: 2026,
     result
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
@@ -32,9 +32,9 @@ export async function POST(request) {
     const contentLength = Number(request.headers.get('content-length') || 0);
     if (contentLength > 4096) throw new Error('Backtest request is too large.');
     const body = await request.json();
-    const days = Math.max(10, Math.min(90, Math.round(Number(body.days) || 60)));
-    const result = await executeBacktest({ days });
-    log.done(200, { days, candles: result.candles, strategies: result.strategies?.length || 0 });
+    const year = Math.trunc(Number(body.year) || 2026);
+    const result = await executeBacktest({ year });
+    log.done(200, { year, candles: result.candles, strategies: result.strategies?.length || 0 });
     return NextResponse.json({ ok: true, result }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     log.done(503, { errorType: error.name });

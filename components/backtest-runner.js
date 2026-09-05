@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'doctortrades-60-day-backtest-v1';
+const STORAGE_KEY = 'doctortrades-2026-backtest-v1';
 
 async function requestJson(url, options) {
   const response = await fetch(url, options);
@@ -104,7 +104,7 @@ export default function BacktestRunner() {
     setError('');
     try {
       const data = await requestJson('/api/backtest', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ days: 60 })
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ year: 2026 })
       });
       setResult(data.result);
       try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional cache */ }
@@ -119,7 +119,7 @@ export default function BacktestRunner() {
     <div className="backtest-runner">
       <section className="backtest-control panel" aria-labelledby="backtest-control-title">
         <div>
-          <span className="section-kicker">60-day walk-forward simulation</span>
+          <span className="section-kicker">2026 year-to-date walk-forward simulation</span>
           <h2 id="backtest-control-title">Run every strategy against the same NQ history</h2>
           <p>The engine downloads one-minute candles, evaluates signals without future candles, begins fills on the next candle, applies commissions and slippage, and reserves the newest 30% of trades as holdout evidence.</p>
         </div>
@@ -136,7 +136,7 @@ export default function BacktestRunner() {
         ) : (
           <div className="backtest-action">
             <button className="primary-button" disabled={Boolean(busy) || !access.configured} onClick={runBacktest} type="button">
-              {busy === 'run' ? 'Running 60-day backtest…' : 'Run last 60 days'}
+              {busy === 'run' ? 'Running 2026 backtest…' : 'Run all of 2026'}
             </button>
             {!access.configured ? <p className="live-inline-warning">Historical data is not connected yet. Add Databento access on Vercel or update the VPS bridge.</p> : null}
           </div>
@@ -148,7 +148,7 @@ export default function BacktestRunner() {
         <section className="backtest-results" aria-labelledby="backtest-results-title">
           <div className="section-heading">
             <div><span className="section-kicker">Historical simulated evidence</span><h2 id="backtest-results-title">Backtest results</h2></div>
-            <p>{result.window?.days || 60} days · {result.tradingDays} sessions · {result.candles.toLocaleString()} candles</p>
+            <p>{result.window?.year ? `${result.window.year} year to date` : `${result.window?.days || 60} days`} · {result.tradingDays} sessions · {result.candles.toLocaleString()} candles</p>
           </div>
           <aside className="backtest-disclosure"><strong>Not verified forward trades.</strong> These results can recommend advancing a strategy to forward paper testing. They cannot promote a strategy directly to live trading.</aside>
           <div className="backtest-grid">{result.strategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} />)}</div>

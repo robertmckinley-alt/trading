@@ -20,7 +20,7 @@ export default function BacktestsPage() {
       </header>
       <section className="research-hero backtest-hero">
         <div>
-          <p className="eyebrow">Last 60 days of NQ candles</p>
+          <p className="eyebrow">All 2026 NQ candles</p>
           <h1>Simulate the rules before trusting the recommendation.</h1>
           <p>Each strategy receives the same historical market window, account size, $500 risk ceiling, transaction costs, and conservative same-candle assumptions.</p>
         </div>
