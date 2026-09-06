@@ -370,3 +370,6 @@ Price columns must be numeric. Timestamps are used only for reporting.
 ## Next Useful Upgrade
 
 Add a managed identity provider such as Clerk when the dashboard needs multiple operators, role-based access, password recovery, or MFA. The built-in operator session is intentionally scoped to a single trusted operator.
+# ORB learning update
+
+See [ORB_LEARNING.md](ORB_LEARNING.md) for the versioned ORB algorithm, nine separate experiments, corrected execution assumptions, daily research archive, coverage limitations and the Docker VPS rollout command.

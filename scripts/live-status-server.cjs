@@ -22,6 +22,16 @@ const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname
 const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
 const backtestStartYear = Number(process.env.BACKTEST_START_YEAR || 2025);
 let backtestRefreshPromise = null;
+let backtestStartedAt = null;
+
+function backtestStatus() {
+  let progress = null;
+  try { progress = readBacktestResult(`${backtestCachePath}.progress.json`); } catch { /* No progress before first run. */ }
+  if (backtestRefreshPromise && (!progress || progress.startedAt < backtestStartedAt)) {
+    progress = { phase: 'starting', startedAt: backtestStartedAt, updatedAt: backtestStartedAt };
+  }
+  return { pending: Boolean(backtestRefreshPromise), progress };
+}
 
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -45,6 +55,7 @@ function readRequestJson(req) {
 function refreshBacktestCache(options = { startYear: backtestStartYear }) {
   if (!process.env.DATABENTO_API_KEY) return Promise.resolve(null);
   if (backtestRefreshPromise) return backtestRefreshPromise;
+  backtestStartedAt = new Date().toISOString();
   const label = options.startYear ? `${options.startYear}-to-present` : options.year ? `${options.year} year-to-date` : `${options.days || 60}-day`;
   console.log(`[${new Date().toISOString()}] starting ${label} backtest refresh in worker`);
   backtestRefreshPromise = runBacktestWorker({ ...options, cachePath: backtestCachePath })
@@ -67,7 +78,7 @@ const server = http.createServer(async (req, res) => {
       'content-type': 'application/json',
       'cache-control': 'no-store'
     });
-    res.end(JSON.stringify({ ok: true, at: new Date().toISOString() }));
+    res.end(JSON.stringify({ ok: true, at: new Date().toISOString(), pid: process.pid }));
     return;
   }
 
@@ -83,12 +94,20 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/backtest' && req.method === 'POST') {
     try {
       const body = await readRequestJson(req);
-      const result = await refreshBacktestCache(body.startYear
+      if (!process.env.DATABENTO_API_KEY) throw new Error('Historical data access is not configured on this server.');
+      const options = body.startYear
         ? { startYear: body.startYear }
         : body.year
           ? { year: body.year }
-          : { days: body.days || 60 });
-      sendJson(res, 200, { ok: true, result });
+          : { days: body.days || 60 };
+      const promise = refreshBacktestCache(options);
+      if (body.background === true) {
+        sendJson(res, 202, { ok: true, ...backtestStatus() });
+      } else {
+        const result = await promise;
+        if (!result) throw new Error('Backtest failed; inspect the progress report.');
+        sendJson(res, 200, { ok: true, result, ...backtestStatus() });
+      }
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
     }
@@ -99,10 +118,10 @@ const server = http.createServer(async (req, res) => {
     try {
       if (!fs.existsSync(backtestCachePath)) {
         void refreshBacktestCache();
-        sendJson(res, 202, { ok: false, pending: true, error: `The first ${backtestStartYear}-to-present backtest is still being prepared.` });
+        sendJson(res, 202, { ok: true, result: null, ...backtestStatus() });
         return;
       }
-      sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath) });
+      sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath), ...backtestStatus() });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
     }

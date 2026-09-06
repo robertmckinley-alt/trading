@@ -738,7 +738,7 @@ test('strategy registry gives all seven bots isolated runtime files and risk fam
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
   assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
-  assert.equal(BACKTEST_STRATEGIES.length, 17);
+  assert.equal(BACKTEST_STRATEGIES.length, 21);
   assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });
@@ -920,8 +920,7 @@ test('15-minute ORB close bot accepts a strong close and rejects a wick-heavy br
     timestamp: new Date(start + ((15 + index) * 60_000)).toISOString(),
     open: 20_004 + (index * 0.6), high: 20_006 + (index * 0.8), low: 20_003 + (index * 0.6), close: 20_005 + (index * 0.75), volume: 140
   }));
-  const clock = { timestamp: '2026-09-02T14:00:00.000Z', open: 20_016, high: 20_017, low: 20_015, close: 20_016, volume: 80 };
-  const signal = detectOpeningRangeCloseSignal([...opening, ...strongBreak, clock], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
+  const signal = detectOpeningRangeCloseSignal([...opening, ...strongBreak], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
   assert.equal(signal.found, true, signal.reason);
   assert.equal(signal.setup.side, 'long');
   assert.equal(signal.setup.setup.entryModel, 'opening-range-close-confirmation');
@@ -933,7 +932,7 @@ test('15-minute ORB close bot accepts a strong close and rejects a wick-heavy br
   const wickBreak = strongBreak.map((candle, index) => index === 14
     ? { ...candle, high: 20_040, close: 20_011 }
     : candle);
-  const rejected = detectOpeningRangeCloseSignal([...opening, ...wickBreak, clock], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
+  const rejected = detectOpeningRangeCloseSignal([...opening, ...wickBreak], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
   assert.equal(rejected.found, false);
 });
 
@@ -957,14 +956,14 @@ test('ORB research variants isolate timing, weekday, and body rules', () => {
   };
 
   const session = buildSession();
-  const delayedEarly = detectSignalFromCandles([...session.opening, ...session.firstBreak, session.clock10], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
+  const delayedEarly = detectSignalFromCandles([...session.opening, ...session.firstBreak], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
   assert.equal(delayedEarly.found, false);
-  const delayed = detectSignalFromCandles([...session.opening, ...session.firstBreak, ...session.secondBreak, session.clock1015], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
+  const delayed = detectSignalFromCandles([...session.opening, ...session.firstBreak, ...session.secondBreak], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
   assert.equal(delayed.found, true, delayed.reason);
   assert.equal(delayed.metadata.confirmationBarEnd, session.secondBreak.at(-1).timestamp);
 
   const monday = buildSession('2026-09-07');
-  const noMonday = detectSignalFromCandles([...monday.opening, ...monday.firstBreak, monday.clock10], { ...config, strategySlug: 'nq-15m-orb-no-monday' }, { trades: [] });
+  const noMonday = detectSignalFromCandles([...monday.opening, ...monday.firstBreak], { ...config, strategySlug: 'nq-15m-orb-no-monday' }, { trades: [] });
   assert.equal(noMonday.found, false);
   assert.match(noMonday.reason, /does not trade on Mon/);
 
@@ -974,7 +973,7 @@ test('ORB research variants isolate timing, weekday, and body rules', () => {
     low: 19_999.5,
     ...(index === 14 ? { high: 20_020, close: 20_019 } : {})
   }));
-  const bodyWindow = detectSignalFromCandles([...session.opening, ...highBody, session.clock10], { ...config, strategySlug: 'nq-15m-orb-body-window' }, { trades: [] });
+  const bodyWindow = detectSignalFromCandles([...session.opening, ...highBody], { ...config, strategySlug: 'nq-15m-orb-body-window' }, { trades: [] });
   assert.equal(bodyWindow.found, false, JSON.stringify(bodyWindow));
 });
 

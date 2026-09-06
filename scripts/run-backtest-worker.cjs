@@ -13,6 +13,11 @@ async function main() {
   };
   try {
     const result = await executeBacktest({ days: workerData.days, year: workerData.year, startYear: workerData.startYear, onProgress });
+    // Persist each run's rules and evaluation so daily refreshes do not erase the research trail.
+    const archivePath = require('node:path').join(require('node:path').dirname(workerData.cachePath), 'research-history',
+      `${result.generatedAt.replace(/[:.]/g, '-')}-${result.learning.manifestHash.slice(0, 12)}.json`);
+    saveBacktestResult(archivePath, { generatedAt: result.generatedAt, window: result.window,
+      provenance: result.provenance, learning: result.learning });
     saveBacktestResult(workerData.cachePath, result);
     onProgress({ phase: 'completed', strategies: result.strategies.length, generatedAt: result.generatedAt });
     parentPort.postMessage({ ok: true });

@@ -1322,3 +1322,20 @@ textarea {
     scroll-behavior: auto !important;
   }
 }
+
+.orb-lab { margin: 24px 0; padding: clamp(16px, 3vw, 30px); }
+.orb-lab p, .orb-lab details { margin: 14px 0; }
+.orb-lab summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+.orb-controls { display: flex; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
+.orb-controls label { flex: 1 1 240px; display: grid; gap: 6px; }
+.orb-controls select, .orb-month input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.orb-equity { margin: 20px 0; }
+.orb-equity svg { display: block; width: 100%; height: auto; }
+.orb-equity figcaption { color: var(--muted); font-size: 14px; }
+.orb-table-wrap { overflow-x: auto; max-width: 100%; }
+.orb-table-wrap table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.orb-table-wrap th, .orb-table-wrap td { padding: 12px; text-align: left; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.orb-table-wrap caption { text-align: left; font-weight: 600; margin: 12px 0; }
+.orb-month { display: grid; gap: 6px; max-width: 240px; margin: 16px 0; }
+.orb-progress { width: 100%; padding: 16px; background: var(--surface-subtle); border-radius: 12px; }
+.orb-progress progress { width: 100%; accent-color: var(--accent); }

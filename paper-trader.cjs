@@ -388,6 +388,10 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       }
       const adaptiveConfig = applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
+      if (plan.setup.execution === 'next-bar-market') {
+        // Forward paper fills cannot precede the time this watcher actually observed the signal.
+        plan.setup.signalAvailableAt = new Date(Math.max(Date.now(), Date.parse(plan.setup.signalAvailableAt) || 0)).toISOString();
+      }
       plan.adaptive = adaptiveDecision;
       const portfolioDecision = reservePortfolioRisk({
         rootDir: BASE,

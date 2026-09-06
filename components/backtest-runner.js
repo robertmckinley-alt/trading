@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import OrbLearningPanel from './orb-learning-panel';
 
 const STORAGE_KEY = 'doctortrades-since-2025-backtest-v1';
 
@@ -36,12 +37,12 @@ function BacktestCard({ strategy }) {
         <div><dt>Profit factor</dt><dd>{review.total.profitFactor === null ? '—' : review.total.profitFactor.toFixed(2)}</dd></div>
         <div><dt>Expectancy</dt><dd>{money(review.total.expectancyUsd)}</dd></div>
         <div><dt>Max drawdown</dt><dd>{money(review.total.maxDrawdownUsd)}</dd></div>
-        <div><dt>Holdout trades</dt><dd>{review.holdout.trades}</dd></div>
-        <div><dt>Holdout expectancy</dt><dd>{money(review.holdout.expectancyUsd)}</dd></div>
+        <div><dt>Trailing 30% trades</dt><dd>{review.holdout.trades}</dd></div>
+        <div><dt>Trailing expectancy</dt><dd>{money(review.holdout.expectancyUsd)}</dd></div>
       </dl>
       <div className="backtest-gates" aria-label={`${strategy.name} backtest gates`}>
         {Object.entries(review.gates).map(([gate, passed]) => (
-          <span className={passed ? 'backtest-gate-pass' : 'backtest-gate-fail'} key={gate}>{passed ? 'Pass' : 'Fail'} · {gate.replace(/([A-Z])/g, ' $1')}</span>
+          <span className={passed ? 'backtest-gate-pass' : 'backtest-gate-fail'} key={gate}>{passed ? 'Pass' : 'Fail'} · {gate.replace('lockedHoldout', 'trailingSample').replace('positiveHoldout', 'positiveTrailingSample').replace(/([A-Z])/g, ' $1')}</span>
         ))}
       </div>
       <div className="research-flags">
@@ -59,6 +60,8 @@ export default function BacktestRunner() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let saved = null;
@@ -72,6 +75,9 @@ export default function BacktestRunner() {
     requestJson('/api/backtest')
       .then((data) => {
         setAccess(data);
+        setProgress(data.progress);
+        setPending(Boolean(data.pending));
+        if (data.error) setError(data.error);
         if (data.result) {
           setResult(data.result);
           try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional cache */ }
@@ -80,6 +86,27 @@ export default function BacktestRunner() {
       .catch((err) => setError(err.message))
       .finally(() => setAccess((current) => ({ ...current, checking: false })));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let timer;
+    async function poll() {
+      try {
+        const data = await requestJson('/api/backtest');
+        if (!active) return;
+        setProgress(data.progress);
+        setPending(Boolean(data.pending));
+        if (data.result) {
+          setResult(data.result);
+          try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional */ }
+        }
+        setError(data.error || (data.progress?.phase === 'failed' ? data.progress.error : ''));
+      } catch (err) { if (active) setError(err.message); }
+      if (active) timer = setTimeout(poll, pending ? 15_000 : 60_000);
+    }
+    timer = setTimeout(poll, pending ? 15_000 : 60_000);
+    return () => { active = false; clearTimeout(timer); };
+  }, [pending]);
 
   async function unlock(event) {
     event.preventDefault();
@@ -106,8 +133,12 @@ export default function BacktestRunner() {
       const data = await requestJson('/api/backtest', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ startYear: 2025 })
       });
-      setResult(data.result);
-      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional cache */ }
+      setPending(Boolean(data.pending));
+      setProgress(data.progress);
+      if (data.result) {
+        setResult(data.result);
+        try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data.result)); } catch { /* optional cache */ }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -119,9 +150,9 @@ export default function BacktestRunner() {
     <div className="backtest-runner">
       <section className="backtest-control panel" aria-labelledby="backtest-control-title">
         <div>
-          <span className="section-kicker">January 2025 to present walk-forward simulation</span>
+          <span className="section-kicker">January 2025 to present · retrospective research</span>
           <h2 id="backtest-control-title">Run every strategy against the same NQ history</h2>
-          <p>The engine downloads one-minute candles, evaluates signals without future candles, begins fills on the next candle, applies commissions and slippage, and reserves the newest 30% of trades as holdout evidence.</p>
+          <p>Completed historical candles feed versioned experiments. The ORB lab compares calendar periods, execution costs, and drawdown. Cached candles are reused on later runs.</p>
         </div>
         {access.checking ? <p role="status">Checking backtest access…</p> : !access.operatorConfigured ? (
           <p className="live-inline-meta">Results refresh automatically once per day on the private data server. The latest completed report appears below.</p>
@@ -135,13 +166,14 @@ export default function BacktestRunner() {
           </form>
         ) : (
           <div className="backtest-action">
-            <button className="primary-button" disabled={Boolean(busy) || !access.configured} onClick={runBacktest} type="button">
-              {busy === 'run' ? 'Running 2025–present backtest…' : 'Run from January 2025'}
+            <button className="primary-button" disabled={Boolean(busy) || pending || !access.configured} onClick={runBacktest} type="button">
+              {pending ? 'Simulation in progress…' : busy === 'run' ? 'Starting simulation…' : 'Run from January 2025'}
             </button>
             {!access.configured ? <p className="live-inline-warning">Historical data is not connected yet. Add Databento access on Vercel or update the VPS bridge.</p> : null}
           </div>
         )}
         {error ? <p className="error-box" role="alert">{error}</p> : null}
+        {pending && <div className="orb-progress" role="status"><strong>Simulation running</strong><p>{progress?.strategy ? `Strategy ${progress.strategyIndex} of ${progress.strategyTotal}: ${progress.strategy}` : progress?.phase || 'Preparing worker'}</p>{progress?.daysTotal ? <><progress max={progress.daysTotal} value={progress.daysCompleted || 0} /><p>{progress.daysCompleted || 0} of {progress.daysTotal} dates processed for this strategy · {progress.date || ''}</p></> : null}<small>Latest update: {progress?.updatedAt || 'waiting for first progress report'}. The previous completed report stays visible below.</small></div>}
       </section>
 
       {result ? (
@@ -151,8 +183,10 @@ export default function BacktestRunner() {
             <p>{result.window?.startYear ? `${result.window.startYear} to present` : result.window?.year ? `${result.window.year} year to date` : `${result.window?.days || 60} days`} · {result.tradingDays} sessions · {result.candles.toLocaleString()} candles</p>
           </div>
           <aside className="backtest-disclosure"><strong>Not verified forward trades.</strong> These results can recommend advancing a strategy to forward paper testing. They cannot promote a strategy directly to live trading.</aside>
+          <p>Report completed: {result.generatedAt}</p>
+          <OrbLearningPanel result={result} />
           <div className="backtest-grid">{result.strategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} />)}</div>
-          <p className="backtest-method">{result.methodology} Cost model: {result.costs.slippageTicks} tick slippage and {money(result.costs.commissionPerContractUsd)} commission per contract.</p>
+          <p className="backtest-method">{result.methodology} Cost model: {result.costs.slippageTicks} tick slippage per applicable fill and ${result.costs.commissionPerContractUsd} round-trip commission per contract. A one-contract position exits fully at its first target. The trailing 30% account sample is retrospective, not an untouched holdout.</p>
         </section>
       ) : null}
     </div>
