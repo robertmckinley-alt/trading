@@ -57,6 +57,25 @@
       "maximumBreakoutWickFraction": 0.25,
       "maximumStopPoints": 20
     },
+    "dmcMarketOpen": {
+      "requiredHourlyBars": 18,
+      "maximumHourlyBars": 24,
+      "hourlyAtrPeriod": 14,
+      "minimumBiasAtrRatio": 0.35,
+      "maximumBiasAtrRatio": 2,
+      "maximumBiasWickFraction": 0.5,
+      "minimumFiveMinuteBodyFraction": 0.5,
+      "maximumFiveMinuteAdverseWickFraction": 0.35,
+      "fiveMinuteAtrPeriod": 14,
+      "maximumEntryDistanceAtr": 2,
+      "minimumStopPoints": 2,
+      "maximumStopPoints": 22,
+      "minimumRewardRisk": 1.5,
+      "rangeLockBars": 3,
+      "rangeLockConfirmations": 2,
+      "rangeLockAtrFraction": 0.2,
+      "blackoutDates": []
+    },
     "sessionWindows": {
       "asia": { "start": "20:00", "end": "01:59" },
       "london": { "start": "02:00", "end": "07:59" }

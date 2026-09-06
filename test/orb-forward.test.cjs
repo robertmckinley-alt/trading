@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeConfig } = require('../lib/trader-core.cjs');
-const { createState, advance, mergeCandles, DEFINITIONS } = require('../lib/orb-forward.cjs');
+const { createState, advance, mergeCandles, DEFINITIONS, version } = require('../lib/orb-forward.cjs');
 const config = normalizeConfig(require('../config.json'));
 const base = Date.parse('2026-02-03T14:30:00.000Z');
 function bars() {
@@ -59,4 +59,9 @@ test('stale confirmations never become new forward entries and gaps flag trades 
 });
 test('same timestamp with different ISO precision is deduplicated', () => {
   assert.equal(mergeCandles([{...candle(1), timestamp: candle(1).timestamp.replace('.000Z','Z')}], [candle(1)]).length, 1);
+});
+test('unrelated DMC configuration does not invalidate locked ORB forward rules', () => {
+  const changed = structuredClone(config);
+  changed.live.dmcMarketOpen = { maximumStopPoints: 99 };
+  assert.equal(version(changed), version(config));
 });

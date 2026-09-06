@@ -25,7 +25,7 @@ The baseline, delayed confirmation, no-Monday, 50–80% body and focused-time ex
 
 These are initial, unvalidated hypotheses, not optimized recommendations. ATR is a simple mean of 14 prior complete cash-session true ranges (not Wilder smoothing). Relative volume uses the same 15-minute slot in the last 20 complete cash sessions, with at least 10 valid observations. Complete cash sessions require 390 unique consecutive minutes. Half days are excluded from feature warmup. Current-day future candles cannot contribute to either historical baseline.
 
-All 21 platform tests run in the common backtest, including the nine ORB trials. Feature context is prepared once and reused. Complete historical daily candle files are reused from `runtime/historical-candles`; missing or corrupt files are fetched again. NQ bars are not a substitute for MNQ execution data or transaction-level order flow.
+All 22 platform tests run in the common backtest, including the nine ORB trials and the DMC market-open paper hypothesis. Feature context is prepared once and reused. Complete historical daily candle files are reused from `runtime/historical-candles`; missing or corrupt files are fetched again. NQ bars are not a substitute for MNQ execution data or transaction-level order flow.
 
 ## What learning means
 

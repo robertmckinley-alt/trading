@@ -136,3 +136,19 @@ print_watcher "NQ Opening Range Breakout" "nq-opening-range-breakout" "$RUNTIME_
 print_watcher "EMA 20/60 Momentum" "ema-20-60-momentum" "$RUNTIME_DIR/ema-20-60-momentum-watch.pid" "$RUNTIME_DIR/ema-20-60-momentum-watch.log" "$ROOT_DIR/state-ema-20-60-momentum.json"
 print_watcher "Volume POC Reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume-poc-reversion-watch.pid" "$RUNTIME_DIR/volume-poc-reversion-watch.log" "$ROOT_DIR/state-volume-poc-reversion.json"
 print_watcher "NQ 15M Opening Range Retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.log" "$ROOT_DIR/state-nq-15m-opening-range-retest.json"
+print_watcher "NQ 15M ORB Close Confirmation" "nq-15m-orb-close-confirmation" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.pid" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.log" "$ROOT_DIR/state-nq-15m-orb-close-confirmation.json"
+print_watcher "NQ DMC Market Open" "nq-dmc-market-open" "$RUNTIME_DIR/nq-dmc-market-open-watch.pid" "$RUNTIME_DIR/nq-dmc-market-open-watch.log" "$ROOT_DIR/state-nq-dmc-market-open.json"
+
+echo
+echo "=== ORB forward supervisor (nine isolated accounts) ==="
+orb_runner_pid="$(find_existing_watcher_pid "$RUNTIME_DIR/orb-forward/runner.pid" "node scripts/orb-forward-paper.cjs --run")"
+if is_pid_running "$orb_runner_pid"; then
+  echo "PID: $orb_runner_pid"
+  ps -fp "$orb_runner_pid"
+else
+  echo "PID: not running"
+fi
+node - <<'EOF'
+const { snapshot } = require('./lib/orb-forward.cjs');
+console.log(JSON.stringify(snapshot(process.cwd()), null, 2));
+EOF

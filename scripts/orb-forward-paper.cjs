@@ -5,6 +5,7 @@ const forward = require('../lib/orb-forward.cjs');
 const root = path.resolve(__dirname, '..');
 const dir = path.join(root, 'runtime', 'orb-forward');
 const pidFile = path.join(dir, 'runner.pid');
+const LEGACY_COMPATIBLE_VERSIONS = new Set(['5928c3ccc4768a71']);
 function alive() {
   try { const pid = Number(fs.readFileSync(pidFile, 'utf8')); if (pid > 0) { process.kill(pid, 0); return true; } } catch { /* Stopped. */ }
   return false;
@@ -29,8 +30,21 @@ async function run() {
   const historyFile = path.join(dir, 'candles.json');
   let state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : forward.createState(config);
   if (state.version !== forward.version(config)) {
-    state.status = 'rules-changed-review-required'; state.heartbeat = new Date().toISOString(); forward.atomic(stateFile, state);
-    throw new Error('Rules changed. Existing forward journal retained; review before starting a new experiment.');
+    const expectedSlugs = forward.DEFINITIONS.map((definition) => definition.slug);
+    const savedSlugs = (state.accounts || []).map((account) => account.slug);
+    const legacyCompatible = LEGACY_COMPATIBLE_VERSIONS.has(state.version)
+      && JSON.stringify(savedSlugs) === JSON.stringify(expectedSlugs);
+    if (legacyCompatible) {
+      state.migrations = [...(state.migrations || []), {
+        at: new Date().toISOString(), from: state.version, to: forward.version(config),
+        reason: 'Version hashing isolated from unrelated non-ORB strategy files; ORB definitions and journals unchanged.'
+      }];
+      state.version = forward.version(config);
+      forward.atomic(stateFile, state);
+    } else {
+      state.status = 'rules-changed-review-required'; state.heartbeat = new Date().toISOString(); forward.atomic(stateFile, state);
+      throw new Error('ORB rules changed. Existing forward journal retained; review before starting a new experiment.');
+    }
   }
   let history = forward.mergeCandles(forward.readWarmup(root, config), fs.existsSync(historyFile) ? JSON.parse(fs.readFileSync(historyFile)) : []);
   console.log(`${new Date().toISOString()} STARTED nine ORB forward-paper accounts; rules=${state.version}`);

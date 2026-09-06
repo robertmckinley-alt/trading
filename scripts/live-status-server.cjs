@@ -14,6 +14,7 @@ if (fs.existsSync(envPath)) {
 
 const { getLocalStrategySnapshots } = require('../lib/live-status.cjs');
 const { readBacktestResult, runBacktestWorker } = require('../lib/backtest-worker.cjs');
+const { BACKTEST_STRATEGIES } = require('../lib/strategy-registry.cjs');
 
 const port = Number(process.env.LIVE_STATUS_PORT || 3210);
 const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
@@ -73,8 +74,11 @@ function refreshBacktestCache(options = { startYear: backtestStartYear }) {
 
 function refreshBacktestIfDue() {
   try {
-    const generatedAt = Date.parse(readBacktestResult(backtestCachePath).generatedAt);
-    if (Number.isFinite(generatedAt) && Date.now() - generatedAt < backtestRefreshMs) return Promise.resolve(null);
+    const cached = readBacktestResult(backtestCachePath);
+    const generatedAt = Date.parse(cached.generatedAt);
+    const cachedSlugs = new Set((cached.strategies || []).map((strategy) => strategy.slug));
+    const hasEveryStrategy = BACKTEST_STRATEGIES.every((strategy) => cachedSlugs.has(strategy.slug));
+    if (hasEveryStrategy && Number.isFinite(generatedAt) && Date.now() - generatedAt < backtestRefreshMs) return Promise.resolve(null);
   } catch { /* Missing or invalid cache must be rebuilt. */ }
   return refreshBacktestCache({ startYear: backtestStartYear });
 }
