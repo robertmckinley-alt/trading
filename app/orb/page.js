@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import BacktestRunner from '../../components/backtest-runner';
+import OrbForwardPanel from '../../components/orb-forward-panel';
+import { BACKTEST_STRATEGIES } from '../../lib/strategy-registry.cjs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,6 +14,7 @@ export default function OrbPage() {
       <nav className="app-nav" aria-label="ORB navigation"><Link href="/">Dashboard</Link><Link href="/backtests">Other Backtests</Link><Link href="/research">Research Lab</Link><Link href="#orb-learning-title">ORB Comparison</Link></nav>
     </header>
     <section className="research-hero backtest-hero"><div><p className="eyebrow">Opening range breakout · January 2025 onward</p><h1>Every ORB experiment. Every result.</h1><p>Compare each variant below, with its own profit curve, annual results, risk rejections, and searchable trade history. No experiment dropdown.</p></div><aside className="research-safety"><strong>Understand the trade count</strong><p>A signal is not a filled trade. Research tests one NQ contract with no dollar risk cap. Invalid entry gaps can still prevent a fill. Each setup keeps its actual stop and trading costs.</p></aside></section>
+    <OrbForwardPanel definitions={BACKTEST_STRATEGIES.filter(s => s.slug.startsWith('nq-15m-orb-')).map(({ slug, name }) => ({ slug, name }))} />
     <BacktestRunner view="orb" />
   </main>;
 }

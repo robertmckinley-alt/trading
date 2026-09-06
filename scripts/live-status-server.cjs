@@ -147,6 +147,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, host, () => {
+  const { ensure } = require('./orb-forward-paper.cjs');
+  ensure();
+  setInterval(ensure, 60000).unref();
   console.log(`Live status server listening on http://${host}:${port}/api/live-status`);
   void refreshBacktestCache({ startYear: backtestStartYear });
   setInterval(() => { void refreshBacktestCache({ startYear: backtestStartYear }); }, backtestRefreshMs).unref();

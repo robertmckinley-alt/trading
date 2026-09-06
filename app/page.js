@@ -2,9 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import Link from 'next/link';
 import LiveStrategyBoard from '../components/live-strategy-board';
+import OrbForwardPanel from '../components/orb-forward-panel';
 import TraderDashboard from '../components/trader-dashboard';
 import { getStrategySnapshots } from '../lib/live-status.cjs';
-import { STRATEGIES } from '../lib/strategy-registry.cjs';
+import { STRATEGIES, BACKTEST_STRATEGIES } from '../lib/strategy-registry.cjs';
 import { normalizeConfig } from '../lib/trader-core.cjs';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,7 @@ export default async function HomePage() {
           <Link href="#strategy-network">Strategy network</Link>
           <Link href="#research-method">Research method</Link>
           <Link href="/orb">ORB Lab</Link>
+          <Link href="/orb#orb-live-paper">ORB Live Paper</Link>
         </nav>
       </header>
 
@@ -53,6 +55,7 @@ export default async function HomePage() {
 
       <div id="strategy-network">
         <LiveStrategyBoard initialData={liveStatus} />
+        <OrbForwardPanel initialData={liveStatus} definitions={BACKTEST_STRATEGIES.filter(s => s.slug.startsWith('nq-15m-orb-')).map(({ slug, name }) => ({ slug, name }))} />
       </div>
 
       <section className="research-method" id="research-method" aria-labelledby="research-method-title">

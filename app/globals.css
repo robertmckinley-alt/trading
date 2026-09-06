@@ -1346,3 +1346,13 @@ textarea {
 .orb-lab { min-width: 0; }
 .orb-account-summary { padding: 16px; background: var(--surface-subtle); border-radius: 12px; }
 .orb-table-wrap a { color: var(--accent); text-underline-offset: 3px; }
+/* Independent forward-paper accounts */
+.orb-forward-panel { margin: 2rem 0; scroll-margin-top: 1rem; }
+.orb-forward-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 1rem; }
+.orb-forward-card { border: 1px solid #334155; border-radius: 16px; padding: 1.25rem; background: #101a2b; color: #e2e8f0; min-width: 0; }
+.orb-forward-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.orb-forward-card dt { font-size: .8rem; color: #a7b6ca; }
+.orb-forward-card dd { margin: .3rem 0 0; font-size: 1.25rem; font-weight: 700; }
+.orb-forward-card summary { cursor: pointer; }
+.orb-forward-table { overflow-x: auto; }
+.orb-forward-table td, .orb-forward-table th { padding: .5rem; text-align: left; white-space: nowrap; }
