@@ -41,6 +41,7 @@ async function run() {
       // Work on a copy: a failed tick cannot partially journal a trade twice.
       const next = JSON.parse(JSON.stringify(state));
       forward.advance(next, candles, history, config, now);
+      if (next.status === 'running' && !require('../lib/market-feed-status.cjs').clock(new Date(now)).orbEntryWindow) next.status = 'watching-outside-orb-window';
       const changed = next.cursor !== state.cursor;
       forward.atomic(stateFile, next); state = next;
       if (changed) {
@@ -48,7 +49,9 @@ async function run() {
         forward.atomic(historyFile, history);
       }
     } catch (error) {
-      state.heartbeat = new Date().toISOString(); state.status = 'waiting-for-feed-or-recovery'; forward.atomic(stateFile, state);
+      state.heartbeat = new Date().toISOString();
+      state.status = /Missing .*environment variable/.test(error.message) ? 'missing-data-configuration' : require('../lib/market-feed-status.cjs').clock().regularMarketClosed ? 'market-closed' : 'feed-or-processing-error';
+      forward.atomic(stateFile, state);
       console.error(`${state.heartbeat} ${error.message}`);
     }
     setTimeout(tick, 15000);
@@ -56,7 +59,19 @@ async function run() {
   await tick();
 }
 if (require.main === module) {
-  if (process.argv.includes('--enable')) {
+  if (process.argv.includes('--restart')) {
+    (async () => {
+      if (alive()) {
+        const pid = Number(fs.readFileSync(pidFile));
+        const args = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+        if (!args.includes(__filename)) throw new Error('PID does not belong to the ORB runner.');
+        process.kill(pid, 'SIGTERM');
+        for (let i = 0; i < 50 && alive(); i++) await new Promise(r => setTimeout(r, 100));
+        if (alive()) throw new Error('ORB runner did not stop.');
+      }
+      ensure(); console.log('ORB runner restarted with existing accounts and journals.');
+    })().catch(e => { console.error(e.message); process.exitCode = 1; });
+  } else if (process.argv.includes('--enable')) {
     fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'enabled'), 'paper-only\n'); ensure();
     console.log('ORB paper runner enabled. Check runtime/orb-forward/runner.log and the ORB Live Paper section.');
   } else if (process.argv.includes('--run')) run().catch(error => { console.error(error); process.exitCode = 1; });

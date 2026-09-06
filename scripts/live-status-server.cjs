@@ -71,6 +71,14 @@ function refreshBacktestCache(options = { startYear: backtestStartYear }) {
   return backtestRefreshPromise;
 }
 
+function refreshBacktestIfDue() {
+  try {
+    const generatedAt = Date.parse(readBacktestResult(backtestCachePath).generatedAt);
+    if (Number.isFinite(generatedAt) && Date.now() - generatedAt < backtestRefreshMs) return Promise.resolve(null);
+  } catch { /* Missing or invalid cache must be rebuilt. */ }
+  return refreshBacktestCache({ startYear: backtestStartYear });
+}
+
 const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
   if (pathname === '/healthz') {
@@ -128,6 +136,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/buy-hold' && req.method === 'GET') {
+    try {
+      const report = readBacktestResult(backtestCachePath);
+      const saved = report.buyHold || readBacktestResult(path.join(__dirname, '..', 'runtime', 'buy-hold-results.json'));
+      if (!saved || saved.dataFingerprint !== report.provenance?.dataFingerprint || saved.reportGeneratedAt !== report.generatedAt) throw new Error('Benchmark needs rebuilding against the latest completed report.');
+      sendJson(res, 200, { ok: true, result: saved });
+    } catch { sendJson(res, 200, { ok: true, result: null, message: 'Benchmark not ready. Run node scripts/build-buy-hold.cjs on the VPS, or wait for the next completed backtest.' }); }
+    return;
+  }
+
   if (pathname !== '/api/live-status') {
     sendJson(res, 404, { ok: false, error: 'Not found' });
     return;
@@ -135,6 +153,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const payload = getLocalStrategySnapshots();
+    payload.orbForward.feed = require('../lib/market-feed-status.cjs').status(path.resolve(__dirname, '..'));
     res.writeHead(200, {
       'content-type': 'application/json',
       'cache-control': 'no-store'
@@ -150,7 +169,10 @@ server.listen(port, host, () => {
   const { ensure } = require('./orb-forward-paper.cjs');
   ensure();
   setInterval(ensure, 60000).unref();
+  const ensureFeed = () => require('../lib/market-feed-status.cjs').ensureFeed(path.resolve(__dirname, '..'));
+  ensureFeed();
+  setInterval(ensureFeed, 60000).unref();
   console.log(`Live status server listening on http://${host}:${port}/api/live-status`);
-  void refreshBacktestCache({ startYear: backtestStartYear });
-  setInterval(() => { void refreshBacktestCache({ startYear: backtestStartYear }); }, backtestRefreshMs).unref();
+  void refreshBacktestIfDue();
+  setInterval(() => { void refreshBacktestIfDue(); }, Math.min(backtestRefreshMs, 60 * 60 * 1000)).unref();
 });

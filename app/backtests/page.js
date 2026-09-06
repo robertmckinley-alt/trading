@@ -17,6 +17,7 @@ export default function BacktestsPage() {
           <Link href="/research">Research Lab</Link>
           <Link href="#backtest-results-title">Results</Link>
           <Link href="/orb">ORB Lab</Link>
+          <Link href="/comparison">Buy &amp; Hold</Link>
         </nav>
       </header>
       <section className="research-hero backtest-hero">

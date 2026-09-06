@@ -33,6 +33,7 @@ export default async function HomePage() {
           <Link href="#strategy-network">Strategy network</Link>
           <Link href="#research-method">Research method</Link>
           <Link href="/orb">ORB Lab</Link>
+          <Link href="/comparison">Buy &amp; Hold</Link>
           <Link href="/orb#orb-live-paper">ORB Live Paper</Link>
         </nav>
       </header>
