@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const core = require('../lib/trader-core.cjs');
 const {
+  aggregateCandles,
   detectEmaMomentumSignal,
   detectOpeningRangeBreakoutSignal,
   detectOpeningRangeCloseSignal,
@@ -34,7 +35,7 @@ const {
   reviewBacktestEvidence,
   splitChronologically
 } = require('../lib/research-lab.cjs');
-const { checkpointsForDay, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
+const { checkpointsForDay, runAllBacktests, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
 const { fetchDatabentoHistoricalCandles, historicalSinceYearWindow, historicalWindow, historicalYearWindow, parseDatabentoJson, splitHistoricalWindow } = require('../lib/historical-data.cjs');
 const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 const { readBacktestResult, saveBacktestResult } = require('../lib/backtest-worker.cjs');
@@ -198,6 +199,79 @@ test('historical service merges candles returned from every bounded request', as
   assert.equal(result.candles.length, 3);
   assert.equal(result.window.year, 2026);
   assert.ok(calls.every((url) => url.searchParams.get('schema') === 'ohlcv-1m'));
+});
+
+test('daily historical cache reuses overlapping windows and fetches only missing days', async () => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'historical-cache-'));
+  const calls = [];
+  const events = [];
+  const options = {
+    cacheDir, apiKey: 'test-key', now: new Date('2026-09-06T12:00:00Z'),
+    onProgress: (event) => events.push(event),
+    fetchImpl: async (requestUrl) => {
+      const url = new URL(requestUrl);
+      const start = Date.parse(url.searchParams.get('start'));
+      const end = Date.parse(url.searchParams.get('end'));
+      calls.push({ start, end, symbol: url.searchParams.get('symbols') });
+      const rows = [];
+      for (let time = start; time < end; time += 86_400_000) rows.push({
+        ts_event: new Date(time).toISOString(), open: 100, high: 102, low: 99, close: 101, volume: 10
+      });
+      return { ok: true, text: async () => JSON.stringify(rows) };
+    }
+  };
+  const window = { start: '2025-01-01T00:00:00.000Z', end: '2025-01-03T00:00:00.000Z' };
+  try {
+    const first = await fetchDatabentoHistoricalCandles({ ...options, window });
+    const second = await fetchDatabentoHistoricalCandles({ ...options, window, apiKey: '', env: {}, fetchImpl: () => { throw new Error('Cache should avoid network'); } });
+    assert.deepEqual(second.candles, first.candles);
+    assert.equal(calls.length, 1);
+    const overlap = await fetchDatabentoHistoricalCandles({ ...options, window: { start: '2025-01-02T00:00:00.000Z', end: '2025-01-04T00:00:00.000Z' } });
+    assert.equal(overlap.candles.length, 2);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].start, Date.parse('2025-01-03T00:00:00Z'));
+    assert.ok(events.some((event) => event.phase === 'cache-read' && event.cachedDays === 2));
+    await fetchDatabentoHistoricalCandles({ ...options, window, symbol: 'MNQ.v.0' });
+    assert.equal(calls.length, 3);
+    assert.equal(calls[2].symbol, 'MNQ.v.0');
+    const identityDir = fs.readdirSync(cacheDir).find((directory) => JSON.parse(fs.readFileSync(path.join(cacheDir, directory, '2025-01-01.json'))).identity.includes('"symbol":"NQ.v.0"'));
+    fs.writeFileSync(path.join(cacheDir, identityDir, '2025-01-01.json'), 'broken');
+    await fetchDatabentoHistoricalCandles({ ...options, window });
+    assert.equal(calls.length, 4);
+    assert.equal(calls[3].end, Date.parse('2025-01-02T00:00:00Z'));
+  } finally {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('calendar cache keys include timezone and preserve DST hour grouping', () => {
+  const candles = Array.from({ length: 120 }, (_, i) => ({
+    timestamp: new Date(Date.parse('2026-03-08T06:00:00Z') + i * 60_000).toISOString(),
+    open: 100, high: 102, low: 99, close: 101, volume: 10
+  }));
+  const first = aggregateCandles(candles, 60, 'America/New_York');
+  assert.equal(first.length, 2);
+  assert.equal(first[1].timestamp, '2026-03-08T07:00:00.000Z');
+  const otherZone = aggregateCandles(candles, 60, 'Asia/Kathmandu');
+  assert.equal(otherZone.length, 1);
+  assert.equal(otherZone[0].timestamp, '2026-03-08T06:15:00.000Z');
+  assert.deepEqual(aggregateCandles(candles, 60, 'America/New_York'), first);
+});
+
+test('backtest progress identifies strategy, calendar date, and completion', () => {
+  const events = [];
+  const candles = [{ timestamp: '2025-01-02T15:00:00Z', open: 100, high: 101, low: 99, close: 100, volume: 10 }];
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const result = runAllBacktests(candles, config, {
+    strategies: [{ slug: 'test', name: 'Test' }],
+    dependencies: { detectSignal: () => ({ found: false }) },
+    onProgress: (event) => events.push(event)
+  });
+  assert.equal(result.strategies.length, 1);
+  assert.equal(events[0].date, '2025-01-02');
+  assert.equal(events[0].strategyIndex, 1);
+  assert.equal(events.at(-1).phase, 'strategy-completed');
+  assert.equal(events.at(-1).daysCompleted, 1);
 });
 
 test('remote backtest URL derives from the existing private live bridge', () => {
