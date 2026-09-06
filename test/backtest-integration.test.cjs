@@ -34,6 +34,12 @@ test('historical fetch flows through all algorithms into versioned learning with
     assert.equal(result.provenance.dataFingerprint.length, 64);
     const baseline = result.strategies.find((s) => s.slug === 'nq-15m-orb-close-confirmation');
     assert.equal(baseline.research.trades.length, 2);
+    assert.equal(result.orbResearchVersion, 'one-contract-v1');
+    assert.ok(result.learning.trials.every(trial => trial.sizingMode === 'fixed-contract' && trial.valid));
+    assert.equal(result.learning.manifest.researchMode, 'fixed-contract');
+    assert.equal(result.learning.manifest.riskPerTradeUsd, null);
+    assert.equal(baseline.research.signalAudit.length, 2);
+    assert.ok(baseline.research.trades.every(trade => trade.contracts === 1));
     assert.equal(baseline.trades[0].execution.model, 'next-bar-market');
     assert.equal(baseline.trades[0].filledAt, '2026-01-05T15:00:00.000Z');
     assert.ok(baseline.trades[0].entry > 20006, 'entry slippage included');

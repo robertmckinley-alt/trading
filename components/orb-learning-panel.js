@@ -34,16 +34,18 @@ function OrbTrial({ result, trial, strategy }) {
   const filtered = allTrades.filter((trade) => !month || trade.date?.startsWith(month));
   const metrics = trial.fixedRisk;
   const research = strategy.research || {};
+  const oneContract = research.mode === 'fixed-contract';
+  const curveLabel = oneContract ? 'One-contract research' : 'Previous risk-capped research';
   return <article className="orb-lab panel orb-trial" id={trial.slug} aria-labelledby={`${trial.slug}-title`}>
     <div className="section-heading"><div><span className="section-kicker">Separate ORB experiment</span><h2 id={`${trial.slug}-title`}>{trial.name}</h2></div><a href="#orb-learning-title">Back to comparison ↑</a></div>
-    <p>Fixed-risk research uses the same risk ceiling for each signal throughout the historical window. The guarded account below also enforces accumulated losses.</p>
+    <p>{oneContract ? 'One NQ contract per eligible signal. No dollar risk cap and no accumulated loss cutoff. Actual stops, slippage and commissions apply. The entire contract exits at the first target; dollar risk varies with stop width.' : 'Previous risk-capped run: the $500 sizing ceiling rejected wide-stop setups. These results do not represent the new one-contract test.'}</p>
     <dl className="backtest-metrics">
       <div><dt>Signals found</dt><dd>{research.signals ?? strategy.signals}</dd></div>
-      <div><dt>Rejected by risk limits</dt><dd>{research.rejectedSignals || 0}</dd></div>
+      <div><dt>Sizing rejections</dt><dd>{research.rejectedSignals || 0}</dd></div>
       <div><dt>Unfilled orders</dt><dd>{research.notFilled || 0}</dd></div>
       <div><dt>Dates with research trades</dt><dd>{metrics.daysWithTrades}</dd></div>
     </dl>
-    {research.rejectedSignals > 0 && <p className="backtest-disclosure">{research.rejectedSignals} of {research.signals} detected signals could not pass position sizing and risk limits. A small trade count does not mean that history was not processed. Fixed-risk research still requires an affordable whole NQ contract.</p>}
+    {research.rejectedSignals > 0 && <p className="backtest-disclosure">{research.rejectedSignals} of {research.signals} detected signals could not pass position sizing and risk limits. A small trade count does not mean that history was not processed. This saved result used a dollar sizing cap. An updated VPS run is required to evaluate these setups with one contract.</p>}
     {Object.keys(strategy.research?.filterChecks || {}).length > 0 && <details><summary>Filtered breakout checks and missing warmup</summary><ul>{Object.entries(strategy.research.filterChecks).map(([reason, count]) => <li key={reason}>{count} checks: {reason}</li>)}</ul><p>Counts are confirmation checks, not unique trading days.</p></details>}
     <dl className="backtest-metrics">
       <div><dt>Simulated net P&amp;L</dt><dd>{money(metrics?.netPnlUsd)}</dd></div>
@@ -51,11 +53,13 @@ function OrbTrial({ result, trial, strategy }) {
       <div><dt>Simulated trades</dt><dd>{metrics?.trades || 0}</dd></div>
       <div><dt>Research P&amp;L at double costs</dt><dd>{money(trial.doubledCosts?.netPnlUsd)}</dd></div>
     </dl>
-    <EquityChart trades={allTrades} dates={result.provenance?.tradingDates || []} label={`${trial.name}: fixed-risk research`} />
+    <EquityChart trades={allTrades} dates={result.provenance?.tradingDates || []} label={`${trial.name}: ${curveLabel}`} />
     <div className="orb-table-wrap"><table><caption>Separate annual research results</caption><thead><tr><th>Year</th><th>Trades</th><th>Net P&amp;L</th><th>Drawdown</th><th>Worst month</th></tr></thead><tbody>{trial.annual.map((year) => <tr key={year.year}><th>{year.year}{year.completeCalendarYear ? '' : ' (partial)'}</th><td>{year.trades}</td><td>{money(year.netPnlUsd)}</td><td>{money(year.maxDrawdownUsd)}</td><td>{money(year.worstMonthPnlUsd)}</td></tr>)}</tbody></table></div>
 
     <div className="orb-account-summary"><strong>Separate account with drawdown guard</strong><p>{strategy.metrics.trades} trades · net P&amp;L {money(strategy.metrics.netPnlUsd)} · closed-trade drawdown {money(strategy.metrics.maxDrawdownUsd)} · {strategy.rejectedSignals || 0} signals rejected by risk limits.</p></div>
     <details><summary>View guarded account curve</summary><EquityChart trades={strategy.trades || []} dates={result.provenance?.tradingDates || []} label={`${trial.name}: guarded account`} /></details>
+    {Object.keys(research.unfilledReasons || {}).length > 0 && <details><summary>Why orders did not fill</summary><ul>{Object.entries(research.unfilledReasons).map(([reason, count]) => <li key={reason}>{count}: {reason}</li>)}</ul></details>}
+    {research.signalAudit && <details><summary>Audit every detected signal ({research.signalAudit.length})</summary><div className="orb-table-wrap"><table><thead><tr><th>Date</th><th>Side</th><th>Signal entry</th><th>Structural stop</th><th>Stop width</th><th>Outcome</th><th>Net P&amp;L</th></tr></thead><tbody>{research.signalAudit.map((signal) => <tr key={`${signal.date}-${signal.detectedAt}`}><th>{signal.date}</th><td>{signal.side}</td><td>{signal.entry}</td><td>{signal.stop}</td><td>{signal.stopDistancePoints.toFixed(2)} pts</td><td>{signal.status}: {signal.reason}</td><td>{signal.status === 'not-filled' ? 'Unfilled' : money(signal.netPnlUsd)}</td></tr>)}</tbody></table></div></details>}
     <details><summary>Inspect simulated trades</summary>
       <label className="orb-month">Filter by month<input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
       <div className="orb-table-wrap"><table><thead><tr><th>Date</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Exit</th><th>Net P&amp;L</th></tr></thead><tbody>{filtered.map((trade) => <tr key={trade.id}><th>{trade.date}</th><td>{trade.side}</td><td>{trade.contracts}</td><td>{trade.entry}</td><td>{trade.exitReason}</td><td>{money(trade.realizedPnlUsd)}</td></tr>)}</tbody></table></div>
@@ -71,11 +75,12 @@ export default function OrbLearningPanel({ result }) {
   const candidate = learning.trials.find((item) => item.slug === learning.candidate?.slug);
   const sequence = learning.sequenceRisk;
   return <div className="orb-trials">
+    {result.orbResearchVersion !== 'one-contract-v1' && <aside className="backtest-disclosure"><strong>ORB correction awaiting a new VPS run.</strong> The previous $500 sizing cap excluded most valid setups. The results below are explicitly the old capped experiment. New research will test one NQ contract per eligible signal with no dollar loss cap.</aside>}
     <section className="orb-lab panel" aria-labelledby="orb-learning-title">
       <div className="section-heading"><div><span className="section-kicker">All experiments visible</span><h2 id="orb-learning-title">ORB comparison</h2></div><span>{trials.length} close-confirmation trials</span></div>
       <p>{candidate ? `Research candidate: ${candidate.name}. Freeze its rules before starting a new forward paper test.` : 'No candidate has cleared all research checks yet. The simulation is complete; qualification is a separate decision.'}</p>
       <p>Historical simulations do not count toward 50 verified forward-paper trades. Each row is an independent experiment, so their profits must not be added together as a portfolio.</p>
-      <div className="orb-table-wrap"><table><caption>Fixed-risk research results. Select a name to jump to its chart and trades.</caption><thead><tr><th>Experiment</th><th>Signals</th><th>Risk rejected</th><th>Trades</th><th>Net P&amp;L</th><th>Win rate</th><th>Drawdown</th></tr></thead><tbody>{trials.map(({ trial, strategy }) => <tr key={trial.slug}><th><a href={`#${trial.slug}`}>{trial.name}</a></th><td>{strategy.research?.signals ?? strategy.signals}</td><td>{strategy.research?.rejectedSignals || 0}</td><td>{trial.fixedRisk.trades}</td><td>{money(trial.fixedRisk.netPnlUsd)}</td><td>{trial.fixedRisk.trades ? `${trial.fixedRisk.winRate}%` : 'No trades'}</td><td>{money(trial.fixedRisk.maxDrawdownUsd)}</td></tr>)}</tbody></table></div>
+      <div className="orb-table-wrap"><table><caption>{result.orbResearchVersion === 'one-contract-v1' ? 'One-contract research results' : 'Previous risk-capped results'} · Select a name to jump to its chart and trades.</caption><thead><tr><th>Experiment</th><th>Signals</th><th>Risk rejected</th><th>Trades</th><th>Net P&amp;L</th><th>Win rate</th><th>Drawdown</th></tr></thead><tbody>{trials.map(({ trial, strategy }) => <tr key={trial.slug}><th><a href={`#${trial.slug}`}>{trial.name}</a></th><td>{strategy.research?.signals ?? strategy.signals}</td><td>{strategy.research?.rejectedSignals || 0}</td><td>{trial.fixedRisk.trades}</td><td>{money(trial.fixedRisk.netPnlUsd)}</td><td>{trial.fixedRisk.trades ? `${trial.fixedRisk.winRate}%` : 'No trades'}</td><td>{money(trial.fixedRisk.maxDrawdownUsd)}</td></tr>)}</tbody></table></div>
       {learning.blockers.length > 0 && <details><summary>Why no candidate qualified ({learning.blockers.length})</summary><ul>{learning.blockers.map((item) => <li key={item}>{item}</li>)}</ul></details>}
     <details><summary>Monthly selection: train six months, test the next month</summary>
       <p>Each choice uses only its preceding training period. These are retrospective comparisons; earlier research has already influenced the trial definitions.</p>
