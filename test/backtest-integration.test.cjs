@@ -25,6 +25,8 @@ test('historical fetch flows through all algorithms into versioned learning with
       env: { DATABENTO_API_KEY: 'test-only' }, onProgress: (event) => events.push(event),
       fetchImpl: async () => ({ ok: true, text: async () => JSON.stringify(records) }) });
     assert.equal(result.strategies.length, 21);
+    assert.equal(result.researchVersion, "all-strategy-fixed-risk-v1");
+    assert.ok(result.strategies.every((strategy) => strategy.research?.review && !("drawdown" in strategy.research.review.gates)));
     assert.equal(result.learning.trials.length, 9);
     assert.equal(result.learning.forwardPaperGate.livePromotionAllowed, false);
     assert.equal(result.learning.candidate, null);

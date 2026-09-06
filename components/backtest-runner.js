@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import OrbLearningPanel from './orb-learning-panel';
 
@@ -23,13 +24,20 @@ function recommendationClass(value) {
 }
 
 function BacktestCard({ strategy }) {
-  const review = strategy.review;
+  const [accountView, setAccountView] = useState(false);
+  const research = strategy.research;
+  const source = accountView ? strategy : research;
+  const review = source?.review;
+  if (!review) return <article className="backtest-card"><h2>{strategy.name}</h2><p>Full-history research results need an updated VPS run. The older account-limited result is not being presented as full-history performance.</p><details><summary>Previous guarded account result</summary><p>{strategy.metrics.trades} trades · {money(strategy.metrics.netPnlUsd)} net P&amp;L</p></details></article>;
+  const recommendation = review.recommendation === 'MORE HISTORY NEEDED' ? 'TOO FEW ACCEPTED TRADES' : review.recommendation;
   return (
     <article className="backtest-card">
       <header>
         <div><span>{strategy.family}</span><h2>{strategy.name}</h2></div>
-        <strong className={`research-verdict ${recommendationClass(review.recommendation)}`}>{review.recommendation}</strong>
+        <strong className={`research-verdict ${recommendationClass(review.recommendation)}`}>{recommendation}</strong>
       </header>
+      <p>{accountView ? 'Separate account simulation with accumulated loss limits.' : 'Full-history research. Accumulated losses never stop the simulation.'}</p>
+      <button className="secondary-button" type="button" onClick={() => setAccountView(!accountView)}>{accountView ? 'Show full-history research' : 'Show account with loss limits'}</button>
       <dl className="backtest-metrics">
         <div><dt>Simulated trades</dt><dd>{review.total.trades}</dd></div>
         <div><dt>Net P&amp;L</dt><dd>{money(review.total.netPnlUsd)}</dd></div>
@@ -49,12 +57,13 @@ function BacktestCard({ strategy }) {
         <strong>Recommendation notes</strong>
         {review.redFlags.length ? <ul>{review.redFlags.map((flag) => <li key={flag}>{flag.replace(/holdout/gi, 'trailing retrospective sample')}</li>)}</ul> : <p>{review.recommendation === 'ADVANCE TO FORWARD TEST' ? 'Historical checks passed. This is a forward-paper research candidate.' : 'Review the failed checks above. This result has not passed all research gates.'}</p>}
       </div>
-      <p className="backtest-fill-note">{strategy.signals} signals · {strategy.rejectedSignals || 0} rejected by risk limits · {strategy.notFilled} unfilled · {strategy.rolloverDaysSkipped} rollover days skipped</p>
+      {Object.keys(source.rejectionReasons || {}).length > 0 && <ul>{Object.entries(source.rejectionReasons).map(([reason, count]) => <li key={reason}>{count}: {reason}</li>)}</ul>}
+      <p className="backtest-fill-note">{source.signals} signals · {source.rejectedSignals || 0} rejected by position sizing · {source.notFilled} unfilled · {strategy.rolloverDaysSkipped} rollover days skipped</p>
     </article>
   );
 }
 
-export default function BacktestRunner() {
+export default function BacktestRunner({ view = 'all' }) {
   const [access, setAccess] = useState({ checking: true, configured: false, operatorConfigured: false, authenticated: false });
   const [passcode, setPasscode] = useState('');
   const [busy, setBusy] = useState('');
@@ -146,6 +155,10 @@ export default function BacktestRunner() {
     }
   }
 
+  const orbView = view === 'orb';
+  const relatedOrb = (strategy) => /opening-range|^nq-15m-retest-/.test(strategy.slug);
+  const visibleStrategies = (result?.strategies || []).filter((strategy) => orbView ? relatedOrb(strategy) : !strategy.slug.startsWith('nq-15m-orb-') && !relatedOrb(strategy));
+
   return (
     <div className="backtest-runner">
       <section className="backtest-control panel" aria-labelledby="backtest-control-title">
@@ -179,13 +192,16 @@ export default function BacktestRunner() {
       {result ? (
         <section className="backtest-results" aria-labelledby="backtest-results-title">
           <div className="section-heading">
-            <div><span className="section-kicker">Historical simulated evidence</span><h2 id="backtest-results-title">Backtest results</h2></div>
-            <p>{result.window?.startYear ? `${result.window.startYear} to present` : result.window?.year ? `${result.window.year} year to date` : `${result.window?.days || 60} days`} · {result.tradingDays} sessions · {result.candles.toLocaleString()} candles</p>
+            <div><span className="section-kicker">Historical simulated evidence</span><h2 id="backtest-results-title">{orbView ? "ORB results" : "Other strategy results"}</h2></div>
+            <p>{result.window?.startYear ? `${result.window.startYear} to present` : result.window?.year ? `${result.window.year} year to date` : `${result.window?.days || 60} days`} · {result.provenance?.tradingDates?.length ?? result.tradingDays} cash-session dates · {result.candles.toLocaleString()} candles</p>
           </div>
           <aside className="backtest-disclosure"><strong>Not verified forward trades.</strong> These results can recommend advancing a strategy to forward paper testing. They cannot promote a strategy directly to live trading.</aside>
           <p>Report completed: {result.generatedAt}</p>
-          <OrbLearningPanel result={result} />
-          <div className="backtest-grid">{result.strategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} />)}</div>
+          {result.researchVersion !== 'all-strategy-fixed-risk-v1' && <aside className="backtest-disclosure"><strong>Updated simulation required.</strong> This saved run has independent research results for the ORB close-confirmation experiments only. An updated VPS run is needed to remove accumulated loss cutoffs from the other strategies.</aside>}
+          {orbView ? <OrbLearningPanel result={result} /> : <aside className="backtest-disclosure">Opening-range experiments now have their own page with every chart visible. <Link href="/orb">Open all ORB results →</Link></aside>}
+          {orbView && <h2>Other opening-range strategies</h2>}
+          <p>Research results keep evaluating eligible setups through the full date range without an accumulated loss limit. Per-trade sizing and execution costs still apply. The optional guarded account view answers a different question: how a limited account would have performed.</p>
+          <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} />)}</div>
           <p className="backtest-method">{result.methodology} Cost model: {result.costs.slippageTicks} tick slippage per applicable fill and ${result.costs.commissionPerContractUsd} round-trip commission per contract. A one-contract position exits fully at its first target. The trailing 30% account sample is retrospective, not an untouched holdout.</p>
         </section>
       ) : null}

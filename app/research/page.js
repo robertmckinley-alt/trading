@@ -49,6 +49,7 @@ export default async function ResearchPage() {
           <Link href="/backtests">Backtest Results</Link>
           <Link href="#strategy-reviews">Strategy reviews</Link>
           <Link href="#memory">Research memory</Link>
+          <Link href="/orb">ORB Lab</Link>
         </nav>
       </header>
 

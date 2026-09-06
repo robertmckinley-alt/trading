@@ -28,33 +28,22 @@ function EquityChart({ trades, dates, label }) {
   </figure>;
 }
 
-export default function OrbLearningPanel({ result }) {
-  const learning = result.learning;
-  const [selected, setSelected] = useState('nq-15m-orb-close-confirmation');
-  const [mode, setMode] = useState('research');
+function OrbTrial({ result, trial, strategy }) {
   const [month, setMonth] = useState('');
-  if (!learning) return <aside className="backtest-disclosure">This saved report predates the ORB learning engine. The new comparisons will appear after an updated VPS run completes.</aside>;
-  const trial = learning.trials.find((item) => item.slug === selected) || learning.trials[0];
-  const strategy = result.strategies.find((item) => item.slug === trial?.slug);
-  if (!trial || !strategy) return null;
-  const allTrades = mode === 'research' ? strategy.research?.trades || [] : strategy.trades || [];
+  const allTrades = strategy.research?.trades || [];
   const filtered = allTrades.filter((trade) => !month || trade.date?.startsWith(month));
-  const metrics = mode === 'research' ? trial.fixedRisk : strategy.metrics;
-  const candidate = learning.trials.find((item) => item.slug === learning.candidate?.slug);
-  const sequence = learning.sequenceRisk;
-  return <section className="orb-lab panel" aria-labelledby="orb-learning-title">
-    <div className="section-heading">
-      <div><span className="section-kicker">Versioned experiments · daily evaluation</span><h2 id="orb-learning-title">ORB Learning Lab</h2></div>
-      <span>{learning.trials.length} recorded trials</span>
-    </div>
-    <p>{candidate ? `Research candidate: ${candidate.name}. Freeze its rules before starting a new forward paper test.` : 'No candidate has cleared all research checks yet. Every trial and its results remain visible below.'}</p>
-    <p className="backtest-fill-note">2025 and 2026 comparisons are retrospective. Historical trades do not count toward the 50 verified forward-paper trades. Running strategies are not changed automatically.</p>
-    {learning.blockers.length > 0 && <details><summary>What still needs evidence ({learning.blockers.length})</summary><ul>{learning.blockers.map((item) => <li key={item}>{item}</li>)}</ul></details>}
-    <div className="orb-controls">
-      <label>Experiment<select value={trial.slug} onChange={(e) => setSelected(e.target.value)}>{learning.trials.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>
-      <label>Curve<select value={mode} onChange={(e) => setMode(e.target.value)}><option value="research">Fixed-risk research</option><option value="account">Account with drawdown guard</option></select></label>
-    </div>
-    <p>{mode === 'research' ? 'Shows eligible trades throughout history using the same risk ceiling, even after an account would have reached its loss limit.' : 'Shows this strategy’s separate account with the drawdown guard enforced. This is not a combined portfolio.'}</p>
+  const metrics = trial.fixedRisk;
+  const research = strategy.research || {};
+  return <article className="orb-lab panel orb-trial" id={trial.slug} aria-labelledby={`${trial.slug}-title`}>
+    <div className="section-heading"><div><span className="section-kicker">Separate ORB experiment</span><h2 id={`${trial.slug}-title`}>{trial.name}</h2></div><a href="#orb-learning-title">Back to comparison ↑</a></div>
+    <p>Fixed-risk research uses the same risk ceiling for each signal throughout the historical window. The guarded account below also enforces accumulated losses.</p>
+    <dl className="backtest-metrics">
+      <div><dt>Signals found</dt><dd>{research.signals ?? strategy.signals}</dd></div>
+      <div><dt>Rejected by risk limits</dt><dd>{research.rejectedSignals || 0}</dd></div>
+      <div><dt>Unfilled orders</dt><dd>{research.notFilled || 0}</dd></div>
+      <div><dt>Dates with research trades</dt><dd>{metrics.daysWithTrades}</dd></div>
+    </dl>
+    {research.rejectedSignals > 0 && <p className="backtest-disclosure">{research.rejectedSignals} of {research.signals} detected signals could not pass position sizing and risk limits. A small trade count does not mean that history was not processed. Fixed-risk research still requires an affordable whole NQ contract.</p>}
     {Object.keys(strategy.research?.filterChecks || {}).length > 0 && <details><summary>Filtered breakout checks and missing warmup</summary><ul>{Object.entries(strategy.research.filterChecks).map(([reason, count]) => <li key={reason}>{count} checks: {reason}</li>)}</ul><p>Counts are confirmation checks, not unique trading days.</p></details>}
     <dl className="backtest-metrics">
       <div><dt>Simulated net P&amp;L</dt><dd>{money(metrics?.netPnlUsd)}</dd></div>
@@ -62,18 +51,39 @@ export default function OrbLearningPanel({ result }) {
       <div><dt>Simulated trades</dt><dd>{metrics?.trades || 0}</dd></div>
       <div><dt>Research P&amp;L at double costs</dt><dd>{money(trial.doubledCosts?.netPnlUsd)}</dd></div>
     </dl>
-    <EquityChart trades={allTrades} dates={result.provenance?.tradingDates || []} label={mode === 'research' ? 'Fixed-risk research' : 'Guarded account'} />
+    <EquityChart trades={allTrades} dates={result.provenance?.tradingDates || []} label={`${trial.name}: fixed-risk research`} />
     <div className="orb-table-wrap"><table><caption>Separate annual research results</caption><thead><tr><th>Year</th><th>Trades</th><th>Net P&amp;L</th><th>Drawdown</th><th>Worst month</th></tr></thead><tbody>{trial.annual.map((year) => <tr key={year.year}><th>{year.year}{year.completeCalendarYear ? '' : ' (partial)'}</th><td>{year.trades}</td><td>{money(year.netPnlUsd)}</td><td>{money(year.maxDrawdownUsd)}</td><td>{money(year.worstMonthPnlUsd)}</td></tr>)}</tbody></table></div>
-    <details><summary>Monthly selection: train six months, test the next month</summary>
-      <p>Each choice uses only its preceding training period. These are retrospective comparisons; earlier research has already influenced the trial definitions.</p>
-      <div className="orb-table-wrap"><table><thead><tr><th>Test month</th><th>Chosen experiment</th><th>Trades</th><th>Net P&amp;L</th><th>Double costs</th></tr></thead><tbody>{learning.walkForward.folds.map((fold) => <tr key={fold.testStart}><th>{fold.testStart.slice(0, 7)}</th><td>{learning.trials.find((item) => item.slug === fold.selectedSlug)?.name || 'No qualifying choice'}</td><td>{fold.test.trades}</td><td>{money(fold.test.netPnlUsd)}</td><td>{money(fold.doubledCosts?.netPnlUsd)}</td></tr>)}</tbody></table></div>
-      {sequence?.status === 'retrospective-resampling' && <p>Across 250 resampled scenarios, median drawdown was {money(sequence.maxDrawdownUsd.p50)} and the 95th-percentile drawdown was {money(sequence.maxDrawdownUsd.p95)}. These scenarios describe sequence risk, not a forecast or a loss limit.</p>}
-    </details>
+
+    <div className="orb-account-summary"><strong>Separate account with drawdown guard</strong><p>{strategy.metrics.trades} trades · net P&amp;L {money(strategy.metrics.netPnlUsd)} · closed-trade drawdown {money(strategy.metrics.maxDrawdownUsd)} · {strategy.rejectedSignals || 0} signals rejected by risk limits.</p></div>
+    <details><summary>View guarded account curve</summary><EquityChart trades={strategy.trades || []} dates={result.provenance?.tradingDates || []} label={`${trial.name}: guarded account`} /></details>
     <details><summary>Inspect simulated trades</summary>
       <label className="orb-month">Filter by month<input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
       <div className="orb-table-wrap"><table><thead><tr><th>Date</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Exit</th><th>Net P&amp;L</th></tr></thead><tbody>{filtered.map((trade) => <tr key={trade.id}><th>{trade.date}</th><td>{trade.side}</td><td>{trade.contracts}</td><td>{trade.entry}</td><td>{trade.exitReason}</td><td>{money(trade.realizedPnlUsd)}</td></tr>)}</tbody></table></div>
       {!filtered.length && <p>No simulated trades in this selection.</p>}
     </details>
+  </article>;
+}
+
+export default function OrbLearningPanel({ result }) {
+  const learning = result.learning;
+  if (!learning) return <aside className="backtest-disclosure">This saved report predates the ORB learning engine. Comparisons will appear after an updated VPS run completes.</aside>;
+  const trials = learning.trials.map((trial) => ({ trial, strategy: result.strategies.find((item) => item.slug === trial.slug) })).filter((item) => item.strategy);
+  const candidate = learning.trials.find((item) => item.slug === learning.candidate?.slug);
+  const sequence = learning.sequenceRisk;
+  return <div className="orb-trials">
+    <section className="orb-lab panel" aria-labelledby="orb-learning-title">
+      <div className="section-heading"><div><span className="section-kicker">All experiments visible</span><h2 id="orb-learning-title">ORB comparison</h2></div><span>{trials.length} close-confirmation trials</span></div>
+      <p>{candidate ? `Research candidate: ${candidate.name}. Freeze its rules before starting a new forward paper test.` : 'No candidate has cleared all research checks yet. The simulation is complete; qualification is a separate decision.'}</p>
+      <p>Historical simulations do not count toward 50 verified forward-paper trades. Each row is an independent experiment, so their profits must not be added together as a portfolio.</p>
+      <div className="orb-table-wrap"><table><caption>Fixed-risk research results. Select a name to jump to its chart and trades.</caption><thead><tr><th>Experiment</th><th>Signals</th><th>Risk rejected</th><th>Trades</th><th>Net P&amp;L</th><th>Win rate</th><th>Drawdown</th></tr></thead><tbody>{trials.map(({ trial, strategy }) => <tr key={trial.slug}><th><a href={`#${trial.slug}`}>{trial.name}</a></th><td>{strategy.research?.signals ?? strategy.signals}</td><td>{strategy.research?.rejectedSignals || 0}</td><td>{trial.fixedRisk.trades}</td><td>{money(trial.fixedRisk.netPnlUsd)}</td><td>{trial.fixedRisk.trades ? `${trial.fixedRisk.winRate}%` : 'No trades'}</td><td>{money(trial.fixedRisk.maxDrawdownUsd)}</td></tr>)}</tbody></table></div>
+      {learning.blockers.length > 0 && <details><summary>Why no candidate qualified ({learning.blockers.length})</summary><ul>{learning.blockers.map((item) => <li key={item}>{item}</li>)}</ul></details>}
+    <details><summary>Monthly selection: train six months, test the next month</summary>
+      <p>Each choice uses only its preceding training period. These are retrospective comparisons; earlier research has already influenced the trial definitions.</p>
+      <div className="orb-table-wrap"><table><thead><tr><th>Test month</th><th>Chosen experiment</th><th>Trades</th><th>Net P&amp;L</th><th>Double costs</th></tr></thead><tbody>{learning.walkForward.folds.map((fold) => <tr key={fold.testStart}><th>{fold.testStart.slice(0, 7)}</th><td>{learning.trials.find((item) => item.slug === fold.selectedSlug)?.name || 'No qualifying choice'}</td><td>{fold.test.trades}</td><td>{money(fold.test.netPnlUsd)}</td><td>{money(fold.doubledCosts?.netPnlUsd)}</td></tr>)}</tbody></table></div>
+      {sequence?.status === 'retrospective-resampling' && <p>Across 250 resampled scenarios, median drawdown was {money(sequence.maxDrawdownUsd.p50)} and the 95th-percentile drawdown was {money(sequence.maxDrawdownUsd.p95)}. These scenarios describe sequence risk, not a forecast or a loss limit.</p>}
+    </details>
     <details><summary>Data coverage and research version</summary><p>Run {result.generatedAt}. Trial fingerprint {learning.manifestHash.slice(0, 12)}. {learning.coverage.scope}</p><ul>{learning.coverage.issues.map((item, index) => <li key={index}>{item}</li>)}</ul><p>Research summaries are saved on the VPS for comparison across daily runs.</p></details>
-  </section>;
+    </section>
+    {trials.map(({ trial, strategy }) => <OrbTrial key={trial.slug} result={result} trial={trial} strategy={strategy} />)}
+  </div>;
 }

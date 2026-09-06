@@ -356,7 +356,7 @@ test('60-day backtest fills only after the detection checkpoint and reaches its 
     },
     replay(plan, future) {
       assert.ok(future.every((candle) => Date.parse(candle.timestamp) > Date.parse(plan.triggerTimestamp)));
-      const pnl = sequence % 2 === 0 ? 100 : -50;
+      const pnl = Math.floor(sequence / 2) % 2 === 0 ? 100 : -50;
       sequence += 1;
       return { status: 'closed', contracts: 1, filledAt: future[0].timestamp, exitReason: pnl > 0 ? 'target' : 'stop-loss', finalExitPrice: 100, realizedPnlUsd: pnl, rMultiple: pnl / 100, targetsHit: [], mfePoints: 1, maePoints: 1, mfeUsd: 20, maeUsd: -20 };
     }
@@ -408,7 +408,7 @@ test('an untradeable signal does not abort the remaining historical sessions', (
     },
     buildPlan(signal) {
       plans += 1;
-      if (plans === 1) throw new Error('No trade: minimum 1-contract risk exceeds the strategy limit');
+      if (plans <= 2) throw new Error('No trade: minimum 1-contract risk exceeds the strategy limit');
       return { setup: signal.setup, sizing: { maxContracts: 1, actualRiskUsd: 100 }, targets: [], triggerTimestamp: signal.triggerTimestamp };
     },
     replay(plan, future) {

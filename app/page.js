@@ -31,6 +31,7 @@ export default async function HomePage() {
           <Link href="/backtests">Backtest Results</Link>
           <Link href="#strategy-network">Strategy network</Link>
           <Link href="#research-method">Research method</Link>
+          <Link href="/orb">ORB Lab</Link>
         </nav>
       </header>
 

@@ -1339,3 +1339,10 @@ textarea {
 .orb-month { display: grid; gap: 6px; max-width: 240px; margin: 16px 0; }
 .orb-progress { width: 100%; padding: 16px; background: var(--surface-subtle); border-radius: 12px; }
 .orb-progress progress { width: 100%; accent-color: var(--accent); }
+
+.orb-trials { display: grid; gap: 24px; min-width: 0; }
+.orb-trial { scroll-margin-top: 24px; min-width: 0; }
+.orb-trial .section-heading { flex-wrap: wrap; gap: 12px; }
+.orb-lab { min-width: 0; }
+.orb-account-summary { padding: 16px; background: var(--surface-subtle); border-radius: 12px; }
+.orb-table-wrap a { color: var(--accent); text-underline-offset: 3px; }

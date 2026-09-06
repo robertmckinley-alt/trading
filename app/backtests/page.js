@@ -16,6 +16,7 @@ export default function BacktestsPage() {
           <Link href="/">Dashboard</Link>
           <Link href="/research">Research Lab</Link>
           <Link href="#backtest-results-title">Results</Link>
+          <Link href="/orb">ORB Lab</Link>
         </nav>
       </header>
       <section className="research-hero backtest-hero">

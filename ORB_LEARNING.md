@@ -67,3 +67,7 @@ docker exec openclaw-anwx-openclaw-1 cat /data/.openclaw/workspace/lucid-nq-pape
 ```
 
 `phase: completed` and a new report timestamp confirm completion. A heartbeat, high CPU usage or health check alone does not.
+
+## Full-history research view
+
+The ORB page is `/orb`; all nine close-confirmation experiments have separate visible sections, followed by the other opening-range tests. `/backtests` shows the remaining strategies. Research results are the default for every strategy. Each signal receives an independent sizing state so accumulated losses cannot stop or shrink later research trades. The configured per-trade risk ceiling, whole-contract sizing, costs, entry windows and one-signal-per-day rule still apply. An optional guarded account view retains the original account-floor simulation. The research reviewer measures drawdown but does not reject a strategy merely for crossing the account's $5,000 floor. Saved reports without `researchVersion: all-strategy-fixed-risk-v1` require an updated VPS run for non-ORB research results; the UI does not relabel their old account results as research.
