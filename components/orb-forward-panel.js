@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 
 const startingBalanceUsd = 50000;
 const usd = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
+const timestamp = value => new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric',
+  hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+}).format(new Date(value));
 export default function OrbForwardPanel({ initialData = null, definitions = [] }) {
   const [data, setData] = useState(initialData?.orbForward || null);
   const [error, setError] = useState(false);
@@ -25,7 +29,7 @@ export default function OrbForwardPanel({ initialData = null, definitions = [] }
   const accounts = data?.accounts || definitions;
   const status = error ? 'Status connection unavailable' : !data || data.status === 'not-started' ? 'Awaiting VPS activation' : data.feed?.message || data.status.replaceAll('-', ' ');
   return <section className="orb-forward-panel" id="orb-live-paper" aria-labelledby="orb-forward-title">
-    <div className="research-hero"><div><p className="eyebrow">Forward paper trading · 9 independent accounts</p><h2 id="orb-forward-title">ORB Live Paper</h2><p>Each account starts with $50,000 in paper funds. One NQ contract per signal. Structural stops and trading costs; no dollar risk cap or account loss cutoff. Results start from activation, separate from backtests and the eight primary accounts.</p></div><aside className="research-safety"><strong>{status}</strong><p>{data?.heartbeat ? `Runner heartbeat: ${new Date(data.heartbeat).toLocaleString()} · ${data.supervisedAccounts || accounts.length} accounts supervised` : 'The VPS must start the ORB supervisor before live results appear.'}</p>{data?.feed?.latestCandleAt && <p>Latest candle: {new Date(data.feed.latestCandleAt).toLocaleString()} · {data.feed.feedProcesses} feed process</p>}{data?.startedAt && <p>Started {new Date(data.startedAt).toLocaleString()} · Rules {data.version}</p>}</aside></div>
+    <div className="research-hero"><div><p className="eyebrow">Forward paper trading · 9 independent accounts</p><h2 id="orb-forward-title">ORB Live Paper</h2><p>Each account starts with $50,000 in paper funds. One NQ contract per signal. Structural stops and trading costs; no dollar risk cap or account loss cutoff. Results start from activation, separate from backtests and the eight primary accounts.</p></div><aside className="research-safety"><strong>{status}</strong><p>{data?.heartbeat ? `Runner heartbeat: ${timestamp(data.heartbeat)} · ${data.supervisedAccounts || accounts.length} accounts supervised` : 'The VPS must start the ORB supervisor before live results appear.'}</p>{data?.feed?.latestCandleAt && <p>Latest candle: {timestamp(data.feed.latestCandleAt)} · {data.feed.feedProcesses} feed process</p>}{data?.startedAt && <p>Started {timestamp(data.startedAt)} · Rules {data.version}</p>}</aside></div>
     <p>Paper fills use the next unseen minute open after signal observation, including modeled slippage. The 50-trade count includes only closed forward trades without detected data gaps; it is a review checkpoint, not proof of profitability.</p>
     <div className="orb-forward-grid">{accounts.map(account => <article className="orb-forward-card" key={account.slug}>
       <h3>{account.name.replace('ORB Test: ', '')}</h3>

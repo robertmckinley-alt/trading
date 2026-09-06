@@ -40,7 +40,7 @@ export default async function HomePage() {
 
       <section className="dashboard-intro">
         <div>
-          <p className="eyebrow">Six-bot NQ paper research network</p>
+          <p className="eyebrow">Eight-bot NQ paper research network</p>
           <h1>Compare strategies under the same risk rules.</h1>
           <p>
             Every bot receives the same live feed, $500 per-trade cap, $2,500 shared open-risk guard, correlated-strategy family limits, daily loss protection, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
