@@ -20,7 +20,7 @@ const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
 const statusToken = process.env.LIVE_STATUS_TOKEN || '';
 const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname, '..', 'runtime', 'backtest-results.json');
 const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
-const backtestYear = Number(process.env.BACKTEST_YEAR || 2026);
+const backtestStartYear = Number(process.env.BACKTEST_START_YEAR || 2025);
 let backtestRefreshPromise = null;
 
 function sendJson(res, status, payload) {
@@ -42,10 +42,10 @@ function readRequestJson(req) {
   });
 }
 
-function refreshBacktestCache(options = { year: backtestYear }) {
+function refreshBacktestCache(options = { startYear: backtestStartYear }) {
   if (!process.env.DATABENTO_API_KEY) return Promise.resolve(null);
   if (backtestRefreshPromise) return backtestRefreshPromise;
-  const label = options.year ? `${options.year} year-to-date` : `${options.days || 60}-day`;
+  const label = options.startYear ? `${options.startYear}-to-present` : options.year ? `${options.year} year-to-date` : `${options.days || 60}-day`;
   console.log(`[${new Date().toISOString()}] starting ${label} backtest refresh in worker`);
   backtestRefreshPromise = runBacktestWorker({ ...options, cachePath: backtestCachePath })
     .then((result) => {
@@ -83,7 +83,11 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/backtest' && req.method === 'POST') {
     try {
       const body = await readRequestJson(req);
-      const result = await refreshBacktestCache(body.year ? { year: body.year } : { days: body.days || 60 });
+      const result = await refreshBacktestCache(body.startYear
+        ? { startYear: body.startYear }
+        : body.year
+          ? { year: body.year }
+          : { days: body.days || 60 });
       sendJson(res, 200, { ok: true, result });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
@@ -95,7 +99,7 @@ const server = http.createServer(async (req, res) => {
     try {
       if (!fs.existsSync(backtestCachePath)) {
         void refreshBacktestCache();
-        sendJson(res, 202, { ok: false, pending: true, error: `The first ${backtestYear} year-to-date backtest is still being prepared.` });
+        sendJson(res, 202, { ok: false, pending: true, error: `The first ${backtestStartYear}-to-present backtest is still being prepared.` });
         return;
       }
       sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath) });
@@ -125,6 +129,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Live status server listening on http://${host}:${port}/api/live-status`);
-  void refreshBacktestCache({ year: backtestYear });
-  setInterval(() => { void refreshBacktestCache({ year: backtestYear }); }, backtestRefreshMs).unref();
+  void refreshBacktestCache({ startYear: backtestStartYear });
+  setInterval(() => { void refreshBacktestCache({ startYear: backtestStartYear }); }, backtestRefreshMs).unref();
 });

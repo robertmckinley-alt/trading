@@ -24,7 +24,7 @@ const { synchronizeStrategyLearning } = require('../lib/strategy-learning.cjs');
 const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
 const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
 const { applyRiskDecision, buildResearchCouncilReview } = require('../lib/research-council.cjs');
-const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
+const { BACKTEST_STRATEGIES, ORB_RESEARCH_VARIANTS, STRATEGIES, STRATEGY_RESEARCH_VARIANTS, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 const {
   auditCandles,
   auditResearchTrades,
@@ -35,7 +35,7 @@ const {
   splitChronologically
 } = require('../lib/research-lab.cjs');
 const { checkpointsForDay, runStrategyBacktest } = require('../lib/backtest-engine.cjs');
-const { fetchDatabentoHistoricalCandles, historicalWindow, historicalYearWindow, parseDatabentoJson, splitHistoricalWindow } = require('../lib/historical-data.cjs');
+const { fetchDatabentoHistoricalCandles, historicalSinceYearWindow, historicalWindow, historicalYearWindow, parseDatabentoJson, splitHistoricalWindow } = require('../lib/historical-data.cjs');
 const { getCachedBacktest, remoteBacktestResultUrls, remoteBacktestUrls } = require('../lib/backtest-service.cjs');
 const { readBacktestResult, saveBacktestResult } = require('../lib/backtest-worker.cjs');
 
@@ -149,6 +149,15 @@ test('2026 backtest window runs from January 1 through the delayed current minut
   assert.equal(window.days, 248);
 });
 
+test('since-year backtest window runs from January 2025 through the delayed current minute', () => {
+  const window = historicalSinceYearWindow(2025, new Date('2026-09-05T12:34:56.000Z'));
+  assert.equal(window.startYear, 2025);
+  assert.equal(window.endYear, 2026);
+  assert.equal(window.start, '2025-01-01T00:00:00.000Z');
+  assert.equal(window.end, '2026-09-05T12:14:00.000Z');
+  assert.ok(window.days > 600);
+});
+
 test('year-to-date history is split into bounded contiguous requests', () => {
   const chunks = splitHistoricalWindow({
     start: '2026-01-01T00:00:00.000Z',
@@ -239,19 +248,26 @@ test('historical strategies are evaluated inside their actual entry windows', ()
   assert.equal(nineAm.at(-1), 960);
 });
 
-test('60-day backtest fills only after the signal candle and reaches its separate 50-trade gate', () => {
+test('60-day backtest fills only after the detection checkpoint and reaches its separate 50-trade gate', () => {
   const candles = [];
   for (let day = 0; day < 60; day += 1) {
     const first = new Date(Date.UTC(2026, 0, day + 1, 15, 0));
     const second = new Date(first.getTime() + 60_000);
+    const third = new Date(first.getTime() + 120_000);
+    const fourth = new Date(first.getTime() + 180_000);
+    const fifth = new Date(first.getTime() + 240_000);
     candles.push({ timestamp: first.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
     candles.push({ timestamp: second.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: third.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: fourth.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: fifth.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
   }
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
   let sequence = 0;
   const definition = { slug: 'test-strategy', name: 'Test strategy', strategyFamily: 'test', strategyFamilyName: 'Test' };
   const result = runStrategyBacktest(candles, config, definition, {
     detectSignal(context) {
+      if (context.length < 2) return { found: false };
       const trigger = context.at(-2);
       const date = trigger.timestamp.slice(0, 10);
       return {
@@ -276,6 +292,7 @@ test('60-day backtest fills only after the signal candle and reaches its separat
   assert.equal(result.review.recommendation, 'ADVANCE TO FORWARD TEST');
   assert.equal(result.review.evidenceType, 'historical-simulated');
   assert.ok(result.trades.every((trade) => trade.evidenceType === 'historical-simulated'));
+  assert.ok(result.trades.every((trade) => Date.parse(trade.filledAt) > Date.parse(trade.detectedAt)));
 });
 
 test('historical recommendations never use the forward-paper promotion label', () => {
@@ -289,8 +306,14 @@ test('an untradeable signal does not abort the remaining historical sessions', (
   for (let day = 0; day < 3; day += 1) {
     const first = new Date(Date.UTC(2026, 0, day + 1, 15));
     const second = new Date(first.getTime() + 60_000);
+    const third = new Date(first.getTime() + 120_000);
+    const fourth = new Date(first.getTime() + 180_000);
+    const fifth = new Date(first.getTime() + 240_000);
     candles.push({ timestamp: first.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
     candles.push({ timestamp: second.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: third.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: fourth.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
+    candles.push({ timestamp: fifth.toISOString(), open: 100, high: 101, low: 99, close: 100, volume: 10 });
   }
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
   let plans = 0;
@@ -301,6 +324,7 @@ test('an untradeable signal does not abort the remaining historical sessions', (
     strategyFamilyName: 'Test'
   }, {
     detectSignal(context) {
+      if (context.length < 2) return { found: false };
       const trigger = context.at(-2);
       return {
         found: true,
@@ -638,6 +662,10 @@ test('strategy registry gives all seven bots isolated runtime files and risk fam
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
+  assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
+  assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
+  assert.equal(BACKTEST_STRATEGIES.length, 17);
+  assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });
 
@@ -833,6 +861,47 @@ test('15-minute ORB close bot accepts a strong close and rejects a wick-heavy br
     : candle);
   const rejected = detectOpeningRangeCloseSignal([...opening, ...wickBreak, clock], { ...config, strategySlug: 'nq-15m-orb-close-confirmation' }, { trades: [] });
   assert.equal(rejected.found, false);
+});
+
+test('ORB research variants isolate timing, weekday, and body rules', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const buildSession = (date = '2026-09-02') => {
+    const start = Date.parse(`${date}T13:30:00.000Z`);
+    const opening = Array.from({ length: 15 }, (_, index) => ({
+      timestamp: new Date(start + (index * 60_000)).toISOString(),
+      open: 20_000, high: 20_010, low: 19_990, close: 20_000, volume: 100
+    }));
+    const firstBreak = Array.from({ length: 15 }, (_, index) => ({
+      timestamp: new Date(start + ((15 + index) * 60_000)).toISOString(),
+      open: 20_004 + (index * 0.6), high: 20_006 + (index * 0.8), low: 20_003 + (index * 0.6), close: 20_005 + (index * 0.75), volume: 140
+    }));
+    const secondBreak = Array.from({ length: 15 }, (_, index) => ({
+      timestamp: new Date(start + ((30 + index) * 60_000)).toISOString(),
+      open: 20_009 + (index * 0.2), high: 20_011 + (index * 0.3), low: 20_008 + (index * 0.2), close: 20_010 + (index * 0.25), volume: 130
+    }));
+    return { opening, firstBreak, secondBreak, clock10: { timestamp: new Date(start + (30 * 60_000)).toISOString(), open: 20_016, high: 20_017, low: 20_015, close: 20_016, volume: 80 }, clock1015: { timestamp: new Date(start + (45 * 60_000)).toISOString(), open: 20_017, high: 20_018, low: 20_016, close: 20_017, volume: 80 } };
+  };
+
+  const session = buildSession();
+  const delayedEarly = detectSignalFromCandles([...session.opening, ...session.firstBreak, session.clock10], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
+  assert.equal(delayedEarly.found, false);
+  const delayed = detectSignalFromCandles([...session.opening, ...session.firstBreak, ...session.secondBreak, session.clock1015], { ...config, strategySlug: 'nq-15m-orb-delayed-confirmation' }, { trades: [] });
+  assert.equal(delayed.found, true, delayed.reason);
+  assert.equal(delayed.metadata.confirmationBarEnd, session.secondBreak.at(-1).timestamp);
+
+  const monday = buildSession('2026-09-07');
+  const noMonday = detectSignalFromCandles([...monday.opening, ...monday.firstBreak, monday.clock10], { ...config, strategySlug: 'nq-15m-orb-no-monday' }, { trades: [] });
+  assert.equal(noMonday.found, false);
+  assert.match(noMonday.reason, /does not trade on Mon/);
+
+  const highBody = session.firstBreak.map((candle, index) => ({
+    ...candle,
+    open: 20_000,
+    low: 19_999.5,
+    ...(index === 14 ? { high: 20_020, close: 20_019 } : {})
+  }));
+  const bodyWindow = detectSignalFromCandles([...session.opening, ...highBody, session.clock10], { ...config, strategySlug: 'nq-15m-orb-body-window' }, { trades: [] });
+  assert.equal(bodyWindow.found, false, JSON.stringify(bodyWindow));
 });
 
 test('research council remains advisory and records a deterministic risk veto', () => {
