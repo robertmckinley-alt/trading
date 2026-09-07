@@ -23,7 +23,7 @@ function recommendationClass(value) {
   return 'research-verdict-warn';
 }
 
-function BacktestCard({ strategy }) {
+function BacktestCard({ strategy, validation }) {
   const [accountView, setAccountView] = useState(false);
   const research = strategy.research;
   const source = accountView ? strategy : research;
@@ -59,6 +59,18 @@ function BacktestCard({ strategy }) {
       </div>
       {Object.keys(source.rejectionReasons || {}).length > 0 && <ul>{Object.entries(source.rejectionReasons).map(([reason, count]) => <li key={reason}>{count}: {reason}</li>)}</ul>}
       <p className="backtest-fill-note">{source.signals} signals · {source.rejectedSignals || 0} rejected by position sizing · {source.notFilled} unfilled · {strategy.rolloverDaysSkipped} rollover days skipped</p>
+      {validation ? <details className="backtest-validation"><summary>Validation and overfit checks</summary>
+        <dl className="backtest-metrics">
+          <div><dt>Walk-forward months</dt><dd>{validation.walkForward.folds.length}</dd></div>
+          <div><dt>Positive test months</dt><dd>{validation.walkForward.positiveFoldRate}%</dd></div>
+          <div><dt>Walk-forward expectancy</dt><dd>{money(validation.walkForward.aggregate.expectancyUsd)}</dd></div>
+          <div><dt>Double-cost expectancy</dt><dd>{money(validation.walkForward.doubledCosts.expectancyUsd)}</dd></div>
+          <div><dt>Monte Carlo median drawdown</dt><dd>{money(validation.sequenceRisk.maxDrawdownUsd?.p50)}</dd></div>
+          <div><dt>Monte Carlo 95% drawdown</dt><dd>{money(validation.sequenceRisk.maxDrawdownUsd?.p95)}</dd></div>
+        </dl>
+        <p>Trade P&amp;L distribution: 5th percentile {money(validation.distribution.p05Usd)}, median {money(validation.distribution.medianUsd)}, 95th percentile {money(validation.distribution.p95Usd)}.</p>
+        <div className="backtest-gates">{Object.entries(validation.gates).map(([gate, passed]) => <span className={passed ? 'backtest-gate-pass' : 'backtest-gate-fail'} key={gate}>{passed ? 'Pass' : 'Fail'} · {gate.replace(/([A-Z])/g, ' $1')}</span>)}</div>
+      </details> : null}
     </article>
   );
 }
@@ -196,12 +208,13 @@ export default function BacktestRunner({ view = 'all' }) {
             <p>{result.window?.startYear ? `${result.window.startYear} to present` : result.window?.year ? `${result.window.year} year to date` : `${result.window?.days || 60} days`} · {result.provenance?.tradingDates?.length ?? result.tradingDays} cash-session dates · {result.candles.toLocaleString()} candles</p>
           </div>
           <aside className="backtest-disclosure"><strong>Not verified forward trades.</strong> These results can recommend advancing a strategy to forward paper testing. They cannot promote a strategy directly to live trading.</aside>
+          {result.validation ? <aside className="backtest-disclosure"><strong>Overfit controls active.</strong> Every strategy now receives rolling six-month/one-month walk-forward diagnostics, doubled-cost stress, a trade-outcome distribution, and 250-run block-bootstrap sequence testing. Parameter search remains limited to declared variants; automatic optimization is disabled.</aside> : null}
           <p>Report completed: {result.generatedAt}</p>
           {result.researchVersion !== 'all-strategy-fixed-risk-v1' && <aside className="backtest-disclosure"><strong>Updated simulation required.</strong> This saved run has independent research results for the ORB close-confirmation experiments only. An updated VPS run is needed to remove accumulated loss cutoffs from the other strategies.</aside>}
           {orbView ? <OrbLearningPanel result={result} /> : <aside className="backtest-disclosure">Opening-range experiments now have their own page with every chart visible. <Link href="/orb">Open all ORB results →</Link></aside>}
           {orbView && <h2>Other opening-range strategies</h2>}
           <p>Research results keep evaluating eligible setups through the full date range without an accumulated loss limit. Per-trade sizing and execution costs still apply. The optional guarded account view answers a different question: how a limited account would have performed.</p>
-          <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} />)}</div>
+          <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} validation={result.validation?.strategies?.find(item => item.slug === strategy.slug)} />)}</div>
           <p className="backtest-method">{result.methodology} Cost model: {result.costs.slippageTicks} tick slippage per applicable fill and ${result.costs.commissionPerContractUsd} round-trip commission per contract. A one-contract position exits fully at its first target. The trailing 30% account sample is retrospective, not an untouched holdout.</p>
         </section>
       ) : null}

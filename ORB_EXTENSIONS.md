@@ -26,9 +26,10 @@ The exit pair intentionally adds no ATR/RVOL filters or trailing/break-even logi
 
 ## Integration and deployment boundary
 
-- Total historical definitions: 25. ORB learning trials: 12.
+- Total historical definitions: 26. ORB learning trials: 12.
 - Next complete backtest includes all three automatically, their signal audit and serialized rule metadata.
 - Learning counts the added trials in its existing multiple-testing assessment and retrospective walk-forward comparison.
+- The fade receives all-strategy validation but is excluded from the breakout parameter-neighborhood count because its entry model is different.
 - The existing nine-account forward experiment keeps its definition set and rules hash. New candidates have `forwardPaperEligible: false` and are not accepted by the production strategy registry.
 - No watchers, broker orders, environment variables or deployed runtime state were changed.
 - Existing cached reports remain historical records; a new backtest is necessary to obtain results for these candidates.

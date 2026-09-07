@@ -151,6 +151,7 @@ start_watcher "volume POC reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume
 start_watcher "15-minute opening-range retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.log" "$ROOT_DIR/state-nq-15m-opening-range-retest.json" "$INTERVAL_MS"
 start_watcher "15-minute ORB close confirmation" "nq-15m-orb-close-confirmation" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.pid" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.log" "$ROOT_DIR/state-nq-15m-orb-close-confirmation.json" "$INTERVAL_MS"
 start_watcher "DMC market open" "nq-dmc-market-open" "$RUNTIME_DIR/nq-dmc-market-open-watch.pid" "$RUNTIME_DIR/nq-dmc-market-open-watch.log" "$ROOT_DIR/state-nq-dmc-market-open.json" "$INTERVAL_MS"
+start_watcher "HTF session sweep" "nq-htf-session-sweep" "$RUNTIME_DIR/nq-htf-session-sweep-watch.pid" "$RUNTIME_DIR/nq-htf-session-sweep-watch.log" "$ROOT_DIR/state-nq-htf-session-sweep.json" "$INTERVAL_MS"
 
 # One supervisor evaluates all nine ORB variants from the shared Databento feed
 # while retaining an isolated $50,000 account and journal for each variant.

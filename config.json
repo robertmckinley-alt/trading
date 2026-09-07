@@ -76,6 +76,15 @@
       "rangeLockAtrFraction": 0.2,
       "blackoutDates": []
     },
+    "htfSessionSweep": {
+      "entryStart": "08:00",
+      "entryEnd": "11:30",
+      "confirmationMinutes": 5,
+      "minimumConfirmationBodyFraction": 0.45,
+      "maximumStopPoints": 24,
+      "minimumStopPoints": 2,
+      "hourlyLookbackBars": 3
+    },
     "sessionWindows": {
       "asia": { "start": "20:00", "end": "01:59" },
       "london": { "start": "02:00", "end": "07:59" }
