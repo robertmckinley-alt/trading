@@ -3,6 +3,9 @@ const assert = require('node:assert/strict');
 const { normalizeConfig } = require('../lib/trader-core.cjs');
 const { createState, advance, mergeCandles, DEFINITIONS, version } = require('../lib/orb-forward.cjs');
 const config = normalizeConfig(require('../config.json'));
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const base = Date.parse('2026-02-03T14:30:00.000Z');
 function bars() {
   return Array.from({ length: 30 }, (_, i) => ({ timestamp: new Date(base + i * 60000).toISOString(),
@@ -64,4 +67,26 @@ test('unrelated DMC configuration does not invalidate locked ORB forward rules',
   const changed = structuredClone(config);
   changed.live.dmcMarketOpen = { maximumStopPoints: 99 };
   assert.equal(version(changed), version(config));
+});
+test('snapshot reports actual per-account fills and preserves their mark time while stale', () => {
+  const s = triggered();
+  const pending = s.accounts[0].active;
+  assert.equal(pending.result, null);
+  advance(s, [candle(31)], [], config, base + 32 * 60000 + 5000);
+  const filled = s.accounts[0].active;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-audit-'));
+  const { atomic, snapshot } = require('../lib/orb-forward.cjs');
+  try {
+    s.lastError = { at: new Date(base).toISOString(), message: 'stale feed' };
+    advance(s, [candle(31)], [], config, base + 40 * 60000);
+    atomic(path.join(root, 'runtime/orb-forward/state.json'), s);
+    const view = snapshot(root);
+    assert.equal(view.accounts[0].active.entry, filled.result.filledEntryPrice);
+    assert.equal(view.accounts[0].active.filledAt, candle(31).timestamp);
+    assert.equal(view.accounts[0].active.markedAt, candle(31).timestamp);
+    assert.equal(view.lastError.message, 'stale feed');
+    assert.ok(view.accounts.some(a => a.active === null));
+    advance(s, [candle(32)], [], config, base + 33 * 60000 + 5000);
+    assert.equal(s.lastError, null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

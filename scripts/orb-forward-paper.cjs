@@ -64,7 +64,8 @@ async function run() {
       }
     } catch (error) {
       state.heartbeat = new Date().toISOString();
-      state.status = /Missing .*environment variable/.test(error.message) ? 'missing-data-configuration' : require('../lib/market-feed-status.cjs').clock().regularMarketClosed ? 'market-closed' : 'feed-or-processing-error';
+      state.status = /Missing .*environment variable/.test(error.message) ? 'missing-data-configuration' : /Databento live candle is stale/.test(error.message) ? 'waiting-for-fresh-feed' : 'feed-or-processing-error';
+      state.lastError = { at: state.heartbeat, message: error.message };
       forward.atomic(stateFile, state);
       console.error(`${state.heartbeat} ${error.message}`);
     }
