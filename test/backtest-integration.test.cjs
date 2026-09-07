@@ -24,10 +24,10 @@ test('historical fetch flows through all algorithms into versioned learning with
     const result = await executeBacktest({ year: 2026, now: new Date('2026-01-07T01:00:00Z'), cacheDir,
       env: { DATABENTO_API_KEY: 'test-only' }, onProgress: (event) => events.push(event),
       fetchImpl: async () => ({ ok: true, text: async () => JSON.stringify(records) }) });
-    assert.equal(result.strategies.length, 22);
+    assert.equal(result.strategies.length, 25);
     assert.equal(result.researchVersion, "all-strategy-fixed-risk-v1");
     assert.ok(result.strategies.every((strategy) => strategy.research?.review && !("drawdown" in strategy.research.review.gates)));
-    assert.equal(result.learning.trials.length, 9);
+    assert.equal(result.learning.trials.length, 12);
     assert.equal(result.learning.forwardPaperGate.livePromotionAllowed, false);
     assert.equal(result.learning.candidate, null);
     assert.equal(result.provenance.executionVersion, 'orb-execution-v2');
@@ -43,7 +43,7 @@ test('historical fetch flows through all algorithms into versioned learning with
     assert.equal(baseline.trades[0].execution.model, 'next-bar-market');
     assert.equal(baseline.trades[0].filledAt, '2026-01-05T15:00:00.000Z');
     assert.ok(baseline.trades[0].entry > 20006, 'entry slippage included');
-    assert.equal(events.filter((event) => event.phase === 'strategy-completed').length, 22);
+    assert.equal(events.filter((event) => event.phase === 'strategy-completed').length, 25);
     assert.deepEqual(states.map((name) => fs.readFileSync(name, 'utf8')), before);
   } finally { fs.rmSync(cacheDir, { recursive: true, force: true }); }
 });
