@@ -1159,7 +1159,7 @@ function CompactStrategyTable({ strategies }) {
   return (
     <section className="command-panel strategy-ranking" aria-labelledby="strategy-ranking-title">
       <div className="command-panel-head">
-        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Eight accounts. One clean view.</h2></div>
+        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Nine accounts. One clean view.</h2></div>
         <span>Ranked by realized P&amp;L</span>
       </div>
       <div className="command-table-wrap">
