@@ -138,6 +138,7 @@ print_watcher "Volume POC Reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume
 print_watcher "NQ 15M Opening Range Retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.log" "$ROOT_DIR/state-nq-15m-opening-range-retest.json"
 print_watcher "NQ 15M ORB Close Confirmation" "nq-15m-orb-close-confirmation" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.pid" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.log" "$ROOT_DIR/state-nq-15m-orb-close-confirmation.json"
 print_watcher "NQ DMC Market Open" "nq-dmc-market-open" "$RUNTIME_DIR/nq-dmc-market-open-watch.pid" "$RUNTIME_DIR/nq-dmc-market-open-watch.log" "$ROOT_DIR/state-nq-dmc-market-open.json"
+print_watcher "NQ HTF Session Sweep" "nq-htf-session-sweep" "$RUNTIME_DIR/nq-htf-session-sweep-watch.pid" "$RUNTIME_DIR/nq-htf-session-sweep-watch.log" "$ROOT_DIR/state-nq-htf-session-sweep.json"
 
 echo
 echo "=== ORB forward supervisor (nine isolated accounts) ==="

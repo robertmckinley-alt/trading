@@ -727,19 +727,20 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
-test('strategy registry gives all eight bots isolated runtime files and risk families', () => {
-  assert.equal(STRATEGIES.length, 8);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 8);
+test('strategy registry gives all nine bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 9);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 9);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 8);
+  assert.equal(new Set(paths).size, 9);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-dmc-market-open.json')));
+  assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-htf-session-sweep.json')));
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
   assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
-  assert.equal(BACKTEST_STRATEGIES.length, 22);
+  assert.equal(BACKTEST_STRATEGIES.length, 23);
   assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });

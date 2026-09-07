@@ -20,7 +20,7 @@ export default async function HomePage() {
 
       <section className="command-hero">
         <div>
-          <p className="eyebrow">Live operations · eight independent paper accounts</p>
+          <p className="eyebrow">Live operations · nine independent paper accounts</p>
           <h1>See what matters. Act on what changed.</h1>
           <p>
             A focused view of system health, portfolio performance, current risk, and every strategy running on the shared NQ feed.
