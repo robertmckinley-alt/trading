@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import AppHeader from '../../../components/app-header';
 import LiveStrategyBoard from '../../../components/live-strategy-board';
 import { getStrategySnapshots } from '../../../lib/live-status.cjs';
 import { STRATEGIES, getStrategyDefinition } from '../../../lib/strategy-registry.cjs';
@@ -20,16 +20,7 @@ export default async function ResearchStrategyPage({ params }) {
 
   return (
     <main className="page-shell" id="main-content">
-      <header className="app-header">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">DT</span>
-          <div><strong>DoctorTrades</strong><span>NQ strategy research</span></div>
-        </div>
-        <nav className="app-nav" aria-label="Strategy navigation">
-          <Link href="/">Dashboard</Link>
-          {strategy.source.url ? <a href={strategy.source.url} rel="noreferrer" target="_blank">Research source</a> : null}
-        </nav>
-      </header>
+      <AppHeader section={`${strategy.paperAccountLabel} · strategy detail`} />
 
       <section className="strategy-detail-intro">
         <div>
@@ -49,6 +40,8 @@ export default async function ResearchStrategyPage({ params }) {
       <p className="research-disclaimer">
         This is an independent paper-trading experiment. Repository results have not been reproduced on this feed and do not predict future returns.
       </p>
+
+      {strategy.source.url ? <p className="strategy-source-link"><a href={strategy.source.url} rel="noreferrer" target="_blank">Open research source →</a></p> : null}
 
       <LiveStrategyBoard initialData={liveStatus} />
     </main>

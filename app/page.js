@@ -1,11 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import Link from 'next/link';
+import AppHeader from '../components/app-header';
 import LiveStrategyBoard from '../components/live-strategy-board';
-import OrbForwardPanel from '../components/orb-forward-panel';
-import TraderDashboard from '../components/trader-dashboard';
 import { getStrategySnapshots } from '../lib/live-status.cjs';
-import { STRATEGIES, BACKTEST_STRATEGIES } from '../lib/strategy-registry.cjs';
+import { STRATEGIES } from '../lib/strategy-registry.cjs';
 import { normalizeConfig } from '../lib/trader-core.cjs';
 
 export const dynamic = 'force-dynamic';
@@ -13,97 +12,56 @@ export const revalidate = 0;
 
 export default async function HomePage() {
   const config = normalizeConfig(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8')));
-  const sampleSetup = fs.readFileSync(path.join(process.cwd(), 'examples', 'lucid-sweep-short.setup.json'), 'utf8');
-  const sampleCsv = fs.readFileSync(path.join(process.cwd(), 'examples', 'sample-nq-1m.csv'), 'utf8');
   const liveStatus = await getStrategySnapshots();
 
   return (
-    <main className="page-shell" id="main-content">
-      <header className="app-header">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">DT</span>
-          <div>
-            <strong>DoctorTrades</strong>
-            <span>NQ paper trading</span>
+    <main className="page-shell command-page" id="main-content">
+      <AppHeader section="Live paper operations" />
+
+      <section className="command-hero">
+        <div>
+          <p className="eyebrow">Live operations · eight independent paper accounts</p>
+          <h1>See what matters. Act on what changed.</h1>
+          <p>
+            A focused view of system health, portfolio performance, current risk, and every strategy running on the shared NQ feed.
+          </p>
+          <div className="hero-actions">
+            <Link className="primary-link" href="/orb">Open ORB forward lab</Link>
+            <Link className="secondary-link" href="/comparison">Compare historical results</Link>
           </div>
         </div>
-        <nav className="app-nav" aria-label="Strategy navigation">
-          <Link href="/research">Research Lab</Link>
-          <Link href="/backtests">Backtest Results</Link>
-          <Link href="#strategy-network">Strategy network</Link>
-          <Link href="#research-method">Research method</Link>
-          <Link href="/orb">ORB Lab</Link>
-          <Link href="/comparison">Buy &amp; Hold</Link>
-          <Link href="/orb#orb-live-paper">ORB Live Paper</Link>
-        </nav>
-      </header>
-
-      <section className="dashboard-intro">
-        <div>
-          <p className="eyebrow">Eight-bot NQ paper research network</p>
-          <h1>Compare strategies under the same risk rules.</h1>
-          <p>
-            Every bot receives the same live feed, $500 per-trade cap, $2,500 shared open-risk guard, correlated-strategy family limits, daily loss protection, slippage, and commission model. Results stay separated so weak ideas can be retired without hiding their losses.
-          </p>
-        </div>
-        <dl className="risk-guardrails" aria-label="Account risk guardrails">
-          <div><dt>Paper allocation</dt><dd>${(config.startingBalanceUsd * STRATEGIES.length).toLocaleString()}</dd></div>
-          <div><dt>Max drawdown</dt><dd>{config.maxAccountDrawdownPercent}% per account</dd></div>
-          <div><dt>Trade risk cap</dt><dd>${config.maxRiskPerTradeUsd.toLocaleString()}</dd></div>
-          <div><dt>Network risk cap</dt><dd>${config.maxPortfolioOpenRiskUsd.toLocaleString()}</dd></div>
-        </dl>
+        <aside className="command-hero-summary" aria-label="Paper account structure">
+          <span>Capital framework</span>
+          <strong>${(config.startingBalanceUsd * STRATEGIES.length).toLocaleString()}</strong>
+          <p>{STRATEGIES.length} × ${config.startingBalanceUsd.toLocaleString()} independent paper accounts</p>
+          <dl>
+            <div><dt>Trade cap</dt><dd>${config.maxRiskPerTradeUsd.toLocaleString()}</dd></div>
+            <div><dt>Network cap</dt><dd>${config.maxPortfolioOpenRiskUsd.toLocaleString()}</dd></div>
+          </dl>
+        </aside>
       </section>
 
       <div id="strategy-network">
-        <LiveStrategyBoard initialData={liveStatus} />
-        <OrbForwardPanel initialData={liveStatus} definitions={BACKTEST_STRATEGIES.filter(s => s.slug.startsWith('nq-15m-orb-')).map(({ slug, name }) => ({ slug, name }))} />
+        <LiveStrategyBoard compact initialData={liveStatus} />
       </div>
 
-      <section className="research-method" id="research-method" aria-labelledby="research-method-title">
-        <div>
-          <span className="section-kicker">Research controls</span>
-          <h2 id="research-method-title">Promotion is earned with forward paper evidence.</h2>
-          <p>
-            Repository claims are treated as hypotheses. A bot must collect at least 50 closed paper trades across 20 trading days, maintain positive expectancy and average R, reach a 1.20 profit factor, and keep drawdown within the test limit before it can be labeled a paper candidate.
-          </p>
+      <section className="workspace-links" aria-labelledby="workspace-links-title">
+        <div className="workspace-links-head">
+          <div><span className="section-kicker">Research workspaces</span><h2 id="workspace-links-title">Go deeper without crowding the live board.</h2></div>
+          <p>Live execution, forward evidence, and retrospective simulations remain clearly separated.</p>
         </div>
-        <ol className="research-steps">
-          <li><strong>Reproduce</strong><span>Translate only licensed or independently described rules.</span></li>
-          <li><strong>Forward test</strong><span>Use the shared live feed and identical cost model.</span></li>
-          <li><strong>Keep or retire</strong><span>Score every result; never hide failed strategies.</span></li>
-        </ol>
+        <div className="workspace-link-grid">
+          <Link href="/orb"><span>Forward paper</span><strong>ORB Lab</strong><p>Nine isolated $50,000 accounts and their verified-trade progress.</p><i>Open lab →</i></Link>
+          <Link href="/backtests"><span>Historical research</span><strong>All Backtests</strong><p>Inspect every strategy, trade count, P&amp;L, and drawdown.</p><i>View results →</i></Link>
+          <Link href="/comparison"><span>Benchmarking</span><strong>Strategy Comparison</strong><p>Measure each model against NQ buy-and-hold approximations.</p><i>Compare →</i></Link>
+          <Link href="/research"><span>Evidence controls</span><strong>Research Lab</strong><p>Review qualification gates, holdouts, and strategy memory.</p><i>Review evidence →</i></Link>
+        </div>
       </section>
 
-      <section className="shadow-research" aria-labelledby="shadow-research-title">
-        <div>
-          <span className="section-kicker">Shadow research</span>
-          <h2 id="shadow-research-title">Power of Three stays observational until its rules are exact.</h2>
-          <p>
-            The video concept is being treated as accumulation, manipulation, and distribution context—not as an executable strategy. It cannot open trades until trend, confirmation, stop, target, timeframe, and session rules are specified and tested.
-          </p>
-        </div>
-        <dl className="shadow-research-facts">
-          <div><dt>Execution</dt><dd>Disabled</dd></div>
-          <div><dt>Current use</dt><dd>Context tagging</dd></div>
-          <div><dt>Promotion path</dt><dd>Rule spec → replay → forward paper</dd></div>
-        </dl>
-      </section>
-
-      <section className="manual-workspace" aria-labelledby="manual-workspace-title">
-        <div className="section-heading manual-workspace-head">
-          <div>
-            <span className="section-kicker">Replay lab</span>
-            <h2 id="manual-workspace-title">Validate a setup against one-minute candles</h2>
-          </div>
-          <p>Plans and journal entries stay in this browser.</p>
-        </div>
-        <TraderDashboard
-          initialConfig={config}
-          initialSetupText={sampleSetup}
-          initialCsvText={sampleCsv}
-          storageKey="lucid-nq-paper-trader-live-9am-sweep-journal-v1"
-        />
-      </section>
+      <footer className="command-footer">
+        <strong>Paper trading only.</strong>
+        <span>Simulated fills, modeled slippage, and historical results do not establish future profitability.</span>
+      </footer>
     </main>
   );
 }

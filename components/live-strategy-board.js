@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const timestampFormatter = new Intl.DateTimeFormat('en-US', {
@@ -1140,7 +1141,149 @@ function StrategyCard({ strategy, isBridgeFallback }) {
   );
 }
 
-export default function LiveStrategyBoard({ initialData }) {
+function CompactMetric({ label, value, detail, tone = '' }) {
+  return (
+    <div className={`command-metric${tone ? ` command-metric-${tone}` : ''}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </div>
+  );
+}
+
+function CompactStrategyTable({ strategies }) {
+  const ranked = strategies.slice().sort((a, b) => (
+    Number(b.journal?.realizedPnlUsd || 0) - Number(a.journal?.realizedPnlUsd || 0)
+  ));
+
+  return (
+    <section className="command-panel strategy-ranking" aria-labelledby="strategy-ranking-title">
+      <div className="command-panel-head">
+        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Eight accounts. One clean view.</h2></div>
+        <span>Ranked by realized P&amp;L</span>
+      </div>
+      <div className="command-table-wrap">
+        <table className="command-table">
+          <thead><tr><th scope="col">Strategy</th><th scope="col">Status</th><th scope="col">Balance</th><th scope="col">Today</th><th scope="col">Total P&amp;L</th><th scope="col">Trades</th><th scope="col">Win rate</th><th scope="col">Profit factor</th><th scope="col">Drawdown</th></tr></thead>
+          <tbody>
+            {ranked.map((strategy) => {
+              const journal = strategy.journal || {};
+              const evaluation = strategy.research?.evaluation || {};
+              const running = strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning;
+              const trades = Number(journal.trades || 0);
+              const wins = Number(journal.wins || 0);
+              const today = Number(journal.daily?.activePnlUsd || 0);
+              const realized = Number(journal.realizedPnlUsd || 0);
+              const profitFactor = evaluation.profitFactor;
+              return (
+                <tr key={strategy.slug}>
+                  <th scope="row">
+                    <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}</span></Link>
+                  </th>
+                  <td><span className={`table-status ${running ? 'table-status-good' : strategy.watcher?.hasLiveEvidence ? 'table-status-warn' : ''}`}><i aria-hidden="true" />{running ? 'Running' : strategy.watcher?.hasLiveEvidence ? 'Check' : 'Offline'}</span></td>
+                  <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
+                  <td className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</td>
+                  <td className={realized >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(realized)}</td>
+                  <td>{trades}</td>
+                  <td>{trades ? formatPercent((wins / trades) * 100) : '—'}</td>
+                  <td>{profitFactor === null || profitFactor === undefined ? '—' : Number.isFinite(profitFactor) ? Number(profitFactor).toFixed(2) : '∞'}</td>
+                  <td>{formatUsd(evaluation.maxDrawdownUsd || 0)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="command-panel-foot"><Link href="/research">Review qualification gates</Link><span>Click any strategy for signals, rules, and full evidence.</span></div>
+    </section>
+  );
+}
+
+function CompactTodayPanel({ strategies, dailySeries }) {
+  const today = buildDailyTotals(strategies);
+  const recentDays = dailySeries.slice(-5).reverse();
+  return (
+    <section className="command-panel today-panel" aria-labelledby="today-panel-title">
+      <div className="command-panel-head">
+        <div><span className="section-kicker">Current session</span><h2 id="today-panel-title">Today at a glance</h2></div>
+        <span>{today.date || 'Awaiting market date'}</span>
+      </div>
+      <div className="today-summary">
+        <div><span>Active P&amp;L</span><strong className={today.activePnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today.activePnlUsd)}</strong></div>
+        <div><span>Closed trades</span><strong>{today.trades}</strong></div>
+        <div><span>Open positions</span><strong>{today.openTrades}</strong></div>
+      </div>
+      <div className="session-strategy-list">
+        {strategies.map((strategy) => {
+          const running = strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning;
+          return (
+            <Link href={strategy.route} key={strategy.slug}>
+              <i className={running ? 'status-orb status-orb-good' : 'status-orb status-orb-warn'} aria-hidden="true" />
+              <span><strong>{strategy.name}</strong><small>{strategy.live?.latestReason || strategy.live?.activationTime || 'Waiting for market data'}</small></span>
+              <b className={Number(strategy.journal?.daily?.activePnlUsd || 0) >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(strategy.journal?.daily?.activePnlUsd || 0)}</b>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="recent-days">
+        <strong>Recent sessions</strong>
+        {recentDays.length ? recentDays.map((day) => (
+          <div key={day.date}><span>{day.date}</span><small>{day.trades} trades</small><b className={day.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(day.realizedPnlUsd)}</b></div>
+        )) : <p>No closed sessions yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshState }) {
+  const totals = buildPortfolioTotals(strategies);
+  const daily = buildDailyTotals(strategies);
+  const analytics = buildPerformanceAnalytics(strategies, dailySeries);
+  const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
+  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && (strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning)).length;
+  const risk = data?.portfolioRisk;
+  const orb = data?.orbForward;
+  const winRate = totals.trades ? (totals.wins / totals.trades) * 100 : 0;
+  const allHealthy = Boolean(watcherCount && runningWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
+
+  return (
+    <section className="command-dashboard" aria-label="Live paper trading overview">
+      <div className={`system-ribbon ${allHealthy ? 'system-ribbon-good' : 'system-ribbon-warn'}`}>
+        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : 'System check required'}</strong><small>{runningWatchers}/{watcherCount} primary watchers · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
+        <div className="system-ribbon-meta"><span>{data?.source === 'remote-bridge' ? 'Live VPS bridge' : data?.source === 'remote-bridge-cache' ? 'Cached VPS snapshot' : data?.source === 'remote-bridge-fallback' ? 'Fallback snapshot' : 'Local runtime'}</span><time dateTime={data?.generatedAt || undefined}>{formatStamp(data?.generatedAt)}</time><button disabled={refreshState.busy} onClick={refreshData} type="button">{refreshState.busy ? 'Refreshing…' : 'Refresh'}</button></div>
+      </div>
+
+      {refreshState.error || data?.error ? <p className="command-alert" role="status">{refreshState.error || 'The live bridge is unavailable. The last safe snapshot remains visible.'}</p> : null}
+
+      <div className="command-metrics">
+        <CompactMetric label="Combined equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized on ${formatUsd(totals.bankrollUsd)}`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
+        <CompactMetric label="Today’s P&L" value={formatUsd(daily.activePnlUsd)} detail={`${daily.trades} closed · ${daily.openTrades} open`} tone={daily.activePnlUsd >= 0 ? 'positive' : 'negative'} />
+        <CompactMetric label="Open risk" value={formatUsd(risk?.reservedRiskUsd || 0)} detail={`${formatUsd(risk?.availableRiskUsd || 0)} available`} />
+        <CompactMetric label="Total trades" value={String(totals.trades)} detail={`${formatPercent(winRate)} win rate`} />
+        <CompactMetric label="Max drawdown" value={formatUsd(analytics.maxDrawdown)} detail={`${analytics.streaks.maxWins}W / ${analytics.streaks.maxLosses}L longest streaks`} />
+      </div>
+
+      <div className="command-main-grid">
+        <section className="command-panel performance-command-panel" aria-labelledby="command-performance-title">
+          <div className="command-panel-head"><div><span className="section-kicker">Portfolio performance</span><h2 id="command-performance-title">Daily P&amp;L and equity momentum</h2></div><span>Last 30 trading days</span></div>
+          <PerformanceChart dailySeries={dailySeries} />
+          <dl className="command-analytics">
+            <div><dt>Profit factor</dt><dd>{analytics.profitFactor === null ? '—' : Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'}</dd></div>
+            <div><dt>Expectancy</dt><dd>{formatUsd(analytics.expectancyUsd)}</dd></div>
+            <div><dt>Average R</dt><dd>{analytics.avgR.toFixed(2)}R</dd></div>
+            <div><dt>Recovery factor</dt><dd>{analytics.recoveryFactor === null ? '—' : Number.isFinite(analytics.recoveryFactor) ? analytics.recoveryFactor.toFixed(2) : '∞'}</dd></div>
+          </dl>
+        </section>
+        <CompactTodayPanel strategies={strategies} dailySeries={dailySeries} />
+      </div>
+
+      <PortfolioRiskGuard risk={risk} />
+      <CompactStrategyTable strategies={strategies} />
+    </section>
+  );
+}
+
+export default function LiveStrategyBoard({ initialData, compact = false }) {
   const [data, setData] = useState(initialData);
   const [selectedDate, setSelectedDate] = useState('');
   const [refreshState, setRefreshState] = useState({ busy: false, error: '' });
@@ -1197,6 +1340,10 @@ export default function LiveStrategyBoard({ initialData }) {
   const activeDate = selectedDate || dailySeries.at(-1)?.date || buildDailyTotals(strategies).date || '';
   const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && (strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning)).length;
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
+
+  if (compact) {
+    return <CompactDashboard data={data} strategies={strategies} dailySeries={dailySeries} refreshData={refreshData} refreshState={refreshState} />;
+  }
 
   return (
     <section className="live-board">

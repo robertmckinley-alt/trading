@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Link from 'next/link';
+import AppHeader from '../../../components/app-header';
 import LiveStrategyBoard from '../../../components/live-strategy-board';
 import TraderDashboard from '../../../components/trader-dashboard';
 import { getStrategySnapshots } from '../../../lib/live-status.cjs';
@@ -17,6 +18,7 @@ export default async function LiveNineAmSweepPage() {
 
   return (
     <main className="page-shell" id="main-content">
+      <AppHeader section="Paper Account A · strategy detail" />
       <section className="hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Strategy A · 9AM session sweep</p>

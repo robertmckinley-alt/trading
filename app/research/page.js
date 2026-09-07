@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import AppHeader from '../../components/app-header';
 import { getStrategySnapshots } from '../../lib/live-status.cjs';
 import { buildResearchLab } from '../../lib/research-lab.cjs';
 
@@ -39,19 +40,7 @@ export default async function ResearchPage() {
 
   return (
     <main className="page-shell research-page" id="main-content">
-      <header className="app-header">
-        <Link className="brand-lockup brand-link" href="/" aria-label="DoctorTrades dashboard">
-          <span className="brand-mark" aria-hidden="true">DT</span>
-          <div><strong>DoctorTrades</strong><span>Research Lab</span></div>
-        </Link>
-        <nav className="app-nav" aria-label="Research navigation">
-          <Link href="/">Dashboard</Link>
-          <Link href="/backtests">Backtest Results</Link>
-          <Link href="#strategy-reviews">Strategy reviews</Link>
-          <Link href="#memory">Research memory</Link>
-          <Link href="/orb">ORB Lab</Link>
-        </nav>
-      </header>
+      <AppHeader section="Evidence and review" />
 
       <section className="research-hero">
         <div>
