@@ -20,6 +20,16 @@ function fixture(overrides = {}, configOverrides = {}) {
 const candle = (minute, open, high, low, close) => ({
   timestamp: `2026-01-02T15:${String(minute).padStart(2, '0')}:00Z`, open, high, low, close
 });
+test('an overdue session exit uses the first available open before later targets', () => {
+  const { plan, config } = fixture();
+  const result = core.trackTradeLifecycle(plan, [candle(1, 100, 101, 99, 100),
+    { timestamp: '2026-01-02T22:00:00Z', open: 102, high: 120, low: 101, close: 119 }], config,
+  { researchFixedContracts: 1, closeOpenAtEnd: false, flattenAt: '2026-01-02T21:00:00Z' });
+  assert.equal(result.status, 'closed');
+  assert.equal(result.finalExitPrice, 101.75);
+  assert.deepEqual(result.targetsHit, []);
+  assert.match(result.exitReason, /delayed session exit/);
+});
 
 test('market entry is after detection, sizes actual gap risk, and preserves structural stop', () => {
   const { plan, config } = fixture();

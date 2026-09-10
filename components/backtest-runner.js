@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import OrbLearningPanel from './orb-learning-panel';
+import OrbDiscoveryPanel from './orb-discovery-panel';
 
 const STORAGE_KEY = 'doctortrades-since-2025-backtest-v1';
 
@@ -211,7 +212,7 @@ export default function BacktestRunner({ view = 'all' }) {
           {result.validation ? <aside className="backtest-disclosure"><strong>Overfit controls active.</strong> Every strategy now receives rolling six-month/one-month walk-forward diagnostics, doubled-cost stress, a trade-outcome distribution, and 250-run block-bootstrap sequence testing. Parameter search remains limited to declared variants; automatic optimization is disabled.</aside> : null}
           <p>Report completed: {result.generatedAt}</p>
           {result.researchVersion !== 'all-strategy-fixed-risk-v1' && <aside className="backtest-disclosure"><strong>Updated simulation required.</strong> This saved run has independent research results for the ORB close-confirmation experiments only. An updated VPS run is needed to remove accumulated loss cutoffs from the other strategies.</aside>}
-          {orbView ? <OrbLearningPanel result={result} /> : <aside className="backtest-disclosure">Opening-range experiments now have their own page with every chart visible. <Link href="/orb">Open all ORB results →</Link></aside>}
+          {orbView ? <><OrbDiscoveryPanel report={result.discovery} /><OrbLearningPanel result={result} /></> : <aside className="backtest-disclosure">Opening-range experiments now have their own page with every chart visible. <Link href="/orb">Open all ORB results →</Link></aside>}
           {orbView && <h2>Other opening-range strategies</h2>}
           <p>Research results keep evaluating eligible setups through the full date range without an accumulated loss limit. Per-trade sizing and execution costs still apply. The optional guarded account view answers a different question: how a limited account would have performed.</p>
           <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} validation={result.validation?.strategies?.find(item => item.slug === strategy.slug)} />)}</div>

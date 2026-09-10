@@ -17,7 +17,7 @@ async function main() {
     const archivePath = require('node:path').join(require('node:path').dirname(workerData.cachePath), 'research-history',
       `${result.generatedAt.replace(/[:.]/g, '-')}-${result.learning.manifestHash.slice(0, 12)}.json`);
     saveBacktestResult(archivePath, { generatedAt: result.generatedAt, window: result.window,
-      provenance: result.provenance, learning: result.learning });
+      provenance: result.provenance, learning: result.learning, discovery: result.discovery });
     saveBacktestResult(workerData.cachePath, result);
     onProgress({ phase: 'completed', strategies: result.strategies.length, generatedAt: result.generatedAt });
     parentPort.postMessage({ ok: true });

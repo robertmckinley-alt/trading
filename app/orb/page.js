@@ -13,7 +13,7 @@ export default function OrbPage() {
     <AppHeader section="ORB forward research" />
     <section className="research-hero backtest-hero"><div><p className="eyebrow">Opening range breakout · January 2025 onward</p><h1>Every ORB experiment. Every result.</h1><p>Compare each variant below, with its own profit curve, annual results, risk rejections, and searchable trade history. No experiment dropdown.</p></div><aside className="research-safety"><strong>Understand the trade count</strong><p>A signal is not a filled trade. Research tests one NQ contract with no dollar risk cap. Invalid entry gaps can still prevent a fill. Each setup keeps its actual stop and trading costs.</p></aside></section>
     <p><Link href="/comparison">Compare all strategies with buy &amp; hold →</Link></p>
-    <OrbForwardPanel definitions={BACKTEST_STRATEGIES.filter(s => s.slug.startsWith('nq-15m-orb-')).map(({ slug, name }) => ({ slug, name }))} />
+    <OrbForwardPanel definitions={BACKTEST_STRATEGIES.filter(s => s.slug.startsWith('nq-15m-orb-') && s.forwardPaperEligible !== false).map(({ slug, name }) => ({ slug, name }))} />
     <BacktestRunner view="orb" />
   </main>;
 }

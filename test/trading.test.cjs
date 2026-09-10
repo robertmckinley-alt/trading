@@ -964,7 +964,7 @@ test('ORB research variants isolate timing, weekday, and body rules', () => {
   assert.equal(delayed.found, true, delayed.reason);
   assert.equal(delayed.metadata.confirmationBarEnd, session.secondBreak.at(-1).timestamp);
 
-  const monday = buildSession('2026-09-07');
+  const monday = buildSession('2026-09-14');
   const noMonday = detectSignalFromCandles([...monday.opening, ...monday.firstBreak], { ...config, strategySlug: 'nq-15m-orb-no-monday' }, { trades: [] });
   assert.equal(noMonday.found, false);
   assert.match(noMonday.reason, /does not trade on Mon/);

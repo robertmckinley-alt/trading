@@ -30,14 +30,16 @@ async function run() {
   const historyFile = path.join(dir, 'candles.json');
   let state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : forward.createState(config);
   if (state.version !== forward.version(config)) {
+    LEGACY_COMPATIBLE_VERSIONS.add(forward.version(config, 'orb-forward-paper-v1'));
     const expectedSlugs = forward.DEFINITIONS.map((definition) => definition.slug);
     const savedSlugs = (state.accounts || []).map((account) => account.slug);
     const legacyCompatible = LEGACY_COMPATIBLE_VERSIONS.has(state.version)
       && JSON.stringify(savedSlugs) === JSON.stringify(expectedSlugs);
     if (legacyCompatible) {
+      for (const account of state.accounts) if (account.active) account.active.rulesVersion ||= state.version;
       state.migrations = [...(state.migrations || []), {
         at: new Date().toISOString(), from: state.version, to: forward.version(config),
-        reason: 'Version hashing isolated from unrelated non-ORB strategy files; ORB definitions and journals unchanged.'
+        reason: 'Cash-session calendar and scheduled-close repair. Existing journals retained; old gap trades remain unverified.'
       }];
       state.version = forward.version(config);
       forward.atomic(stateFile, state);
@@ -47,6 +49,7 @@ async function run() {
     }
   }
   let history = forward.mergeCandles(forward.readWarmup(root, config), fs.existsSync(historyFile) ? JSON.parse(fs.readFileSync(historyFile)) : []);
+  const implementationHash = require('../lib/orb-discovery.cjs').implementationHash();
   console.log(`${new Date().toISOString()} STARTED nine ORB forward-paper accounts; rules=${state.version}`);
   async function tick() {
     try {
@@ -54,7 +57,9 @@ async function run() {
       const now = Date.now();
       // Work on a copy: a failed tick cannot partially journal a trade twice.
       const next = JSON.parse(JSON.stringify(state));
-      forward.advance(next, candles, history, config, now);
+      const candidateFile = path.join(root, 'runtime/orb-discovery/paper-candidates.json');
+      if (fs.existsSync(candidateFile)) forward.attachCandidates(next, JSON.parse(fs.readFileSync(candidateFile)), implementationHash, now);
+      forward.advance(next, candles, history, config, now, { implementationHash });
       if (next.status === 'running' && !require('../lib/market-feed-status.cjs').clock(new Date(now)).orbEntryWindow) next.status = 'watching-outside-orb-window';
       const changed = next.cursor !== state.cursor;
       forward.atomic(stateFile, next); state = next;

@@ -141,5 +141,6 @@ test('all extensions run through research backtests and preserve the nine locked
     assert.equal(forward.DEFINITIONS.some(s => s.slug === slug), false);
   }
   assert.equal(forward.DEFINITIONS.length, 9);
-  assert.equal(forward.version(config), '765e8ae1bf6fd108');
+  assert.equal(forward.version(config, 'orb-forward-paper-v1'), '765e8ae1bf6fd108');
+  assert.notEqual(forward.version(config), '765e8ae1bf6fd108');
 });

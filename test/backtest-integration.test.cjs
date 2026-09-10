@@ -34,7 +34,7 @@ test('historical fetch flows through all algorithms into versioned learning with
     assert.equal(result.validation.parameterRobustness.testedVariants, 11, 'fade is evaluated separately, not counted as a neighboring breakout parameter');
     assert.equal(result.validation.controls.automaticOptimization, false);
     assert.equal(result.learning.candidate, null);
-    assert.equal(result.provenance.executionVersion, 'orb-execution-v2');
+    assert.equal(result.provenance.executionVersion, 'orb-execution-v3-cash-session');
     assert.equal(result.provenance.dataFingerprint.length, 64);
     const baseline = result.strategies.find((s) => s.slug === 'nq-15m-orb-close-confirmation');
     assert.equal(baseline.research.trades.length, 2);
