@@ -59,6 +59,8 @@ async function run() {
       const next = JSON.parse(JSON.stringify(state));
       const candidateFile = path.join(root, 'runtime/orb-discovery/paper-candidates.json');
       if (fs.existsSync(candidateFile)) forward.attachCandidates(next, JSON.parse(fs.readFileSync(candidateFile)), implementationHash, now);
+      const patternFile = path.join(root, 'runtime/price-action/paper-candidates.json');
+      if (fs.existsSync(patternFile)) forward.attachCandidates(next, JSON.parse(fs.readFileSync(patternFile)).slice(0, 3), implementationHash, now);
       forward.advance(next, candles, history, config, now, { implementationHash });
       if (next.status === 'running' && !require('../lib/market-feed-status.cjs').clock(new Date(now)).orbEntryWindow) next.status = 'watching-outside-orb-window';
       const changed = next.cursor !== state.cursor;

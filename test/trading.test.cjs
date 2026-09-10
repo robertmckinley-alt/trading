@@ -740,7 +740,7 @@ test('strategy registry gives all nine bots isolated runtime files and risk fami
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
   assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
-  assert.equal(BACKTEST_STRATEGIES.length, 26);
+  assert.equal(BACKTEST_STRATEGIES.length, 29);
   assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });

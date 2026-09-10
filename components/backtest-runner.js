@@ -24,7 +24,7 @@ function recommendationClass(value) {
   return 'research-verdict-warn';
 }
 
-function BacktestCard({ strategy, validation }) {
+function BacktestCard({ strategy, validation, qualification }) {
   const [accountView, setAccountView] = useState(false);
   const research = strategy.research;
   const source = accountView ? strategy : research;
@@ -38,6 +38,7 @@ function BacktestCard({ strategy, validation }) {
         <strong className={`research-verdict ${recommendationClass(review.recommendation)}`}>{recommendation}</strong>
       </header>
       <p>{accountView ? 'Separate account simulation with accumulated loss limits.' : 'Full-history research. Accumulated losses never stop the simulation.'}</p>
+      {qualification && <div className="research-flags"><strong>{qualification.frozenCodeChanged ? 'Paper candidate needs code review' : qualification.paperSelected ? 'Selected for independent $50,000 forward paper account' : 'Historical candidate only'}</strong><p>Retrospective screening; future paper performance remains unverified.</p>{qualification.issues?.length > 0 && <ul>{qualification.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}</div>}
       <button className="secondary-button" type="button" onClick={() => setAccountView(!accountView)}>{accountView ? 'Show full-history research' : 'Show account with loss limits'}</button>
       <dl className="backtest-metrics">
         <div><dt>Simulated trades</dt><dd>{review.total.trades}</dd></div>
@@ -215,7 +216,7 @@ export default function BacktestRunner({ view = 'all' }) {
           {orbView ? <><OrbDiscoveryPanel report={result.discovery} /><OrbLearningPanel result={result} /></> : <aside className="backtest-disclosure">Opening-range experiments now have their own page with every chart visible. <Link href="/orb">Open all ORB results →</Link></aside>}
           {orbView && <h2>Other opening-range strategies</h2>}
           <p>Research results keep evaluating eligible setups through the full date range without an accumulated loss limit. Per-trade sizing and execution costs still apply. The optional guarded account view answers a different question: how a limited account would have performed.</p>
-          <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} validation={result.validation?.strategies?.find(item => item.slug === strategy.slug)} />)}</div>
+          <div className="backtest-grid">{visibleStrategies.map((strategy) => <BacktestCard key={strategy.slug} strategy={strategy} validation={result.validation?.strategies?.find(item => item.slug === strategy.slug)} qualification={result.priceActionQualification?.reviews?.find(item => item.slug === strategy.slug)} />)}</div>
           <p className="backtest-method">{result.methodology} Cost model: {result.costs.slippageTicks} tick slippage per applicable fill and ${result.costs.commissionPerContractUsd} round-trip commission per contract. A one-contract position exits fully at its first target. The trailing 30% account sample is retrospective, not an untouched holdout.</p>
         </section>
       ) : null}
