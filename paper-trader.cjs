@@ -381,12 +381,12 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 
     let plan;
     try {
-      if (!adaptiveDecision.risk.allowed) {
+      if (config.strategySlug !== 'nq-vwap-stretch-reversion' && !adaptiveDecision.risk.allowed) {
         state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, adaptiveDecision.risk);
         saveLiveState(statePath, state);
         throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
       }
-      const adaptiveConfig = applyAdaptiveRisk(config, adaptiveDecision);
+      const adaptiveConfig = config.strategySlug === 'nq-vwap-stretch-reversion' ? config : applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
       if (plan.setup.execution === 'next-bar-market') {
         // Forward paper fills cannot precede the time this watcher actually observed the signal.
@@ -503,6 +503,7 @@ async function main() {
   const statePath = statePathForStrategy(strategySlug);
   const config = {
     ...loadConfig(),
+    ...(strategySlug === 'nq-vwap-stretch-reversion' ? require('./lib/vwap-stretch.cjs').ACCOUNT : {}),
     strategySlug,
     strategyFamily: strategyDefinition.strategyFamily
   };
