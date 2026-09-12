@@ -381,12 +381,12 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 
     let plan;
     try {
-      if (config.strategySlug !== 'nq-vwap-stretch-reversion' && !adaptiveDecision.risk.allowed) {
+      if (!['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.strategySlug) && !adaptiveDecision.risk.allowed) {
         state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, adaptiveDecision.risk);
         saveLiveState(statePath, state);
         throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
       }
-      const adaptiveConfig = config.strategySlug === 'nq-vwap-stretch-reversion' ? config : applyAdaptiveRisk(config, adaptiveDecision);
+      const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.strategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
       if (plan.setup.execution === 'next-bar-market') {
         // Forward paper fills cannot precede the time this watcher actually observed the signal.
@@ -503,6 +503,7 @@ async function main() {
   const statePath = statePathForStrategy(strategySlug);
   const config = {
     ...loadConfig(),
+    ...(strategySlug === 'mgc-open-ema12' ? require('./lib/gold-open-ema.cjs').config(loadConfig()) : {}),
     ...(strategySlug === 'nq-vwap-stretch-reversion' ? require('./lib/vwap-stretch.cjs').ACCOUNT : {}),
     strategySlug,
     strategyFamily: strategyDefinition.strategyFamily

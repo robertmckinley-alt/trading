@@ -727,11 +727,11 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
-test('strategy registry gives all ten bots isolated runtime files and risk families', () => {
-  assert.equal(STRATEGIES.length, 10);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 10);
+test('strategy registry gives all eleven bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 11);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 11);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 10);
+  assert.equal(new Set(paths).size, 11);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
