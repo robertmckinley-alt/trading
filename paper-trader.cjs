@@ -339,6 +339,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     }
 
     const signal = detectSignalFromCandles(candles, config, state);
+    if (signal.found) signal.metadata = { ...signal.metadata, patternMatching: require('./lib/pattern-matching.cjs').advisory(BASE, candles, config, signal) };
     state.live.researchContext = signal.metadata || null;
     state.live.researchCouncil = buildResearchCouncilReview({
       signal,

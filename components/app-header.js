@@ -6,7 +6,8 @@ const navigation = [
   { href: '/orb', label: 'ORB Lab' },
   { href: '/backtests', label: 'Backtests' },
   { href: '/comparison', label: 'Compare' },
-  { href: '/research', label: 'Research' }
+  { href: '/research', label: 'Research' },
+  { href: '/patterns', label: 'Patterns' }
 ];
 
 export default function AppHeader({ section = 'NQ paper research' }) {

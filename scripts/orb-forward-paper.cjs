@@ -64,6 +64,15 @@ async function run() {
       forward.advance(next, candles, history, config, now, { implementationHash });
       if (next.status === 'running' && !require('../lib/market-feed-status.cjs').clock(new Date(now)).orbEntryWindow) next.status = 'watching-outside-orb-window';
       const changed = next.cursor !== state.cursor;
+      for (const account of next.accounts) {
+        const plan = account.active?.plan;
+        if (plan && !plan.signalContext?.patternMatching) {
+          const available = forward.mergeCandles(history, candles);
+          const advice = require('../lib/pattern-matching.cjs').advisory(root, available,
+            { ...config, strategySlug: account.slug }, { found: true, setup: plan.setup });
+          plan.signalContext = { ...plan.signalContext, patternMatching: advice };
+        }
+      }
       forward.atomic(stateFile, next); state = next;
       if (changed) {
         history = forward.mergeCandles(history, candles).filter(c => Date.parse(c.timestamp) >= now - 75 * 86400000 && Date.parse(c.timestamp) + 60000 <= now);

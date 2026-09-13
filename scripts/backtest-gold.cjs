@@ -12,6 +12,8 @@ try {
   for(const file of ['lib/gold-open-ema.cjs','lib/trader-core.cjs','lib/live-trader.cjs','lib/backtest-engine.cjs','lib/orb-session.cjs']) hash.update(fs.readFileSync(file));
   result.codeHash=hash.digest('hex');result.dataHash=require('node:crypto').createHash('sha256').update(JSON.stringify(input)).digest('hex');
   result.symbol='MGC.v.0';result.firstCandleAt=input.candles[0].timestamp;result.lastCandleAt=input.candles.at(-1).timestamp;
+  const patterns=require('../lib/pattern-matching.cjs').build(input.candles,result);
+  result.patternMatching=patterns.report;require('../lib/pattern-matching.cjs').saveModel(process.cwd(),'MGC',patterns.model);
   result.methodology='Gold opening EMA12 adaptation: next-bar market fills, costs, stop gaps and completed-five-minute trailing after 1R. Research and guarded $50k account are separate; no claim of source replication.';
   fs.mkdirSync('runtime',{recursive:true});
   const out='runtime/gold-backtest-results.json';fs.writeFileSync(out+'.tmp',JSON.stringify(result));fs.renameSync(out+'.tmp',out);
