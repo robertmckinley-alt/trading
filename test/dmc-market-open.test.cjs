@@ -97,3 +97,15 @@ test('DMC backtest checks only completed five-minute bars with time left before 
   const records = Array.from({ length: 70 }, (_, index) => ({ minute: 570 + index, candle: { timestamp: new Date(index * 60_000).toISOString() } }));
   assert.deepEqual(checkpointsForDay('nq-dmc-market-open', records).map((record) => record.minute), [574, 579, 584, 589, 594, 599, 604, 609, 614, 619, 624]);
 });
+
+test('DMC pre-open bias remains frozen after the 09:00 hour completes', () => {
+  const { preOpenHours } = require('../lib/dmc-market-open.cjs');
+  for (const date of ['2026-02-03', '2026-07-07']) {
+    const eight = minuteHour(Date.parse(timestampForWallClock(date, '08:00')), {open:100,high:102,low:99,close:101});
+    const nine = minuteHour(Date.parse(timestampForWallClock(date, '09:00')), {open:101,high:150,low:90,close:145});
+    const before = preOpenHours([...eight,...nine.slice(0,35)],date,24);
+    const after = preOpenHours([...eight,...nine],date,24);
+    assert.deepEqual(after,before);
+    assert.equal(after.at(-1).minute,480);
+  }
+});
