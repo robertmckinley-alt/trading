@@ -200,6 +200,36 @@ npm run trader:watch:status
 npm run trader:watch:stop
 ```
 
+## Secondary futures history
+
+London Strategic Edge data stays separate from the Databento cache and live feed. Authenticated discovery checks `/usage`, `/meta`, and `/catalog` before downloading one bounded `1m` candle page. Set the key only in the environment; generated files are created without overwrite below `runtime/secondary-history/`.
+
+```bash
+export LSE_API_KEY=lse_live_your_key
+npm run history:download:lse -- \
+  --symbol NQ.F --dataset futures \
+  --start 2026-09-01T00:00:00Z --end 2026-09-02T00:00:00Z \
+  --output nq-sample.csv
+
+npm run history:audit -- \
+  --input runtime/secondary-history/nq-sample.csv \
+  --provider "London Strategic Edge" --symbol NQ.F \
+  --output nq-audit.json
+
+npm run history:compare -- \
+  --candidate runtime/secondary-history/nq-sample.csv \
+  --databento /path/to/databento-overlap.json \
+  --output nq-vs-databento.json
+
+npm run history:replay -- \
+  --input runtime/secondary-history/nq-sample.csv \
+  --provider "London Strategic Edge" --symbol NQ.F \
+  --acknowledge-derived-series --allow-gaps \
+  --output nq-replay.json
+```
+
+The importer requires timezone-aware timestamps, finite OHLCV values, valid candle geometry, unique ascending timestamps, and exact minute alignment. It reports every gap without filling it. `--allow-gaps` is an explicit replay override for reviewed closures and is recorded in provenance. `NQ.F` remains an unverified vendor-derived identity until its roll and price basis match Databento. The public catalogue exposes about one year for `NQ.F`, lists no MGC dataset, and does not justify substituting `GC.F` for MGC. The existing ORB calendar also skips dates outside reviewed 2025–2026 sessions.
+
 ## Live Feed Config
 
 The live watcher reads its feed settings from `config.json` plus environment variables.
