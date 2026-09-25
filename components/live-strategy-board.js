@@ -1151,7 +1151,25 @@ function CompactMetric({ label, value, detail, tone = '' }) {
   );
 }
 
-function CompactStrategyTable({ strategies }) {
+function compactWatcherStatus(strategy, orb) {
+  const watcher = strategy.watcher || {};
+  if (watcher.isRunning === true) {
+    if (watcher.isHealthy === true) return { label: 'Running', tone: 'good', title: 'Watcher process and heartbeat are healthy.' };
+    if (strategy.ticker === 'NQ.v.0' && orb?.status === 'waiting-for-fresh-feed' && !orb?.lastError) {
+      return { label: 'Running · market paused', tone: 'warn', title: 'NQ futures are outside the live feed session. The watcher is running and waiting for fresh candles.' };
+    }
+    const label = watcher.statusLabel || '';
+    if (/feed errors?/i.test(label)) return { label: 'Running · feed error', tone: 'warn', title: label };
+    if (/heartbeat stale/i.test(label)) return { label: 'Running · stale heartbeat', tone: 'warn', title: label };
+    return { label: 'Running · check', tone: 'warn', title: label || 'Process is running, but health is not confirmed.' };
+  }
+  if (watcher.hasLiveEvidence) {
+    return { label: 'Offline · saved data', tone: 'warn', title: watcher.staleStatusHint || watcher.statusLabel || 'Saved strategy data exists, but the watcher process is not running.' };
+  }
+  return { label: 'Offline', tone: '', title: watcher.statusLabel || 'No active watcher process or saved live evidence.' };
+}
+
+function CompactStrategyTable({ strategies, orb }) {
   const ranked = strategies.slice().sort((a, b) => (
     Number(b.journal?.realizedPnlUsd || 0) - Number(a.journal?.realizedPnlUsd || 0)
   ));
@@ -1169,7 +1187,7 @@ function CompactStrategyTable({ strategies }) {
             {ranked.map((strategy) => {
               const journal = strategy.journal || {};
               const evaluation = strategy.research?.evaluation || {};
-              const running = strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning;
+              const status = compactWatcherStatus(strategy, orb);
               const trades = Number(journal.trades || 0);
               const wins = Number(journal.wins || 0);
               const today = Number(journal.daily?.activePnlUsd || 0);
@@ -1180,7 +1198,7 @@ function CompactStrategyTable({ strategies }) {
                   <th scope="row">
                     <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}</span></Link>
                   </th>
-                  <td><span className={`table-status ${running ? 'table-status-good' : strategy.watcher?.hasLiveEvidence ? 'table-status-warn' : ''}`}><i aria-hidden="true" />{running ? 'Running' : strategy.watcher?.hasLiveEvidence ? 'Check' : 'Offline'}</span></td>
+                  <td><span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span></td>
                   <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
                   <td className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</td>
                   <td className={realized >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(realized)}</td>
@@ -1240,16 +1258,22 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
   const daily = buildDailyTotals(strategies);
   const analytics = buildPerformanceAnalytics(strategies, dailySeries);
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
-  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && (strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning)).length;
+  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isRunning === true).length;
+  const healthyWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isHealthy === true).length;
   const risk = data?.portfolioRisk;
   const orb = data?.orbForward;
   const winRate = totals.trades ? (totals.wins / totals.trades) * 100 : 0;
-  const allHealthy = Boolean(watcherCount && runningWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
+  const allHealthy = Boolean(watcherCount && runningWatchers === watcherCount && healthyWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
+  const dashboardStatus = !watcherCount || runningWatchers < watcherCount
+    ? 'Watcher offline'
+    : healthyWatchers < watcherCount || orb?.status === 'runner-offline' || data?.error
+      ? 'Feed or health check'
+      : 'All systems operational';
 
   return (
     <section className="command-dashboard" aria-label="Live paper trading overview">
       <div className={`system-ribbon ${allHealthy ? 'system-ribbon-good' : 'system-ribbon-warn'}`}>
-        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : 'System check required'}</strong><small>{runningWatchers}/{watcherCount} primary watchers · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
+        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : dashboardStatus}</strong><small>{runningWatchers}/{watcherCount} watcher processes running · {healthyWatchers} healthy · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
         <div className="system-ribbon-meta"><span>{data?.source === 'remote-bridge' ? 'Live VPS bridge' : data?.source === 'remote-bridge-cache' ? 'Cached VPS snapshot' : data?.source === 'remote-bridge-fallback' ? 'Fallback snapshot' : 'Local runtime'}</span><time dateTime={data?.generatedAt || undefined}>{formatStamp(data?.generatedAt)}</time><button disabled={refreshState.busy} onClick={refreshData} type="button">{refreshState.busy ? 'Refreshing…' : 'Refresh'}</button></div>
       </div>
 
@@ -1278,7 +1302,7 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
       </div>
 
       <PortfolioRiskGuard risk={risk} />
-      <CompactStrategyTable strategies={strategies} />
+      <CompactStrategyTable strategies={strategies} orb={orb} />
     </section>
   );
 }
@@ -1338,7 +1362,8 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
   const isBridgeFallback = data?.source === 'remote-bridge-fallback';
   const dailySeries = useMemo(() => buildDailySeries(strategies), [strategies]);
   const activeDate = selectedDate || dailySeries.at(-1)?.date || buildDailyTotals(strategies).date || '';
-  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && (strategy.watcher?.isHealthy ?? strategy.watcher?.isRunning)).length;
+  const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isRunning === true).length;
+  const healthyWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isHealthy === true).length;
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
 
   if (compact) {
@@ -1353,8 +1378,8 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
           <h2>Daily trading control center</h2>
         </div>
         <div className="live-board-meta">
-          <span className={runningWatchers === watcherCount && watcherCount ? 'source-status source-status-good' : 'source-status source-status-warn'}>
-            {runningWatchers}/{watcherCount} watchers online
+          <span className={runningWatchers === watcherCount && healthyWatchers === watcherCount && watcherCount ? 'source-status source-status-good' : 'source-status source-status-warn'}>
+            {runningWatchers}/{watcherCount} processes · {healthyWatchers} healthy
           </span>
           <span>{isBridgeFallback ? 'Fallback snapshot' : data?.source === 'remote-bridge-cache' ? 'Last good VPS snapshot' : data?.source === 'remote-bridge' ? 'Live VPS bridge' : 'Local runtime'} · {formatStamp(data?.generatedAt)}</span>
           <button className="refresh-button" disabled={refreshState.busy} onClick={refreshData} type="button">
