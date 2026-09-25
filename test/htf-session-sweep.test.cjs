@@ -59,3 +59,20 @@ test('HTF session sweep backtest evaluates every minute in its entry window', ()
   assert.equal(checkpoints.at(-1), 689);
   assert.equal(checkpoints.length, 210);
 });
+
+test('a newer rejection does not hide a fresh break of an earlier confirmation', () => {
+  const input = validLongSetup().slice(0, -1);
+  for (let i = 0; i < 5; i++) input.push(candle(new Date(Date.parse('2026-02-03T13:05:00Z') + i * 60000).toISOString(), 99 + i * .4, 99.4 + i * .4, i === 2 ? { high: 105 } : {}));
+  input.push(candle('2026-02-03T13:10:00.000Z',101,102));
+  const s = detectHtfSessionSweepSignal(input, { ...config, live: { ...config.live, htfSessionSweep: { minimumConfirmationBodyFraction: .1 } } }, { trades: [] });
+  assert.equal(s.found, true, s.reason);
+  assert.equal(s.metadata.confirmationAt, '2026-02-03T13:04:00.000Z');
+});
+
+test('a confirmation outside both Asia boundaries is not a return inside value', () => {
+  const input = validLongSetup();
+  for (const c of input.slice(-6)) { c.open += 20; c.close += 20; c.high += 20; c.low += 20; }
+  const s = detectHtfSessionSweepSignal(input, config, { trades: [] });
+  assert.equal(s.found, false);
+  assert.match(s.reason, /back inside/);
+});

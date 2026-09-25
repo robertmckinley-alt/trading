@@ -38,6 +38,11 @@ test('historical fetch flows through all algorithms into versioned learning with
     assert.equal(result.provenance.dataFingerprint.length, 64);
     const baseline = result.strategies.find((s) => s.slug === 'nq-15m-orb-close-confirmation');
     assert.equal(baseline.research.trades.length, 2);
+    assert.equal(baseline.signalDiagnostics.daysEvaluated, 2);
+    assert.equal(baseline.signalDiagnostics.noSignalDays, 0);
+    const htf = result.strategies.find(s => s.slug === 'nq-htf-session-sweep');
+    assert.equal(htf.signalDiagnostics.noSignalDays, 2);
+    assert.equal(Object.values(htf.signalDiagnostics.reasons).reduce((sum, count) => sum + count, 0), htf.signalDiagnostics.checkpoints);
     assert.equal(result.orbResearchVersion, 'one-contract-v1');
     assert.ok(result.learning.trials.every(trial => trial.sizingMode === 'fixed-contract' && trial.valid));
     assert.equal(result.learning.manifest.researchMode, 'fixed-contract');
