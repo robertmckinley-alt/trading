@@ -2,10 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import signal
-import subprocess
-import sys
 import tempfile
-import time
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -81,28 +78,31 @@ class FeedWatchdogTests(unittest.TestCase):
             w.stop_processes([(123, 'old-start-time')], grace=0)
             kill.assert_not_called()
 
-    def test_hung_feed_kill_and_gold_process_isolation(self):
+    def test_process_match_isolates_nq_from_gold_feed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             (root / 'scripts').mkdir()
-            script = root / 'scripts/databento-live-feed.py'
-            script.write_text('import signal,time\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nprint("ready",flush=True)\ntime.sleep(60)\n')
-            nq = subprocess.Popen([sys.executable, 'scripts/databento-live-feed.py', '--output', 'runtime/databento-live.json'], cwd=root, stdout=subprocess.PIPE)
-            gold = subprocess.Popen([sys.executable, 'scripts/databento-live-feed.py', '--symbol', 'MGC.v.0', '--output', 'runtime/databento-gold-live.json'], cwd=root, stdout=subprocess.PIPE)
-            try:
-                nq.stdout.readline()
-                gold.stdout.readline()
-                processes = w.feed_processes(root, root / 'runtime/databento-live.json', 'NQ.v.0')
-                self.assertEqual([pid for pid, _ in processes], [nq.pid])
-                w.stop_processes(processes, grace=0.1)
-                self.assertEqual(nq.wait(timeout=2), -signal.SIGKILL)
-                self.assertIsNone(gold.poll())
-            finally:
-                for child in [nq, gold]:
-                    if child.poll() is None:
-                        child.kill()
-                    child.wait()
-                    child.stdout.close()
+            (root / 'scripts/databento-live-feed.py').touch()
+            fake_proc = root / 'proc'
+            fake_proc.mkdir()
+            for pid, symbol, output in [
+                ('101', 'NQ.v.0', 'runtime/databento-live.json'),
+                ('202', 'MGC.v.0', 'runtime/databento-gold-live.json'),
+            ]:
+                entry = fake_proc / pid
+                entry.mkdir()
+                (entry / 'cwd').symlink_to(root, target_is_directory=True)
+                args = ['python3', 'scripts/databento-live-feed.py', '--symbol', symbol, '--output', output]
+                (entry / 'cmdline').write_bytes(('\0'.join(args) + '\0').encode())
+            nq = w.feed_processes(root, root / 'runtime/databento-live.json', 'NQ.v.0', fake_proc)
+            gold = w.feed_processes(root, root / 'runtime/databento-gold-live.json', 'MGC.v.0', fake_proc)
+            self.assertEqual([pid for pid, _ in nq], [101])
+            self.assertEqual([pid for pid, _ in gold], [202])
+
+    def test_hung_feed_escalates_term_to_kill(self):
+        with patch.object(w, 'process_identity', side_effect=['same', 'same', 'same']), patch.object(w.os, 'kill') as kill:
+            w.stop_processes([(123, 'same')], grace=0)
+            self.assertEqual([call.args[1] for call in kill.call_args_list], [signal.SIGTERM, signal.SIGKILL])
 
 
 if __name__ == '__main__':
