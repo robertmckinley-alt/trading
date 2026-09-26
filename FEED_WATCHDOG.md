@@ -1,6 +1,6 @@
 # Feed recovery watchdog
 
-Run the installer on the Ubuntu VPS host as root. The host cron service invokes a short-lived check inside the existing container every minute, independently of the status server and trading bots. Cron resumes after host/container restarts; it does not start a stopped container.
+Run the installer on the Ubuntu VPS host as root. The host cron service invokes a short-lived check inside the existing container every minute, independently of the status server. It recovers stale NQ/enabled-gold feeds and restarts missing paper strategy watcher processes. Cron resumes after host/container restarts; it does not start a stopped container.
 
 ```bash
 docker exec openclaw-anwx-openclaw-1 sh -lc 'cd /data/.openclaw/workspace/lucid-nq-paper-trader && git pull --ff-only origin main'
@@ -29,6 +29,6 @@ tail -n 20 /var/log/trading-feed-watchdog.log
 docker exec openclaw-anwx-openclaw-1 cat /data/.openclaw/workspace/lucid-nq-paper-trader/runtime/feed-watchdog-status.json
 ```
 
-`checkedAt` must advance every minute. Feed status is `healthy`, `recovering`, `cooldown`, `market-closed`, or `error`. Logs remain local; no Telegram/email messages are sent. Logrotate retains four weekly host logs. The host watchdog detects a stopped container through failed cron executions in that log, but cannot recover a dead VPS. Remove `/etc/cron.d/trading-feed-watchdog` to disable automated recovery before intentionally stopping feeds.
+`checkedAt` must advance every minute. Feed status is `healthy`, `recovering`, `cooldown`, `market-closed`, or `error`. Strategy status is saved in `runtime/strategy-watchdog-state.json` with values such as `running`, `starting`, `restart-cooldown`, or `duplicate-processes`. Logs remain local; no Telegram/email messages are sent. Logrotate retains four weekly host logs. The host watchdog detects a stopped container through failed cron executions in that log, but cannot recover a dead VPS. Remove `/etc/cron.d/trading-feed-watchdog` to disable automated recovery before intentionally stopping feeds.
 
 Validation: `python3 test/feed-watchdog.test.py` (includes a real hung Python process, forced termination, and verification that the separate gold process is untouched). Node/shell syntax checks are also required. No live feed credentials or network subscription are used in tests.
