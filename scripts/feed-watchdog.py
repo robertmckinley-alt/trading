@@ -62,9 +62,9 @@ def process_identity(pid):
         return None
 
 
-def feed_processes(root, output, symbol):
+def feed_processes(root, output, symbol, proc_dir='/proc'):
     matches = []
-    for entry in Path('/proc').iterdir():
+    for entry in Path(proc_dir).iterdir():
         if not entry.name.isdigit():
             continue
         try:

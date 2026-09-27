@@ -1155,8 +1155,8 @@ function compactWatcherStatus(strategy, orb) {
   const watcher = strategy.watcher || {};
   if (watcher.isRunning === true) {
     if (watcher.isHealthy === true) return { label: 'Running', tone: 'good', title: 'Watcher process and heartbeat are healthy.' };
-    if (strategy.ticker === 'NQ.v.0' && orb?.status === 'waiting-for-fresh-feed' && !orb?.lastError) {
-      return { label: 'Running · market paused', tone: 'warn', title: 'NQ futures are outside the live feed session. The watcher is running and waiting for fresh candles.' };
+    if (strategy.ticker === 'NQ.v.0' && orb?.feed?.regularMarketClosed === true) {
+      return { label: 'Running · market closed', tone: 'warn', title: 'NQ futures are closed. The watcher is running and will evaluate fresh candles when the session reopens.' };
     }
     const label = watcher.statusLabel || '';
     if (/feed errors?/i.test(label)) return { label: 'Running · feed error', tone: 'warn', title: label };
@@ -1262,18 +1262,22 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
   const healthyWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isHealthy === true).length;
   const risk = data?.portfolioRisk;
   const orb = data?.orbForward;
+  const marketClosed = orb?.feed?.regularMarketClosed === true;
+  const waitingForOpen = marketClosed ? strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.ticker === 'NQ.v.0' && strategy.watcher?.isRunning === true && strategy.watcher?.isHealthy !== true).length : 0;
   const winRate = totals.trades ? (totals.wins / totals.trades) * 100 : 0;
   const allHealthy = Boolean(watcherCount && runningWatchers === watcherCount && healthyWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
-  const dashboardStatus = !watcherCount || runningWatchers < watcherCount
-    ? 'Watcher offline'
-    : healthyWatchers < watcherCount || orb?.status === 'runner-offline' || data?.error
+  const dashboardStatus = marketClosed
+    ? runningWatchers < watcherCount ? `Market closed · ${watcherCount - runningWatchers} watchers offline` : 'Market closed · watchers waiting'
+    : !watcherCount || runningWatchers < watcherCount
+      ? 'Watcher offline'
+      : healthyWatchers < watcherCount || orb?.status === 'runner-offline' || data?.error
       ? 'Feed or health check'
       : 'All systems operational';
 
   return (
     <section className="command-dashboard" aria-label="Live paper trading overview">
       <div className={`system-ribbon ${allHealthy ? 'system-ribbon-good' : 'system-ribbon-warn'}`}>
-        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : dashboardStatus}</strong><small>{runningWatchers}/{watcherCount} watcher processes running · {healthyWatchers} healthy · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
+        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : dashboardStatus}</strong><small>{runningWatchers}/{watcherCount} processes running · {healthyWatchers} feeds healthy{waitingForOpen ? ` · ${waitingForOpen} waiting for futures to reopen` : ''} · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
         <div className="system-ribbon-meta"><span>{data?.source === 'remote-bridge' ? 'Live VPS bridge' : data?.source === 'remote-bridge-cache' ? 'Cached VPS snapshot' : data?.source === 'remote-bridge-fallback' ? 'Fallback snapshot' : 'Local runtime'}</span><time dateTime={data?.generatedAt || undefined}>{formatStamp(data?.generatedAt)}</time><button disabled={refreshState.busy} onClick={refreshData} type="button">{refreshState.busy ? 'Refreshing…' : 'Refresh'}</button></div>
       </div>
 
