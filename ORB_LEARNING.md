@@ -40,7 +40,11 @@ The evaluator compares each complete six-month training period, selects a qualif
 
 Training requires at least 50 simulated trades, positive expectancy and profit factor at least 1.2. Aggregate selected test periods require at least 15 simulated trades and the same profitability criteria. Both must survive doubled execution costs. These gates are research filters, not statistical proof.
 
-2025/2026 have already influenced the trial definitions. The walk-forward results are therefore labeled retrospective. No historical trade counts as a verified forward-paper trade. No module automatically changes live strategy rules or raises live risk. A qualifying nomination remains a candidate for a separately frozen forward-paper test. The existing forward risk controls can hold or reduce paper risk as new outcomes arrive.
+2025/2026 have already influenced the trial definitions. The walk-forward results are therefore labeled retrospective. No historical trade counts as a verified forward-paper trade. No module automatically changes live strategy rules or raises live risk. With `learning.autoCreatePaperCandidates` enabled, a qualifying nomination can automatically start an isolated, frozen challenger paper account (up to `maxConcurrentPaperCandidates`). It must then collect 50 data-complete forward trades before stopping for review. The candidate inherits its frozen NQ settings: $50,000 start, 10% account floor, $500 per-trade risk ceiling, and $750 daily loss limit. Existing primary ORB research accounts keep their one-contract research sizing and are not changed by this guard.
+
+Other learning components remain separate. Forward-risk learning can reduce risk in response to recent losses; it cannot increase size or rewrite entry rules. Pattern matching returns shadow advice based on historical analogs; a similarity score alone cannot create an account or place a trade. Only the explicit research nomination pipeline can create challenger accounts, and each candidate retains its own frozen rules and journal.
+
+On the live dashboard, a strategy with at least 20 closed forward trades and profit factor below 1.0 moves to the lower watchlist. It keeps running with its existing paper controls. Its results leave the main-group equity, P&L, trade, and performance metrics, while a separate all-account total remains visible for transparency. Strategies with smaller samples, exactly 1.0 PF, or no computable PF stay in the main group until evidence is sufficient.
 
 ## Coverage limits
 

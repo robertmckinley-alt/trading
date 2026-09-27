@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import strategyCohorts from '../lib/strategy-cohorts.cjs';
+
+const { splitStrategyCohorts } = strategyCohorts;
 
 const timestampFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
@@ -1169,51 +1172,54 @@ function compactWatcherStatus(strategy, orb) {
   return { label: 'Offline', tone: '', title: watcher.statusLabel || 'No active watcher process or saved live evidence.' };
 }
 
-function CompactStrategyTable({ strategies, orb }) {
+function CompactStrategyRows({ strategies, orb }) {
   const ranked = strategies.slice().sort((a, b) => (
     Number(b.journal?.realizedPnlUsd || 0) - Number(a.journal?.realizedPnlUsd || 0)
   ));
-
   return (
-    <section className="command-panel strategy-ranking" aria-labelledby="strategy-ranking-title">
-      <div className="command-panel-head">
-        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Nine accounts. One clean view.</h2></div>
-        <span>Ranked by realized P&amp;L</span>
-      </div>
-      <div className="command-table-wrap">
-        <table className="command-table">
-          <thead><tr><th scope="col">Strategy</th><th scope="col">Status</th><th scope="col">Balance</th><th scope="col">Today</th><th scope="col">Total P&amp;L</th><th scope="col">Trades</th><th scope="col">Win rate</th><th scope="col">Profit factor</th><th scope="col">Drawdown</th></tr></thead>
-          <tbody>
-            {ranked.map((strategy) => {
-              const journal = strategy.journal || {};
-              const evaluation = strategy.research?.evaluation || {};
-              const status = compactWatcherStatus(strategy, orb);
-              const trades = Number(journal.trades || 0);
-              const wins = Number(journal.wins || 0);
-              const today = Number(journal.daily?.activePnlUsd || 0);
-              const realized = Number(journal.realizedPnlUsd || 0);
-              const profitFactor = evaluation.profitFactor;
-              return (
-                <tr key={strategy.slug}>
-                  <th scope="row">
-                    <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}</span></Link>
-                  </th>
-                  <td><span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span></td>
-                  <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
-                  <td className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</td>
-                  <td className={realized >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(realized)}</td>
-                  <td>{trades}</td>
-                  <td>{trades ? formatPercent((wins / trades) * 100) : '—'}</td>
-                  <td>{profitFactor === null || profitFactor === undefined ? '—' : Number.isFinite(profitFactor) ? Number(profitFactor).toFixed(2) : '∞'}</td>
-                  <td>{formatUsd(evaluation.maxDrawdownUsd || 0)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="command-panel-foot"><Link href="/research">Review qualification gates</Link><span>Click any strategy for signals, rules, and full evidence.</span></div>
-    </section>
+    <>
+      {ranked.map((strategy) => {
+        const journal = strategy.journal || {};
+        const evaluation = strategy.research?.evaluation || {};
+        const status = compactWatcherStatus(strategy, orb);
+        const trades = Number(journal.trades || 0);
+        const wins = Number(journal.wins || 0);
+        const today = Number(journal.daily?.activePnlUsd || 0);
+        const realized = Number(journal.realizedPnlUsd || 0);
+        const profitFactor = evaluation.profitFactor;
+        return (
+          <tr key={strategy.slug}>
+            <th scope="row"><Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}</span></Link></th>
+            <td><span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span></td>
+            <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
+            <td className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</td>
+            <td className={realized >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(realized)}</td>
+            <td>{trades}</td>
+            <td>{trades ? formatPercent((wins / trades) * 100) : '—'}</td>
+            <td>{profitFactor === null || profitFactor === undefined ? '—' : Number.isFinite(profitFactor) ? Number(profitFactor).toFixed(2) : '∞'}</td>
+            <td>{formatUsd(evaluation.maxDrawdownUsd || 0)}</td>
+          </tr>
+        );
+      })}
+    </>
+  );
+}
+
+function CompactStrategyTable({ strategies, watchlist, orb, minimumTrades, profitFactorBelow }) {
+  const columns = <thead><tr><th scope="col">Strategy</th><th scope="col">Status</th><th scope="col">Balance</th><th scope="col">Today</th><th scope="col">Total P&amp;L</th><th scope="col">Trades</th><th scope="col">Win rate</th><th scope="col">Profit factor</th><th scope="col">Drawdown</th></tr></thead>;
+  return (
+    <>
+      <section className="command-panel strategy-ranking" aria-labelledby="strategy-ranking-title">
+        <div className="command-panel-head"><div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Main strategy group</h2></div><span>Ranked by realized P&amp;L</span></div>
+        <div className="command-table-wrap"><table className="command-table">{columns}<tbody><CompactStrategyRows strategies={strategies} orb={orb} /></tbody></table></div>
+        <div className="command-panel-foot"><Link href="/research">Review qualification gates</Link><span>Click any strategy for signals, rules, and full evidence.</span></div>
+      </section>
+      {watchlist.length > 0 && <section className="command-panel strategy-ranking strategy-watchlist" aria-labelledby="strategy-watchlist-title">
+        <div className="command-panel-head"><div><span className="section-kicker">Still paper trading</span><h2 id="strategy-watchlist-title">Watchlist · profit factor below {profitFactorBelow.toFixed(2)}</h2></div><span>Minimum {minimumTrades} closed trades</span></div>
+        <p>These accounts keep running under their existing paper risk controls. Their results are excluded from the main-group metrics above and remain included in the all-account summary.</p>
+        <div className="command-table-wrap"><table className="command-table">{columns}<tbody><CompactStrategyRows strategies={watchlist} orb={orb} /></tbody></table></div>
+      </section>}
+    </>
   );
 }
 
@@ -1253,10 +1259,13 @@ function CompactTodayPanel({ strategies, dailySeries }) {
   );
 }
 
-function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshState }) {
-  const totals = buildPortfolioTotals(strategies);
-  const daily = buildDailyTotals(strategies);
-  const analytics = buildPerformanceAnalytics(strategies, dailySeries);
+function CompactDashboard({ data, strategies, refreshData, refreshState }) {
+  const cohorts = splitStrategyCohorts(strategies, data?.learning || {});
+  const totals = buildPortfolioTotals(cohorts.main);
+  const allTotals = buildPortfolioTotals(strategies);
+  const daily = buildDailyTotals(cohorts.main);
+  const mainDailySeries = buildDailySeries(cohorts.main);
+  const analytics = buildPerformanceAnalytics(cohorts.main, mainDailySeries);
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
   const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isRunning === true).length;
   const healthyWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isHealthy === true).length;
@@ -1284,7 +1293,7 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
       {refreshState.error || data?.error ? <p className="command-alert" role="status">{refreshState.error || 'The live bridge is unavailable. The last safe snapshot remains visible.'}</p> : null}
 
       <div className="command-metrics">
-        <CompactMetric label="Combined equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized on ${formatUsd(totals.bankrollUsd)}`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
+        <CompactMetric label="Main group equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized on ${formatUsd(totals.bankrollUsd)}`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
         <CompactMetric label="Today’s P&L" value={formatUsd(daily.activePnlUsd)} detail={`${daily.trades} closed · ${daily.openTrades} open`} tone={daily.activePnlUsd >= 0 ? 'positive' : 'negative'} />
         <CompactMetric label="Open risk" value={formatUsd(risk?.reservedRiskUsd || 0)} detail={`${formatUsd(risk?.availableRiskUsd || 0)} available`} />
         <CompactMetric label="Total trades" value={String(totals.trades)} detail={`${formatPercent(winRate)} win rate`} />
@@ -1293,8 +1302,8 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
 
       <div className="command-main-grid">
         <section className="command-panel performance-command-panel" aria-labelledby="command-performance-title">
-          <div className="command-panel-head"><div><span className="section-kicker">Portfolio performance</span><h2 id="command-performance-title">Daily P&amp;L and equity momentum</h2></div><span>Last 30 trading days</span></div>
-          <PerformanceChart dailySeries={dailySeries} />
+          <div className="command-panel-head"><div><span className="section-kicker">Main strategy group</span><h2 id="command-performance-title">Daily P&amp;L and equity momentum</h2></div><span>Last 30 trading days</span></div>
+          <PerformanceChart dailySeries={mainDailySeries} />
           <dl className="command-analytics">
             <div><dt>Profit factor</dt><dd>{analytics.profitFactor === null ? '—' : Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'}</dd></div>
             <div><dt>Expectancy</dt><dd>{formatUsd(analytics.expectancyUsd)}</dd></div>
@@ -1302,11 +1311,13 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
             <div><dt>Recovery factor</dt><dd>{analytics.recoveryFactor === null ? '—' : Number.isFinite(analytics.recoveryFactor) ? analytics.recoveryFactor.toFixed(2) : '∞'}</dd></div>
           </dl>
         </section>
-        <CompactTodayPanel strategies={strategies} dailySeries={dailySeries} />
+        <CompactTodayPanel strategies={cohorts.main} dailySeries={mainDailySeries} />
       </div>
 
+      {cohorts.watchlist.length > 0 && <p className="command-panel-foot strategy-cohort-total"><strong>All accounts, including watchlist:</strong> {formatUsd(allTotals.balanceUsd)} equity · {formatUsd(allTotals.realizedPnlUsd)} realized · {allTotals.trades} closed trades across {strategies.length} strategies.</p>}
+
       <PortfolioRiskGuard risk={risk} />
-      <CompactStrategyTable strategies={strategies} orb={orb} />
+      <CompactStrategyTable strategies={cohorts.main} watchlist={cohorts.watchlist} orb={orb} minimumTrades={cohorts.minimumTrades} profitFactorBelow={cohorts.profitFactorBelow} />
     </section>
   );
 }

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { validate, runDaily, monitor } = require('../lib/orb-discovery.cjs');
-const { attachCandidates, createState } = require('../lib/orb-forward.cjs');
+const { attachCandidates, createState, candidateRiskPolicy, candidateRiskVeto, initializeCandidateAccounts } = require('../lib/orb-forward.cjs');
 const config = require('../lib/trader-core.cjs').normalizeConfig(require('../config.json'));
 const trade = (year, index, pnl = 100) => ({ id: `${year}-${index}`, date: `${year}-02-${String(index % 20 + 1).padStart(2, '0')}`,
   status: 'closed', contracts: 1, realizedPnlUsd: pnl });
@@ -35,6 +35,13 @@ test('daily research is capped, restart-idempotent, archived, and freezes paper 
     attachCandidates(state, candidates, candidates[0].implementationHash);
     attachCandidates(state, candidates, candidates[0].implementationHash);
     assert.equal(state.accounts.length, 13);
+    const autoAccount = state.accounts.at(-1);
+    assert.equal(autoAccount.autoCreated, true);
+    assert.equal(autoAccount.accountStatus, 'collecting-forward-evidence');
+    assert.equal(autoAccount.riskPolicy.startingBalanceUsd, 50000);
+    assert.equal(autoAccount.riskPolicy.accountFloorUsd, 45000);
+    assert.equal(autoAccount.riskPolicy.maxRiskPerTradeUsd, 500);
+    assert.equal(autoAccount.riskPolicy.maxDailyLossUsd, 750);
     assert.ok(state.accounts.every(a => a.netPnlUsd === 0 && a.trades.length === 0));
     assert.ok(fs.existsSync(path.join(root, `runtime/orb-discovery/trials/${candidates[0].id}.json`)));
     runDaily({ ...options, now: new Date('2026-09-11T00:00:00Z') }); assert.equal(calls, 8);
@@ -43,6 +50,33 @@ test('daily research is capped, restart-idempotent, archived, and freezes paper 
     const wrongCode = createState(config); attachCandidates(wrongCode, candidates, 'wrong');
     assert.equal(wrongCode.accounts.length, 9);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+test('new challenger accounts inherit limits, pause at the daily or equity floor, and stop at 50 verified trades', () => {
+  const policy = candidateRiskPolicy(config);
+  const account = { autoCreated: true, frozenConfig: config, riskPolicy: policy, trades: [], netPnlUsd: 0 };
+  account.trades.push({ date: '2026-09-10', dataQuality: 'complete', realizedPnlUsd: -750 });
+  assert.match(candidateRiskVeto(account, config, '2026-09-10'), /Daily loss limit/);
+  assert.equal(account.dailyLossPauseDate, '2026-09-10');
+  assert.equal(candidateRiskVeto(account, config, '2026-09-11'), null);
+  assert.equal(account.dailyLossPauseDate, null);
+  account.netPnlUsd = -5000;
+  assert.match(candidateRiskVeto(account, config, '2026-09-11'), /Account floor/);
+  account.netPnlUsd = 0;
+  account.trades = Array.from({ length: 50 }, (_, i) => ({ date: `2026-09-${String(i % 28 + 1).padStart(2, '0')}`,
+    dataQuality: 'complete', realizedPnlUsd: 0 }));
+  assert.match(candidateRiskVeto(account, config, '2026-09-11'), /50 data-complete/);
+  assert.equal(account.accountStatus, 'review-ready');
+});
+test('existing research-created accounts receive the candidate risk policy on runner startup', () => {
+  const state = createState(config);
+  state.accounts.push({ slug: 'discovery-existing', experimentId: 'old-id', baseSlug: 'nq-15m-orb-close-confirmation',
+    frozenConfig: config, trades: [], netPnlUsd: 0 });
+  initializeCandidateAccounts(state, config);
+  initializeCandidateAccounts(state, config);
+  const candidate = state.accounts.at(-1);
+  assert.equal(candidate.autoCreated, true);
+  assert.equal(candidate.riskPolicy.accountFloorUsd, 45000);
+  assert.equal(candidate.accountStatus, 'collecting-forward-evidence');
 });
 test('monitor excludes gap trades and needs enough complete observations', () => {
   const rows = monitor([{ slug: 'x', trades: Array.from({ length: 20 }, (_, i) => ({ ...trade(2026, i, -10), dataQuality: 'complete' })) },

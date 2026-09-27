@@ -12,6 +12,12 @@
   },
   "adaptiveRiskFloorUsd": 250,
   "maxDailyLossUsd": 750,
+  "learning": {
+    "autoCreatePaperCandidates": true,
+    "maxConcurrentPaperCandidates": 7,
+    "strategyWatchlistMinimumTrades": 20,
+    "strategyWatchlistProfitFactorBelow": 1.0
+  },
   "tickSize": 0.25,
   "tickValueUsd": 5,
   "commissionPerContractUsd": 4.5,

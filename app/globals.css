@@ -1512,6 +1512,10 @@ textarea {
 .recent-days p { margin: 0; color: var(--subtle); font-size: .72rem; }
 
 .strategy-ranking { padding-bottom: 0; }
+.strategy-watchlist { border-color: color-mix(in srgb, var(--warning) 35%, var(--line)); }
+.strategy-watchlist > p { margin: 0 0 14px; color: var(--muted); font-size: .78rem; }
+.strategy-cohort-total { justify-content: flex-start; border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 12px; }
+.strategy-cohort-total strong { color: var(--ink); }
 .command-table-wrap { margin-inline: -20px; overflow-x: auto; border-top: 1px solid var(--line-soft); }
 .command-table { min-width: 1040px; }
 .command-table th, .command-table td { padding: 11px 12px; font-size: .74rem; }

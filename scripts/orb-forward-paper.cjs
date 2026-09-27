@@ -29,6 +29,7 @@ async function run() {
   const stateFile = path.join(dir, 'state.json');
   const historyFile = path.join(dir, 'candles.json');
   let state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : forward.createState(config);
+  forward.initializeCandidateAccounts(state, config);
   if (state.version !== forward.version(config)) {
     LEGACY_COMPATIBLE_VERSIONS.add(forward.version(config, 'orb-forward-paper-v1'));
     const expectedSlugs = forward.DEFINITIONS.map((definition) => definition.slug);
@@ -50,17 +51,25 @@ async function run() {
   }
   let history = forward.mergeCandles(forward.readWarmup(root, config), fs.existsSync(historyFile) ? JSON.parse(fs.readFileSync(historyFile)) : []);
   const implementationHash = require('../lib/orb-discovery.cjs').implementationHash();
-  console.log(`${new Date().toISOString()} STARTED nine ORB forward-paper accounts; rules=${state.version}`);
+  console.log(`${new Date().toISOString()} STARTED ORB forward-paper runner (${state.accounts.length} supervised accounts); rules=${state.version}`);
   async function tick() {
     try {
       const { candles } = await require('../lib/live-trader.cjs').fetchLiveCandles(config);
       const now = Date.now();
       // Work on a copy: a failed tick cannot partially journal a trade twice.
       const next = JSON.parse(JSON.stringify(state));
-      const candidateFile = path.join(root, 'runtime/orb-discovery/paper-candidates.json');
-      if (fs.existsSync(candidateFile)) forward.attachCandidates(next, JSON.parse(fs.readFileSync(candidateFile)), implementationHash, now);
-      const patternFile = path.join(root, 'runtime/price-action/paper-candidates.json');
-      if (fs.existsSync(patternFile)) forward.attachCandidates(next, JSON.parse(fs.readFileSync(patternFile)).slice(0, 3), implementationHash, now);
+      const learning = config.learning || {};
+      if (learning.autoCreatePaperCandidates !== false) {
+        const nominations = [];
+        for (const file of ['runtime/orb-discovery/paper-candidates.json', 'runtime/price-action/paper-candidates.json']) {
+          const fullPath = path.join(root, file);
+          if (fs.existsSync(fullPath)) nominations.push(...JSON.parse(fs.readFileSync(fullPath, 'utf8')));
+        }
+        forward.attachCandidates(next, nominations, implementationHash, now, {
+          enabled: true,
+          maxCandidates: Number(learning.maxConcurrentPaperCandidates || 7)
+        });
+      }
       forward.advance(next, candles, history, config, now, { implementationHash });
       if (next.status === 'running' && !require('../lib/market-feed-status.cjs').clock(new Date(now)).orbEntryWindow) next.status = 'watching-outside-orb-window';
       const changed = next.cursor !== state.cursor;
