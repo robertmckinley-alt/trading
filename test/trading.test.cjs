@@ -22,10 +22,11 @@ const { parseLiveStatus, sanitizeRemoteSnapshot, summarizeJournal } = require('.
 const { formatTelegramAlert, getTelegramConfig, sendTelegramAlert } = require('../lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('../lib/adaptive-bots.cjs');
 const { synchronizeStrategyLearning } = require('../lib/strategy-learning.cjs');
+const { applyChallengerExperiment, readChallengerManifest, synchronizeChallengerAccount } = require('../lib/challenger-accounts.cjs');
 const { evaluateStrategyJournal } = require('../lib/strategy-evaluation.cjs');
 const { getPortfolioRiskSnapshot, reservePortfolioRisk } = require('../lib/portfolio-risk.cjs');
 const { applyRiskDecision, buildResearchCouncilReview } = require('../lib/research-council.cjs');
-const { BACKTEST_STRATEGIES, ORB_RESEARCH_VARIANTS, STRATEGIES, STRATEGY_RESEARCH_VARIANTS, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
+const { BACKTEST_STRATEGIES, ORB_RESEARCH_VARIANTS, STRATEGIES, STRATEGY_RESEARCH_VARIANTS, getStrategyDefinitions, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 const {
   auditCandles,
   auditResearchTrades,
@@ -727,6 +728,84 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
+test('learning nominates a structured challenger only after a losing twenty-trade sample', () => {
+  const trades = Array.from({ length: 20 }, (_, index) => ({
+    id: `segment-${index + 1}`,
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    side: 'long',
+    realizedPnlUsd: index < 10 ? -100 : 50,
+    rMultiple: index < 10 ? -1 : 0.5,
+    adaptive: { market: { regime: index < 10 ? 'quiet-chop' : 'trending' } }
+  }));
+  const early = synchronizeStrategyLearning(trades.slice(0, 19), { strategySlug: 'nq-opening-range-breakout' });
+  assert.equal(early.experimentRecommendation, null);
+
+  const learned = synchronizeStrategyLearning(trades, { strategySlug: 'nq-opening-range-breakout' });
+  assert.equal(learned.rolling.profitFactor, 0.5);
+  assert.equal(learned.experimentRecommendation.action, 'create-paper-challenger');
+  assert.equal(learned.experimentRecommendation.catalogId, 'exclude-underperforming-segment-v1');
+  assert.equal(learned.experimentRecommendation.dimension, 'market-regime');
+  assert.equal(learned.experimentRecommendation.blockedValue, 'quiet-chop');
+  assert.equal(learned.controls.entryRulesLocked, true);
+});
+
+test('eligible learning creates one isolated fifty-thousand-dollar challenger account', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctortrades-challenger-'));
+  const parentDefinition = STRATEGIES.find((strategy) => strategy.slug === 'nq-opening-range-breakout');
+  const trades = Array.from({ length: 20 }, (_, index) => ({
+    id: `auto-${index + 1}`,
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    side: 'long',
+    realizedPnlUsd: index < 10 ? -100 : 50,
+    rMultiple: index < 10 ? -1 : 0.5,
+    adaptive: { market: { regime: index < 10 ? 'quiet-chop' : 'trending' } }
+  }));
+  const learning = synchronizeStrategyLearning(trades, { strategySlug: parentDefinition.slug });
+  const config = { startingBalanceUsd: 50000, maxAccountDrawdownPercent: 10 };
+  const created = synchronizeChallengerAccount({
+    rootDir: directory,
+    config,
+    learning,
+    parentDefinition,
+    now: '2026-09-28T19:00:00.000Z'
+  });
+  assert.equal(created.state, 'created');
+  assert.equal(created.startingBalanceUsd, 50000);
+  assert.equal(created.maxAccountDrawdownPercent, 10);
+
+  const manifest = readChallengerManifest(directory);
+  assert.equal(manifest.accounts.length, 1);
+  assert.equal(manifest.accounts[0].parentStrategySlug, parentDefinition.slug);
+  assert.equal(manifest.accounts[0].experiment.rulesFrozen, true);
+  assert.equal(manifest.accounts[0].experiment.paperOnly, true);
+  const definitions = getStrategyDefinitions(directory);
+  assert.equal(definitions.length, STRATEGIES.length + 1);
+  const files = runtimeFilesForStrategy(directory, created.accountSlug);
+  const state = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  assert.equal(state.balanceUsd, 50000);
+  assert.deepEqual(state.trades, []);
+
+  const duplicate = synchronizeChallengerAccount({ rootDir: directory, config, learning, parentDefinition });
+  assert.equal(duplicate.state, 'exists');
+  assert.equal(readChallengerManifest(directory).accounts.length, 1);
+});
+
+test('challenger experiment rejects only its frozen underperforming segment', () => {
+  const signal = { found: true, setup: { side: 'long' }, metadata: {} };
+  const config = {
+    challengerExperiment: {
+      catalogId: 'exclude-underperforming-segment-v1',
+      dimension: 'market-regime',
+      blockedValue: 'quiet-chop'
+    }
+  };
+  const rejected = applyChallengerExperiment(signal, config, { market: { regime: 'quiet-chop' } });
+  assert.equal(rejected.found, false);
+  assert.match(rejected.reason, /challenger filter rejected/i);
+  const allowed = applyChallengerExperiment(signal, config, { market: { regime: 'trending' } });
+  assert.equal(allowed.found, true);
+});
+
 test('strategy registry gives all eleven bots isolated runtime files and risk families', () => {
   assert.equal(STRATEGIES.length, 11);
   assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 11);
@@ -1058,4 +1137,18 @@ test('research scorecard only promotes a strategy after every paper gate passes'
   assert.equal(evaluation.status, 'Paper candidate');
   assert.equal(evaluation.passedGates, evaluation.totalGates);
   assert.equal(evaluation.execution, 'paper-only');
+  assert.equal(evaluation.boardGroup, 'focus');
+});
+
+test('twenty-trade profit factor below one moves a strategy to the watchlist without hiding it', () => {
+  const trades = Array.from({ length: 20 }, (_, index) => ({
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    realizedPnlUsd: index < 12 ? -100 : 50,
+    rMultiple: index < 12 ? -1 : 0.5
+  }));
+  const evaluation = evaluateStrategyJournal({ trades });
+  assert.equal(evaluation.profitFactor, 0.33);
+  assert.equal(evaluation.boardGroup, 'watchlist');
+  assert.equal(evaluation.includedInFocusTotals, false);
+  assert.equal(evaluation.trades, 20);
 });

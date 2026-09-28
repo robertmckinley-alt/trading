@@ -216,6 +216,13 @@ function buildRecapForDate(strategies, date) {
   );
 }
 
+function isWatchlistStrategy(strategy) {
+  const evaluation = strategy?.research?.evaluation;
+  if (evaluation?.boardGroup) return evaluation.boardGroup === 'watchlist';
+  const profitFactor = Number(evaluation?.profitFactor);
+  return Number(evaluation?.trades || 0) >= 20 && Number.isFinite(profitFactor) && profitFactor < 1;
+}
+
 function buildDailySeries(strategies) {
   let cumulativePnlUsd = 0;
   return buildRecapDates(strategies)
@@ -857,32 +864,34 @@ function DailyTracker({ strategies, selectedDate, onDateChange }) {
   );
 }
 
-function PortfolioTotals({ strategies }) {
+function PortfolioTotals({ strategies, allStrategies }) {
   const totals = buildPortfolioTotals(strategies);
+  const fullTotals = buildPortfolioTotals(allStrategies);
   const winRate = totals.trades > 0 ? (totals.wins / totals.trades) * 100 : 0;
   const returnPercent = totals.bankrollUsd > 0 ? (totals.realizedPnlUsd / totals.bankrollUsd) * 100 : 0;
+  const watchlistCount = allStrategies.length - strategies.length;
 
   return (
-    <div className="portfolio-totals" aria-label="Running strategy totals">
+    <div className="portfolio-totals" aria-label="Promising and collecting strategy totals">
       <div className="portfolio-total-card portfolio-total-card-primary">
-        <span>Combined balance</span>
+        <span>Focus-group balance</span>
         <strong>{formatUsd(totals.balanceUsd)}</strong>
-        <p className={totals.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(totals.realizedPnlUsd)} realized across {formatUsd(totals.bankrollUsd)} allocated</p>
+        <p className={totals.realizedPnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(totals.realizedPnlUsd)} realized · watchlist excluded</p>
       </div>
       <div className="portfolio-total-card">
-        <span>Total trades</span>
+        <span>Focus-group trades</span>
         <strong>{totals.trades}</strong>
         <p>{countLabel(totals.wins, 'win')} / {countLabel(totals.losses, 'loss', 'losses')}</p>
       </div>
       <div className="portfolio-total-card">
-        <span>Win rate</span>
+        <span>Focus-group win rate</span>
         <strong>{formatPercent(winRate)}</strong>
         <p>{formatPercent(returnPercent)} realized return</p>
       </div>
       <div className="portfolio-total-card">
-        <span>Automated strategies</span>
-        <strong>{totals.automatedStrategies}/{strategies.length}</strong>
-        <p>{totals.runningWatchers} running live watcher, {totals.manualRoutes} manual only</p>
+        <span>Full-system balance</span>
+        <strong>{formatUsd(fullTotals.balanceUsd)}</strong>
+        <p>{formatUsd(fullTotals.realizedPnlUsd)} realized · {watchlistCount} watchlist account{watchlistCount === 1 ? '' : 's'} included</p>
       </div>
     </div>
   );
@@ -1004,6 +1013,8 @@ function StrategyCard({ strategy, isBridgeFallback }) {
   const setupReview = council?.roles?.find((item) => item.name === 'Setup detector');
   const riskReview = council?.roles?.find((item) => item.name === 'Risk veto');
   const amdContext = strategy.live?.researchContext?.amdContext;
+  const automation = learning?.automation;
+  const experimentRecommendation = learning?.experimentRecommendation;
 
   return (
     <article className={`live-card live-card-${tone}`}>
@@ -1024,7 +1035,17 @@ function StrategyCard({ strategy, isBridgeFallback }) {
         <span>{strategy.ticker}</span>
         {strategy.strategyFamilyName ? <span>{strategy.strategyFamilyName}</span> : null}
         <span>Paper only</span>
+        {strategy.accountType === 'challenger' ? <span>Automatic challenger</span> : null}
       </div>
+
+      {strategy.accountType === 'challenger' ? (
+        <div className="challenger-banner">
+          <strong>Forward challenger from {strategy.parentStrategyName || strategy.parentStrategySlug}</strong>
+          <span>
+            Frozen test: skip {String(strategy.experiment?.dimension || 'segment').replaceAll('-', ' ')} = {String(strategy.experiment?.blockedValue || 'n/a').replaceAll('-', ' ')}. Separate $50,000 journal and the same drawdown controls.
+          </span>
+        </div>
+      ) : null}
 
       <div className="live-mini-grid">
         <div>
@@ -1094,6 +1115,21 @@ function StrategyCard({ strategy, isBridgeFallback }) {
             </span>
             {learning?.recommendations?.[0] ? <small>{learning.recommendations[0]}</small> : null}
           </div>
+          {experimentRecommendation ? (
+            <div className="adaptive-bots-note challenger-learning-note">
+              <strong>Suggested test: {experimentRecommendation.title}</strong>
+              <span>{experimentRecommendation.rationale}</span>
+              <small>
+                {automation?.state === 'created'
+                  ? `${automation.accountLabel} was created automatically with $50,000 in paper funds.`
+                  : automation?.state === 'exists'
+                    ? `${automation.accountLabel} is already running this test.`
+                    : automation?.state === 'parent-cap-reached'
+                      ? automation.reason
+                      : 'The account will be created only from the approved experiment catalog.'}
+              </small>
+            </div>
+          ) : null}
           {amdContext ? (
             <div className="adaptive-bots-note">
               <strong>Asia / London context: {String(amdContext.classification || 'unknown').replaceAll('-', ' ')}</strong>
@@ -1171,14 +1207,16 @@ function compactWatcherStatus(strategy, orb) {
 
 function CompactStrategyTable({ strategies, orb }) {
   const ranked = strategies.slice().sort((a, b) => (
+    Number(isWatchlistStrategy(a)) - Number(isWatchlistStrategy(b)) ||
     Number(b.journal?.realizedPnlUsd || 0) - Number(a.journal?.realizedPnlUsd || 0)
   ));
+  const watchlistCount = strategies.filter(isWatchlistStrategy).length;
 
   return (
     <section className="command-panel strategy-ranking" aria-labelledby="strategy-ranking-title">
       <div className="command-panel-head">
-        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">Nine accounts. One clean view.</h2></div>
-        <span>Ranked by realized P&amp;L</span>
+        <div><span className="section-kicker">Strategy network</span><h2 id="strategy-ranking-title">{strategies.length} accounts. Focus first.</h2></div>
+        <span>Ranked by realized P&amp;L · {watchlistCount} on watchlist</span>
       </div>
       <div className="command-table-wrap">
         <table className="command-table">
@@ -1196,7 +1234,7 @@ function CompactStrategyTable({ strategies, orb }) {
               return (
                 <tr key={strategy.slug}>
                   <th scope="row">
-                    <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}</span></Link>
+                    <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}{isWatchlistStrategy(strategy) ? ' · Watchlist' : ''}</span></Link>
                   </th>
                   <td><span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span></td>
                   <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
@@ -1253,10 +1291,13 @@ function CompactTodayPanel({ strategies, dailySeries }) {
   );
 }
 
-function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshState }) {
-  const totals = buildPortfolioTotals(strategies);
-  const daily = buildDailyTotals(strategies);
-  const analytics = buildPerformanceAnalytics(strategies, dailySeries);
+function CompactDashboard({ data, strategies, refreshData, refreshState }) {
+  const focusStrategies = strategies.filter((strategy) => !isWatchlistStrategy(strategy));
+  const focusDailySeries = buildDailySeries(focusStrategies);
+  const totals = buildPortfolioTotals(focusStrategies);
+  const fullTotals = buildPortfolioTotals(strategies);
+  const daily = buildDailyTotals(focusStrategies);
+  const analytics = buildPerformanceAnalytics(focusStrategies, focusDailySeries);
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
   const runningWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isRunning === true).length;
   const healthyWatchers = strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.watcher?.isHealthy === true).length;
@@ -1284,7 +1325,7 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
       {refreshState.error || data?.error ? <p className="command-alert" role="status">{refreshState.error || 'The live bridge is unavailable. The last safe snapshot remains visible.'}</p> : null}
 
       <div className="command-metrics">
-        <CompactMetric label="Combined equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized on ${formatUsd(totals.bankrollUsd)}`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
+        <CompactMetric label="Focus equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized · ${formatUsd(fullTotals.balanceUsd)} full system`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
         <CompactMetric label="Today’s P&L" value={formatUsd(daily.activePnlUsd)} detail={`${daily.trades} closed · ${daily.openTrades} open`} tone={daily.activePnlUsd >= 0 ? 'positive' : 'negative'} />
         <CompactMetric label="Open risk" value={formatUsd(risk?.reservedRiskUsd || 0)} detail={`${formatUsd(risk?.availableRiskUsd || 0)} available`} />
         <CompactMetric label="Total trades" value={String(totals.trades)} detail={`${formatPercent(winRate)} win rate`} />
@@ -1294,7 +1335,7 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
       <div className="command-main-grid">
         <section className="command-panel performance-command-panel" aria-labelledby="command-performance-title">
           <div className="command-panel-head"><div><span className="section-kicker">Portfolio performance</span><h2 id="command-performance-title">Daily P&amp;L and equity momentum</h2></div><span>Last 30 trading days</span></div>
-          <PerformanceChart dailySeries={dailySeries} />
+          <PerformanceChart dailySeries={focusDailySeries} />
           <dl className="command-analytics">
             <div><dt>Profit factor</dt><dd>{analytics.profitFactor === null ? '—' : Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'}</dd></div>
             <div><dt>Expectancy</dt><dd>{formatUsd(analytics.expectancyUsd)}</dd></div>
@@ -1302,7 +1343,7 @@ function CompactDashboard({ data, strategies, dailySeries, refreshData, refreshS
             <div><dt>Recovery factor</dt><dd>{analytics.recoveryFactor === null ? '—' : Number.isFinite(analytics.recoveryFactor) ? analytics.recoveryFactor.toFixed(2) : '∞'}</dd></div>
           </dl>
         </section>
-        <CompactTodayPanel strategies={strategies} dailySeries={dailySeries} />
+        <CompactTodayPanel strategies={focusStrategies} dailySeries={focusDailySeries} />
       </div>
 
       <PortfolioRiskGuard risk={risk} />
@@ -1363,6 +1404,8 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
   }, []);
 
   const strategies = useMemo(() => Array.isArray(data?.strategies) ? data.strategies : [], [data]);
+  const watchlistStrategies = useMemo(() => strategies.filter(isWatchlistStrategy), [strategies]);
+  const focusStrategies = useMemo(() => strategies.filter((strategy) => !isWatchlistStrategy(strategy)), [strategies]);
   const isBridgeFallback = data?.source === 'remote-bridge-fallback';
   const dailySeries = useMemo(() => buildDailySeries(strategies), [strategies]);
   const activeDate = selectedDate || dailySeries.at(-1)?.date || buildDailyTotals(strategies).date || '';
@@ -1371,7 +1414,7 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
 
   if (compact) {
-    return <CompactDashboard data={data} strategies={strategies} dailySeries={dailySeries} refreshData={refreshData} refreshState={refreshState} />;
+    return <CompactDashboard data={data} strategies={strategies} refreshData={refreshData} refreshState={refreshState} />;
   }
 
   return (
@@ -1399,7 +1442,7 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
         </p>
       ) : null}
 
-      <PortfolioTotals strategies={strategies} />
+      <PortfolioTotals strategies={focusStrategies} allStrategies={strategies} />
       <PortfolioRiskGuard risk={data?.portfolioRisk} />
       <PerformancePanel strategies={strategies} dailySeries={dailySeries} />
       <div className="history-actions">
@@ -1416,11 +1459,31 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
       <DailyLedger dailySeries={dailySeries} activeDate={activeDate} onDateChange={setSelectedDate} />
       <DailyTracker strategies={strategies} selectedDate={activeDate} onDateChange={setSelectedDate} />
 
-      <div className="live-board-grid">
-        {strategies.map((strategy) => (
-          <StrategyCard key={strategy.slug} strategy={strategy} isBridgeFallback={isBridgeFallback} />
-        ))}
+      <div className="strategy-group">
+        <div className="strategy-group-head">
+          <div><span>Primary board</span><h3>Promising and collecting evidence</h3></div>
+          <p>{focusStrategies.length} account{focusStrategies.length === 1 ? '' : 's'} · losing strategies move down only after 20 closed trades</p>
+        </div>
+        <div className="live-board-grid">
+          {focusStrategies.map((strategy) => (
+            <StrategyCard key={strategy.slug} strategy={strategy} isBridgeFallback={isBridgeFallback} />
+          ))}
+        </div>
       </div>
+
+      {watchlistStrategies.length ? (
+        <div className="strategy-group strategy-group-watchlist">
+          <div className="strategy-group-head">
+            <div><span>Still monitored</span><h3>Watchlist · profit factor below 1.00</h3></div>
+            <p>Excluded from focus-group totals. Included in the full-system balance and ledger.</p>
+          </div>
+          <div className="live-board-grid">
+            {watchlistStrategies.map((strategy) => (
+              <StrategyCard key={strategy.slug} strategy={strategy} isBridgeFallback={isBridgeFallback} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

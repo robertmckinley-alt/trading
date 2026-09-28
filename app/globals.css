@@ -696,9 +696,36 @@ tbody th button {
 }
 
 .live-board-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.strategy-group { display: grid; gap: 12px; }
+.strategy-group-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.strategy-group-head > div { display: grid; gap: 2px; }
+.strategy-group-head span { color: var(--subtle); font-size: 0.73rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.strategy-group-head h3 { margin: 0; font-size: 1.05rem; }
+.strategy-group-head p { max-width: 54ch; margin: 0; color: var(--muted); font-size: 0.78rem; text-align: end; }
+.strategy-group-watchlist { margin-top: 8px; }
+.strategy-group-watchlist .strategy-group-head { border-top-color: color-mix(in srgb, var(--warning) 45%, var(--line)); }
 .live-card { display: grid; align-content: start; gap: 15px; padding: 20px; }
 .live-card-good { border-color: #abefc6; }
 .live-card-warn { border-color: #fedf89; }
+
+.challenger-banner {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.challenger-banner strong { font-size: 0.8rem; }
+.challenger-banner span { color: var(--muted); font-size: 0.73rem; line-height: 1.45; }
+.challenger-learning-note { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
 
 .research-scorecard {
   display: grid;
@@ -1221,13 +1248,14 @@ textarea {
   h1 { max-width: none; font-size: 2rem; }
   .risk-guardrails { flex-direction: column; }
   .risk-guardrails > div + div { border-inline-start: 0; border-top: 1px solid var(--line-soft); }
-  .live-board-head, .section-heading, .daily-tracker-head, .daily-recap-head { align-items: stretch; flex-direction: column; }
+  .live-board-head, .section-heading, .daily-tracker-head, .daily-recap-head, .strategy-group-head { align-items: stretch; flex-direction: column; }
   .live-board-meta { justify-content: flex-start; }
   .live-board-meta { overflow-wrap: anywhere; }
   .portfolio-risk-strip { align-items: flex-start; flex-direction: column; }
   .portfolio-risk-strip p { text-align: start; }
   .refresh-button, .recap-date-button { min-height: 44px; }
   .section-heading > p { text-align: start; }
+  .strategy-group-head p { text-align: start; }
   .portfolio-totals, .daily-tracker-grid, .live-board-grid, .daily-strategy-list, .hero-panel, .research-method, .strategy-detail-intro, .shadow-research { grid-template-columns: 1fr; }
   .research-method, .strategy-detail-intro { gap: 22px; padding: 20px; }
   .portfolio-total-card + .portfolio-total-card,

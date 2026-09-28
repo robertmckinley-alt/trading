@@ -15,6 +15,7 @@
     "trader:watch:start": "bash scripts/start-live-watcher.sh",
     "trader:watch:stop": "bash scripts/stop-live-watcher.sh",
     "trader:watch:status": "bash scripts/status-live-watcher.sh",
+    "trader:challengers": "node scripts/challenger-watchdog.cjs",
     "trader:status:server": "node scripts/live-status-server.cjs"
   },
   "dependencies": {

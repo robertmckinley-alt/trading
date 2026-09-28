@@ -15,8 +15,12 @@ export function generateStaticParams() {
 
 export default async function ResearchStrategyPage({ params }) {
   const [{ slug }, liveStatus] = await Promise.all([params, getStrategySnapshots()]);
-  const strategy = getStrategyDefinition(slug);
+  const strategy = getStrategyDefinition(slug) || liveStatus?.strategies?.find((item) => item.slug === slug);
   if (!strategy) notFound();
+  const source = strategy.source || strategy.research?.source || {};
+  const researchStage = strategy.researchStage || strategy.research?.stage;
+  const evidenceLabel = strategy.evidenceLabel || strategy.research?.evidenceLabel;
+  const description = strategy.description || strategy.research?.description;
 
   return (
     <main className="page-shell" id="main-content">
@@ -26,14 +30,14 @@ export default async function ResearchStrategyPage({ params }) {
         <div>
           <span className="section-kicker">{strategy.paperAccountLabel} · paper only</span>
           <h1>{strategy.name}</h1>
-          <p>{strategy.description}</p>
+          <p>{description}</p>
         </div>
         <dl className="strategy-research-facts">
-          <div><dt>Stage</dt><dd>{strategy.researchStage}</dd></div>
-          <div><dt>Evidence</dt><dd>{strategy.evidenceLabel}</dd></div>
+          <div><dt>Stage</dt><dd>{researchStage}</dd></div>
+          <div><dt>Evidence</dt><dd>{evidenceLabel}</dd></div>
           <div><dt>Activation</dt><dd>{strategy.activationTime}</dd></div>
           <div><dt>Risk family</dt><dd>{strategy.strategyFamilyName}</dd></div>
-          <div><dt>License</dt><dd>{strategy.source.license}</dd></div>
+          <div><dt>License</dt><dd>{source.license}</dd></div>
         </dl>
       </section>
 
@@ -41,7 +45,7 @@ export default async function ResearchStrategyPage({ params }) {
         This is an independent paper-trading experiment. Repository results have not been reproduced on this feed and do not predict future returns.
       </p>
 
-      {strategy.source.url ? <p className="strategy-source-link"><a href={strategy.source.url} rel="noreferrer" target="_blank">Open research source →</a></p> : null}
+      {source.url ? <p className="strategy-source-link"><a href={source.url} rel="noreferrer" target="_blank">Open research source →</a></p> : null}
 
       <LiveStrategyBoard initialData={liveStatus} />
     </main>

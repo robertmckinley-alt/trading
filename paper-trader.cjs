@@ -31,6 +31,7 @@ const {
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
 const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
+const { applyChallengerExperiment, synchronizeChallengerAccount } = require('./lib/challenger-accounts.cjs');
 const { synchronizeStrategyLearning } = require('./lib/strategy-learning.cjs');
 const { reservePortfolioRisk } = require('./lib/portfolio-risk.cjs');
 const { applyRiskDecision, buildResearchCouncilReview } = require('./lib/research-council.cjs');
@@ -233,7 +234,26 @@ async function runLivePlan(config, state) {
   console.log(printPlan(plan));
 }
 
-function persistClosedTrade(statePath, state, config, plan, lifecycle) {
+function synchronizeLearningAutomation(state, config, strategyDefinition) {
+  if (!state.learning) return null;
+  const result = strategyDefinition.accountType === 'challenger'
+    ? {
+        state: 'disabled-for-challenger',
+        checkedAt: new Date().toISOString(),
+        reason: 'Automatic challengers cannot create recursive child accounts.'
+      }
+    : synchronizeChallengerAccount({
+        rootDir: BASE,
+        config,
+        learning: state.learning,
+        parentDefinition: strategyDefinition
+      });
+  state.learning.automation = result;
+  if (state.live.adaptive?.learning) state.live.adaptive.learning = state.learning;
+  return result;
+}
+
+function persistClosedTrade(statePath, state, config, strategyDefinition, plan, lifecycle) {
   const trade = toJournalTrade(plan, lifecycle);
   state.trades.push(trade);
   state.realizedPnlUsd = Math.round((state.realizedPnlUsd + trade.realizedPnlUsd) * 100) / 100;
@@ -245,15 +265,17 @@ function persistClosedTrade(statePath, state, config, plan, lifecycle) {
   state.live.openTriggeredAt = null;
   state.learning = synchronizeStrategyLearning(state.trades, {
     previous: state.learning,
-    strategySlug: config.strategySlug
+    strategySlug: config.strategySlug,
+    accountType: config.accountType
   });
   if (state.live.adaptive) {
     state.live.adaptive.learning = state.learning;
   }
+  synchronizeLearningAutomation(state, config, strategyDefinition);
   return trade;
 }
 
-async function runWatchLive(config, state, intervalMs, statePath) {
+async function runWatchLive(config, state, strategyDefinition, intervalMs, statePath) {
   const liveConfig = normalizeStrategyConfig(config);
   let lastSignature = null;
   const actualIntervalMs = intervalMs || liveConfig.pollIntervalMs;
@@ -274,6 +296,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
     const adaptiveDecision = evaluateAdaptiveBots(candles, config, state);
     state.live.adaptive = adaptiveDecision;
     state.learning = adaptiveDecision.learning;
+    synchronizeLearningAutomation(state, config, strategyDefinition);
     saveLiveState(statePath, state);
     let summaryLines = [
       `Feed: ${metadata.provider} ${metadata.ticker}`,
@@ -304,7 +327,7 @@ async function runWatchLive(config, state, intervalMs, statePath) {
         saveLiveState(statePath, state);
       }
       if (lifecycle.status === 'closed') {
-        const trade = persistClosedTrade(statePath, state, config, state.live.openPlan, lifecycle);
+        const trade = persistClosedTrade(statePath, state, config, strategyDefinition, state.live.openPlan, lifecycle);
         await sendWatcherAlert(state, {
           type: 'trade-closed',
           status: 'closed',
@@ -338,8 +361,18 @@ async function runWatchLive(config, state, intervalMs, statePath) {
       return;
     }
 
-    const signal = detectSignalFromCandles(candles, config, state);
-    if (signal.found) signal.metadata = { ...signal.metadata, patternMatching: require('./lib/pattern-matching.cjs').advisory(BASE, candles, config, signal) };
+    const detectedSignal = detectSignalFromCandles(candles, config, state);
+    if (detectedSignal.found) {
+      detectedSignal.metadata = {
+        ...detectedSignal.metadata,
+        patternMatching: require('./lib/pattern-matching.cjs').advisory(BASE, candles, config, detectedSignal)
+      };
+    }
+    const signal = applyChallengerExperiment(
+      detectedSignal,
+      config,
+      adaptiveDecision
+    );
     state.live.researchContext = signal.metadata || null;
     state.live.researchCouncil = buildResearchCouncilReview({
       signal,
@@ -382,12 +415,12 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 
     let plan;
     try {
-      if (!['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.strategySlug) && !adaptiveDecision.risk.allowed) {
+      if (!['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) && !adaptiveDecision.risk.allowed) {
         state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, adaptiveDecision.risk);
         saveLiveState(statePath, state);
         throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
       }
-      const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.strategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
+      const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
       if (plan.setup.execution === 'next-bar-market') {
         // Forward paper fills cannot precede the time this watcher actually observed the signal.
@@ -500,14 +533,19 @@ async function runWatchLive(config, state, intervalMs, statePath) {
 async function main() {
   const { command, rest } = parseArgs(process.argv);
   const { provider, strategySlug } = parseWatchOptions(rest);
-  const strategyDefinition = requireStrategyDefinition(strategySlug);
+  const strategyDefinition = requireStrategyDefinition(strategySlug, BASE);
   const statePath = statePathForStrategy(strategySlug);
+  const detectorStrategySlug = strategyDefinition.detectorStrategySlug || strategyDefinition.parentStrategySlug || strategySlug;
+  const baseConfig = loadConfig();
   const config = {
-    ...loadConfig(),
-    ...(strategySlug === 'mgc-open-ema12' ? require('./lib/gold-open-ema.cjs').config(loadConfig()) : {}),
-    ...(strategySlug === 'nq-vwap-stretch-reversion' ? require('./lib/vwap-stretch.cjs').ACCOUNT : {}),
+    ...baseConfig,
+    ...(detectorStrategySlug === 'mgc-open-ema12' ? require('./lib/gold-open-ema.cjs').config(baseConfig) : {}),
+    ...(detectorStrategySlug === 'nq-vwap-stretch-reversion' ? require('./lib/vwap-stretch.cjs').ACCOUNT : {}),
     strategySlug,
-    strategyFamily: strategyDefinition.strategyFamily
+    detectorStrategySlug,
+    strategyFamily: strategyDefinition.strategyFamily,
+    accountType: strategyDefinition.accountType || 'baseline',
+    challengerExperiment: strategyDefinition.experiment || null
   };
   const state = loadState(config, statePath);
 
@@ -537,7 +575,7 @@ async function main() {
   if (command === 'watch-live') {
     const { intervalMs } = parseWatchOptions(rest);
     reportTelegramAlertStatus();
-    await runWatchLive({ ...applyLiveProviderOverride(config, provider), strategySlug }, state, intervalMs, statePath);
+    await runWatchLive({ ...applyLiveProviderOverride(config, provider), strategySlug }, state, strategyDefinition, intervalMs, statePath);
     return;
   }
 

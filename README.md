@@ -19,12 +19,14 @@ The live mode now adds:
 - nine isolated paper strategy watchers sharing that one live stream, including the baseline ORB close-confirmation, DMC market-open, and HTF session-sweep translations
 - one ORB supervisor watching all nine ORB variants with separate $50,000 paper accounts and journals
 - a versioned learning loop that updates after every closed paper trade, records rolling expectancy, profit factor, average R, drawdown, and streaks, and keeps an audit log of any next-trade risk adjustment
+- evidence-gated automatic challengers: after at least 20 closed forward trades and a profit factor below `1.00`, the learner may create a separate `$50,000` paper account only for a cataloged, frozen experiment backed by at least five losing segment observations; free-form advice cannot create an account
 - bounded adaptive controls that classify market regime and pause new trades at the daily-loss or account-floor limits; the approved risk range is `$250` to `$500` per paper trade, and no adaptive decision can exceed the `$500` cap
 - locked entry rules: the learning loop can recommend an offline review, but it cannot silently rewrite a strategy or move it to live money
 - a shared `$2,500` simultaneous open-risk cap across all nine primary paper accounts plus smaller correlated-strategy family caps, enforced before a strategy can reserve a new plan
 - an advisory-only research council that records feed health, setup evidence, market regime, risk-veto status, and post-trade learning without changing entry rules or gaining order authority
 - always-on monitoring that keeps one live paper trade open at a time and journals the close
 - a research scorecard that requires sample size, trading-day, profit-factor, expectancy, average-R, and drawdown gates before labeling any strategy a paper candidate
+- a dashboard split that moves strategies below a `1.00` profit factor to a watchlist after 20 closed trades, excludes them from focus-group totals, and keeps the full-system balance and ledger visible
 
 See [STRATEGY_RESEARCH.md](./STRATEGY_RESEARCH.md) for source provenance, license decisions, rejected candidates, and the limits of every adaptation.
 
@@ -277,8 +279,13 @@ sudo systemctl enable --now doctortrades-watcher@nq-opening-range-breakout
 sudo systemctl enable --now doctortrades-watcher@ema-20-60-momentum
 sudo systemctl enable --now doctortrades-watcher@volume-poc-reversion
 sudo systemctl enable --now doctortrades-watcher@nq-15m-opening-range-retest
+sudo systemctl enable --now doctortrades-challenger-manager
 sudo systemctl enable --now doctortrades-status
 ```
+
+The challenger manager watches `runtime/challenger-accounts.json`. It starts only paper accounts produced by the executable experiment catalog. Each challenger keeps an independent state file, journal, `$50,000` starting balance, `10%` drawdown floor, parent link, and frozen experiment definition. Challenger accounts cannot create recursive challengers.
+
+For the OpenClaw Docker deployment, install and enable `deploy/systemd/doctortrades-container-challenger-manager.service` on the host instead. It runs the same manager inside the trading container beside the existing container feed, status, and watcher services.
 
 The dashboard treats a heartbeat older than three polling intervals as stale and keeps the last good remote snapshot for up to 15 minutes when the bridge briefly fails.
 

@@ -42,6 +42,15 @@ A bot remains in `Warming up` or `Collecting evidence` until its own forward pap
 - at least 50 closed paper trades
 - at least 20 distinct trading days
 - profit factor of at least 1.20
+
+## Automatic challenger controls
+
+- A baseline strategy must first close at least 20 forward paper trades and fall below a `1.00` profit factor.
+- A proposed exclusion must be supported by at least five losing observations for the same side or market regime.
+- Only versioned experiments in the executable catalog can create an account. Narrative recommendations remain advisory.
+- Every challenger starts with a separate `$50,000` paper balance, the same `10%` drawdown pattern and portfolio/family caps, frozen parent entry rules, and its own forward journal.
+- Challengers cannot create child challengers. A parent may have at most two automatic challengers.
+- A watchlist strategy stays in the full-system ledger even when it is removed from focus-group headline statistics.
 - positive expectancy per trade
 - positive average R
 - maximum test drawdown no greater than $1,500

@@ -1,0 +1,21 @@
+[Unit]
+Description=DoctorTrades automatic paper challenger manager
+After=network-online.target doctortrades-feed.service
+Wants=network-online.target
+Requires=doctortrades-feed.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/doctortrades/trading
+EnvironmentFile=/etc/doctortrades/trading.env
+ExecStart=/usr/bin/node scripts/challenger-watchdog.cjs --watch --interval=30000
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGTERM
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

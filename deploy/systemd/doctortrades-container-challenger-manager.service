@@ -1,0 +1,18 @@
+[Unit]
+Description=DoctorTrades automatic paper challenger manager in OpenClaw container
+Requires=docker.service doctortrades-container-feed.service
+After=docker.service network-online.target doctortrades-container-feed.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/docker start openclaw-anwx-openclaw-1
+ExecStart=/usr/bin/docker exec -w /data/.openclaw/workspace/lucid-nq-paper-trader openclaw-anwx-openclaw-1 /bin/bash -lc "set -a; . ./.env.local; set +a; exec node scripts/challenger-watchdog.cjs --watch --interval=30000"
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGTERM
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
