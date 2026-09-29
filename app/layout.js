@@ -3,8 +3,8 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata = {
-  title: 'DoctorTrades NQ Dashboard',
-  description: 'Live NQ paper-strategy monitoring, daily performance analytics, trade history, planning, and replay.'
+  title: 'DoctorTrades Paper Dashboard',
+  description: 'Live paper-strategy monitoring, daily performance analytics, trade history, planning, and replay.'
 };
 
 export const viewport = {

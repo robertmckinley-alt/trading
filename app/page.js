@@ -13,6 +13,7 @@ export default async function HomePage() {
   const config = normalizeConfig(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8')));
   const liveStatus = await getStrategySnapshots();
   const accountCount = Array.isArray(liveStatus?.strategies) ? liveStatus.strategies.length : 0;
+  const orbAccountCount = Number(liveStatus?.orbForward?.supervisedAccounts || 0);
 
   return (
     <main className="page-shell command-page" id="main-content">
@@ -23,7 +24,7 @@ export default async function HomePage() {
           <p className="eyebrow">Live operations · {accountCount} independent paper accounts</p>
           <h1>See what matters. Act on what changed.</h1>
           <p>
-            A focused view of system health, portfolio performance, current risk, and every strategy running on the shared NQ feed.
+            A focused view of system health, portfolio performance, current risk, and every strategy running on its live paper feed.
           </p>
           <div className="hero-actions">
             <Link className="primary-link" href="/orb">Open ORB forward lab</Link>
@@ -51,7 +52,7 @@ export default async function HomePage() {
           <p>Live execution, forward evidence, and retrospective simulations remain clearly separated.</p>
         </div>
         <div className="workspace-link-grid">
-          <Link href="/orb"><span>Forward paper</span><strong>ORB Lab</strong><p>Nine isolated $50,000 accounts and their verified-trade progress.</p><i>Open lab →</i></Link>
+          <Link href="/orb"><span>Forward paper</span><strong>ORB Lab</strong><p>{orbAccountCount || 'Independent'} isolated $50,000 accounts and their verified-trade progress.</p><i>Open lab →</i></Link>
           <Link href="/backtests"><span>Historical research</span><strong>All Backtests</strong><p>Inspect every strategy, trade count, P&amp;L, and drawdown.</p><i>View results →</i></Link>
           <Link href="/comparison"><span>Benchmarking</span><strong>Strategy Comparison</strong><p>Measure each model against NQ buy-and-hold approximations.</p><i>Compare →</i></Link>
           <Link href="/research"><span>Evidence controls</span><strong>Research Lab</strong><p>Review qualification gates, holdouts, and strategy memory.</p><i>Review evidence →</i></Link>

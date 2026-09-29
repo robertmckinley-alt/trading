@@ -12,6 +12,7 @@ const {
   detectOpeningRangeCloseSignal,
   detectOpeningRangeRetestSignal,
   computeAmdContext,
+  clearTerminalUnfilledPlan,
   detectSignalFromCandles,
   detectVolumePocReversionSignal,
   fetchLiveCandles,
@@ -58,6 +59,27 @@ function researchTrades(count, pnlForIndex = (index) => index % 2 === 0 ? 100 : 
     };
   });
 }
+
+test('terminal unfilled paper orders release their plan without erasing signal history', () => {
+  const state = {
+    live: {
+      openSignalKey: 'signal-1',
+      openPlan: { sizing: { actualRiskUsd: 464.5 } },
+      openTriggeredAt: '2026-09-29T14:21:00.000Z',
+      portfolioRisk: { reservedRiskUsd: 464.5 },
+      signalHistory: ['signal-1']
+    }
+  };
+
+  assert.equal(clearTerminalUnfilledPlan(state, { status: 'not-filled', exitReason: 'entry never traded' }), false);
+  assert.ok(state.live.openPlan);
+  assert.equal(clearTerminalUnfilledPlan(state, { status: 'not-filled', exitReason: 'order expired' }), true);
+  assert.equal(state.live.openPlan, null);
+  assert.equal(state.live.openSignalKey, null);
+  assert.equal(state.live.openTriggeredAt, null);
+  assert.equal(state.live.portfolioRisk, null);
+  assert.deepEqual(state.live.signalHistory, ['signal-1']);
+});
 
 test('research lab uses an ordered 70/30 split and computes auditable metrics', () => {
   const trades = researchTrades(60);

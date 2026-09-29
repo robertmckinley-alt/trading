@@ -38,6 +38,21 @@ function formatShortDate(value) {
   return Number.isNaN(date.getTime()) ? value : shortDateFormatter.format(date);
 }
 
+function latestTimestamp(values) {
+  return values.filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null;
+}
+
+function formatAge(value, nowMs) {
+  const timestamp = Date.parse(value || '');
+  if (!Number.isFinite(timestamp) || !Number.isFinite(nowMs) || nowMs <= 0) return 'unknown age';
+  const seconds = Math.max(0, Math.round((nowMs - timestamp) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
+
 function countLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${Number(count) === 1 ? singular : plural}`;
 }
@@ -122,7 +137,8 @@ function buildDailyTotals(strategies) {
       totals.wins += Number(daily.wins || 0);
       totals.losses += Number(daily.losses || 0);
       if (!totals.date && daily.date) totals.date = daily.date;
-      if (daily.openTradeStatus) totals.openTrades += 1;
+      if (daily.openTradeStatus === 'open') totals.openPositions += 1;
+      if (daily.openTradeStatus === 'not-filled') totals.pendingOrders += 1;
       return totals;
     },
     {
@@ -134,7 +150,8 @@ function buildDailyTotals(strategies) {
       trades: 0,
       wins: 0,
       losses: 0,
-      openTrades: 0
+      openPositions: 0,
+      pendingOrders: 0
     }
   );
 }
@@ -951,6 +968,16 @@ function PortfolioRiskGuard({ risk }) {
           </div>
         ))}
       </div>
+      {(risk.reservations || []).length ? (
+        <div className="risk-reservation-list" aria-label="Current paper risk reservations">
+          {(risk.reservations || []).map((reservation) => (
+            <div key={reservation.strategySlug}>
+              <span>{reservation.strategyName} · {reservation.paperAccountLabel}</span>
+              <strong>{formatUsd(reservation.riskUsd)} reserved · {formatStamp(reservation.reservedAt)}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1250,6 +1277,33 @@ function CompactStrategyTable({ strategies, orb }) {
           </tbody>
         </table>
       </div>
+      <div className="command-strategy-list" aria-label="Strategy account summaries">
+        {ranked.map((strategy) => {
+          const journal = strategy.journal || {};
+          const evaluation = strategy.research?.evaluation || {};
+          const status = compactWatcherStatus(strategy, orb);
+          const trades = Number(journal.trades || 0);
+          const today = Number(journal.daily?.activePnlUsd || 0);
+          const realized = Number(journal.realizedPnlUsd || 0);
+          const profitFactor = evaluation.profitFactor;
+          return (
+            <Link className="command-strategy-row" href={strategy.route} key={strategy.slug}>
+              <span className="command-strategy-row-head">
+                <span><strong>{strategy.name}</strong><small>{strategy.paperAccountLabel}{isWatchlistStrategy(strategy) ? ' · Watchlist' : ''}</small></span>
+                <span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span>
+              </span>
+              <span className="command-strategy-row-metrics">
+                <span><small>Balance</small><strong>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</strong></span>
+                <span><small>Today</small><strong className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</strong></span>
+                <span><small>Total P&amp;L</small><strong className={realized >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(realized)}</strong></span>
+                <span><small>Trades</small><strong>{trades}</strong></span>
+                <span><small>Profit factor</small><strong>{profitFactor === null || profitFactor === undefined ? '—' : Number.isFinite(profitFactor) ? Number(profitFactor).toFixed(2) : '∞'}</strong></span>
+                <span><small>Drawdown</small><strong>{formatUsd(evaluation.maxDrawdownUsd || 0)}</strong></span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
       <div className="command-panel-foot"><Link href="/research">Review qualification gates</Link><span>Click any strategy for signals, rules, and full evidence.</span></div>
     </section>
   );
@@ -1267,7 +1321,8 @@ function CompactTodayPanel({ strategies, dailySeries }) {
       <div className="today-summary">
         <div><span>Active P&amp;L</span><strong className={today.activePnlUsd >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today.activePnlUsd)}</strong></div>
         <div><span>Closed trades</span><strong>{today.trades}</strong></div>
-        <div><span>Open positions</span><strong>{today.openTrades}</strong></div>
+        <div><span>Open positions</span><strong>{today.openPositions}</strong></div>
+        <div><span>Pending orders</span><strong>{today.pendingOrders}</strong></div>
       </div>
       <div className="session-strategy-list">
         {strategies.map((strategy) => {
@@ -1291,7 +1346,7 @@ function CompactTodayPanel({ strategies, dailySeries }) {
   );
 }
 
-function CompactDashboard({ data, strategies, refreshData, refreshState }) {
+function CompactDashboard({ data, strategies, nowMs, refreshData, refreshState }) {
   const focusStrategies = strategies.filter((strategy) => !isWatchlistStrategy(strategy));
   const focusDailySeries = buildDailySeries(focusStrategies);
   const totals = buildPortfolioTotals(focusStrategies);
@@ -1304,10 +1359,27 @@ function CompactDashboard({ data, strategies, refreshData, refreshState }) {
   const risk = data?.portfolioRisk;
   const orb = data?.orbForward;
   const marketClosed = orb?.feed?.regularMarketClosed === true;
+  const latestHeartbeatAt = latestTimestamp(strategies.map((strategy) => strategy.watcher?.lastHeartbeatAt));
+  const latestCandleAt = latestTimestamp(strategies.map((strategy) => strategy.live?.lastCandle?.timestamp));
+  const snapshotAtMs = Date.parse(data?.generatedAt || '');
+  const latestCandleAtMs = Date.parse(latestCandleAt || '');
+  const snapshotFresh = Number.isFinite(snapshotAtMs) && nowMs - snapshotAtMs <= 90_000;
+  const candleFresh = marketClosed || (Number.isFinite(latestCandleAtMs) && nowMs - latestCandleAtMs <= 180_000);
+  const trustedLiveSource = data?.source === 'remote-bridge' || data?.source === 'local-runtime';
+  const dataIsLive = trustedLiveSource && snapshotFresh && candleFresh;
+  const sourceLabel = data?.source === 'remote-bridge'
+    ? 'VPS bridge'
+    : data?.source === 'remote-bridge-cache'
+      ? 'cached VPS snapshot'
+      : data?.source === 'remote-bridge-fallback'
+        ? 'fallback snapshot'
+        : 'local runtime';
   const waitingForOpen = marketClosed ? strategies.filter((strategy) => strategy.mode === 'live-watcher' && strategy.ticker === 'NQ.v.0' && strategy.watcher?.isRunning === true && strategy.watcher?.isHealthy !== true).length : 0;
   const winRate = totals.trades ? (totals.wins / totals.trades) * 100 : 0;
-  const allHealthy = Boolean(watcherCount && runningWatchers === watcherCount && healthyWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
-  const dashboardStatus = marketClosed
+  const allHealthy = Boolean(dataIsLive && watcherCount && runningWatchers === watcherCount && healthyWatchers === watcherCount && orb?.status !== 'runner-offline' && !data?.error);
+  const dashboardStatus = !dataIsLive
+    ? 'Data delayed'
+    : marketClosed
     ? runningWatchers < watcherCount ? `Market closed · ${watcherCount - runningWatchers} watchers offline` : 'Market closed · watchers waiting'
     : !watcherCount || runningWatchers < watcherCount
       ? 'Watcher offline'
@@ -1317,16 +1389,16 @@ function CompactDashboard({ data, strategies, refreshData, refreshState }) {
 
   return (
     <section className="command-dashboard" aria-label="Live paper trading overview">
-      <div className={`system-ribbon ${allHealthy ? 'system-ribbon-good' : 'system-ribbon-warn'}`}>
-        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : dashboardStatus}</strong><small>{runningWatchers}/{watcherCount} processes running · {healthyWatchers} feeds healthy{waitingForOpen ? ` · ${waitingForOpen} waiting for futures to reopen` : ''} · {orb?.supervisedAccounts || 0} ORB accounts supervised</small></span></div>
-        <div className="system-ribbon-meta"><span>{data?.source === 'remote-bridge' ? 'Live VPS bridge' : data?.source === 'remote-bridge-cache' ? 'Cached VPS snapshot' : data?.source === 'remote-bridge-fallback' ? 'Fallback snapshot' : 'Local runtime'}</span><time dateTime={data?.generatedAt || undefined}>{formatStamp(data?.generatedAt)}</time><button disabled={refreshState.busy} onClick={refreshData} type="button">{refreshState.busy ? 'Refreshing…' : 'Refresh'}</button></div>
+      <div aria-live="polite" className={`system-ribbon ${allHealthy ? 'system-ribbon-good' : 'system-ribbon-warn'}`}>
+        <div><i aria-hidden="true" /><span><strong>{allHealthy ? 'All systems operational' : dashboardStatus}</strong><small>{runningWatchers}/{watcherCount} processes running · {healthyWatchers} feeds healthy{waitingForOpen ? ` · ${waitingForOpen} waiting for futures to reopen` : ''} · snapshot {formatAge(data?.generatedAt, nowMs)} · candle {formatAge(latestCandleAt, nowMs)}</small></span></div>
+        <div className="system-ribbon-meta"><span className={dataIsLive ? 'data-status data-status-live' : 'data-status data-status-delayed'}>Data status: {dataIsLive ? 'Live' : 'Delayed'} · {sourceLabel}</span><time dateTime={data?.generatedAt || undefined}>Updated {formatStamp(data?.generatedAt)}{latestHeartbeatAt ? ` · heartbeat ${formatAge(latestHeartbeatAt, nowMs)}` : ''}</time><button disabled={refreshState.busy} onClick={refreshData} type="button">{refreshState.busy ? 'Refreshing…' : 'Refresh'}</button></div>
       </div>
 
       {refreshState.error || data?.error ? <p className="command-alert" role="status">{refreshState.error || 'The live bridge is unavailable. The last safe snapshot remains visible.'}</p> : null}
 
       <div className="command-metrics">
         <CompactMetric label="Focus equity" value={formatUsd(totals.balanceUsd)} detail={`${formatUsd(totals.realizedPnlUsd)} realized · ${formatUsd(fullTotals.balanceUsd)} full system`} tone={totals.realizedPnlUsd >= 0 ? 'positive' : 'negative'} />
-        <CompactMetric label="Today’s P&L" value={formatUsd(daily.activePnlUsd)} detail={`${daily.trades} closed · ${daily.openTrades} open`} tone={daily.activePnlUsd >= 0 ? 'positive' : 'negative'} />
+        <CompactMetric label="Today’s P&L" value={formatUsd(daily.activePnlUsd)} detail={`${daily.trades} closed · ${daily.openPositions} positions · ${daily.pendingOrders} pending`} tone={daily.activePnlUsd >= 0 ? 'positive' : 'negative'} />
         <CompactMetric label="Open risk" value={formatUsd(risk?.reservedRiskUsd || 0)} detail={`${formatUsd(risk?.availableRiskUsd || 0)} available`} />
         <CompactMetric label="Total trades" value={String(totals.trades)} detail={`${formatPercent(winRate)} win rate`} />
         <CompactMetric label="Max drawdown" value={formatUsd(analytics.maxDrawdown)} detail={`${analytics.streaks.maxWins}W / ${analytics.streaks.maxLosses}L longest streaks`} />
@@ -1354,6 +1426,7 @@ function CompactDashboard({ data, strategies, refreshData, refreshState }) {
 
 export default function LiveStrategyBoard({ initialData, compact = false }) {
   const [data, setData] = useState(initialData);
+  const [nowMs, setNowMs] = useState(() => Date.parse(initialData?.generatedAt || '') || 0);
   const [selectedDate, setSelectedDate] = useState('');
   const [refreshState, setRefreshState] = useState({ busy: false, error: '' });
 
@@ -1369,6 +1442,7 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
         throw new Error(payload?.error || 'Status service did not return strategy data');
       }
       setData(payload);
+      setNowMs(Date.now());
       setRefreshState({ busy: false, error: '' });
     } catch (error) {
       setRefreshState({
@@ -1389,17 +1463,19 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
         const payload = await response.json();
         if (!cancelled && response.ok && payload?.strategies) {
           setData(payload);
+          setNowMs(Date.now());
         }
       } catch {
         // Keep the last good snapshot visible.
       }
     }
 
-    refresh();
     const timer = setInterval(refresh, 30000);
+    const clock = setInterval(() => setNowMs(Date.now()), 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      clearInterval(clock);
     };
   }, []);
 
@@ -1414,7 +1490,7 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
 
   if (compact) {
-    return <CompactDashboard data={data} strategies={strategies} refreshData={refreshData} refreshState={refreshState} />;
+    return <CompactDashboard data={data} strategies={strategies} nowMs={nowMs} refreshData={refreshData} refreshState={refreshState} />;
   }
 
   return (

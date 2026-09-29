@@ -19,6 +19,7 @@ const {
 } = require('./lib/trader-core.cjs');
 const {
   buildPlanFromSignal,
+  clearTerminalUnfilledPlan,
   detectSignalFromCandles,
   fetchLiveCandles,
   formatOpenTradeSummary,
@@ -308,6 +309,22 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
         ? candles.filter((candle) => new Date(candle.timestamp).getTime() >= new Date(state.live.openTriggeredAt).getTime())
         : candles;
       const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false });
+      if (clearTerminalUnfilledPlan(state, lifecycle)) {
+        summaryLines.push(`No trade: Paper order ${lifecycle.exitReason}; shared risk reservation released`);
+        saveLiveState(statePath, state);
+        const signature = JSON.stringify({
+          mode: 'terminal-unfilled-order',
+          exitReason: lifecycle.exitReason,
+          lastTimestamp: lastCandle ? lastCandle.timestamp : null
+        });
+        if (signature !== lastSignature) {
+          lastSignature = signature;
+          console.log(`[${new Date().toISOString()}] live tick`);
+          console.log(summaryLines.join('\n'));
+          console.log('');
+        }
+        return;
+      }
       summaryLines.push(formatOpenTradeSummary(state.live.openPlan, lifecycle));
       if (lifecycle.filledAt) {
         const adaptive = state.live.openPlan.adaptive;
