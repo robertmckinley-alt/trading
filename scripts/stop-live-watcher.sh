@@ -58,6 +58,8 @@ stop_watcher "volume POC reversion" "volume-poc-reversion" "$RUNTIME_DIR/volume-
 stop_watcher "15-minute opening-range retest" "nq-15m-opening-range-retest" "$RUNTIME_DIR/nq-15m-opening-range-retest-watch.pid"
 stop_watcher "15-minute ORB close confirmation" "nq-15m-orb-close-confirmation" "$RUNTIME_DIR/nq-15m-orb-close-confirmation-watch.pid"
 stop_watcher "DMC market open" "nq-dmc-market-open" "$RUNTIME_DIR/nq-dmc-market-open-watch.pid"
+stop_watcher "DMC failed-level reversal" "nq-dmc-failed-level-reversal" "$RUNTIME_DIR/nq-dmc-failed-level-reversal-watch.pid"
+stop_watcher "DMC gain retest" "nq-dmc-gain-retest" "$RUNTIME_DIR/nq-dmc-gain-retest-watch.pid"
 stop_watcher "HTF session sweep" "nq-htf-session-sweep" "$RUNTIME_DIR/nq-htf-session-sweep-watch.pid"
 
 feed_pid="$(find_existing_watcher_pid "$FEED_PID_FILE" "python3 scripts/databento-live-feed.py")"
@@ -83,6 +85,8 @@ for (const filename of [
   'state-nq-15m-opening-range-retest.json',
   'state-nq-15m-orb-close-confirmation.json',
   'state-nq-dmc-market-open.json',
+  'state-nq-dmc-failed-level-reversal.json',
+  'state-nq-dmc-gain-retest.json',
   'state-nq-htf-session-sweep.json'
 ]) {
   const statePath = path.join(process.cwd(), filename);

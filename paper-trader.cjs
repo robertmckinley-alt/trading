@@ -439,7 +439,7 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
       }
       const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
-      if (plan.setup.execution === 'next-bar-market') {
+      if (plan.setup.execution === 'next-bar-market' || require('./lib/dmc-level-bots.cjs').SLUGS.includes(config.detectorStrategySlug)) {
         // Forward paper fills cannot precede the time this watcher actually observed the signal.
         plan.setup.signalAvailableAt = new Date(Math.max(Date.now(), Date.parse(plan.setup.signalAvailableAt) || 0)).toISOString();
       }
