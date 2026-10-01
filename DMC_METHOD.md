@@ -9,6 +9,7 @@ This repository implements a deterministic, paper-only translation of the Hunter
 - Paper window: 09:30–10:30 `America/New_York`
 - Higher-timeframe context: 18–24 strictly complete one-hour candles
 - Bias candle: final complete hour before the Nasdaq cash open
+- October 1 timing correction: the hour must finish before 09:30 New York; the 09:00–10:00 hour cannot replace the bias after it completes.
 - Levels: fresh candle-body prices at confirmed hourly pivot highs and lows
 - Confirmation: a strictly complete five-minute candle that touches and holds the level in the expected direction
 - Entry: limit order at the body level, submitted only after confirmation closes

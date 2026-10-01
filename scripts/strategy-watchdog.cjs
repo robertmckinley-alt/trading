@@ -3,32 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
+const { isManagedWatcher, matchingPids } = require('../lib/watcher-process.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const RUNTIME = path.join(ROOT, 'runtime');
 const STATE_FILE = path.join(RUNTIME, 'strategy-watchdog-state.json');
 const COOLDOWN_MS = 5 * 60_000;
-
-function isManagedWatcher(cwd, args, slug) {
-  return cwd === ROOT && path.basename(args[0] || '') === 'node'
-    && path.resolve(cwd, args[1] || '') === path.join(ROOT, 'paper-trader.cjs')
-    && args[2] === 'watch-live' && args.includes(`--strategy=${slug}`)
-    && args.includes('--provider=databento-live') && args.includes('--interval=60000');
-}
-
-function matchingPids(slug) {
-  const found = [];
-  for (const entry of fs.readdirSync('/proc')) {
-    if (!/^\d+$/.test(entry)) continue;
-    try {
-      const cwd = fs.readlinkSync(`/proc/${entry}/cwd`);
-      const args = fs.readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0').filter(Boolean);
-      if (!isManagedWatcher(cwd, args, slug)) continue;
-      found.push(Number(entry));
-    } catch { /* Process exited while scanning /proc. */ }
-  }
-  return found.sort((a, b) => a - b);
-}
 
 function atomicWrite(file, data) {
   const temp = `${file}.${process.pid}.tmp`;
@@ -44,6 +24,7 @@ function run() {
   for (const strategy of STRATEGIES) {
     const files = runtimeFilesForStrategy(ROOT, strategy.slug);
     const pids = matchingPids(strategy.slug);
+    if (pids === null) throw new Error('Strategy watchdog requires Linux process discovery');
     if (pids.length) {
       if (pids.length === 1) fs.writeFileSync(files.pidPath, `${pids[0]}\n`);
       state.strategies[strategy.slug] = { status: pids.length === 1 ? 'running' : 'duplicate-processes', pids, checkedAt: new Date().toISOString() };

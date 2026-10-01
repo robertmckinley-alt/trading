@@ -85,6 +85,25 @@ test('DMC fails closed on incomplete confirmation data and manual news blackouts
   assert.match(detectDmcMarketOpenSignal(candles, blackedOut, { trades: [] }).reason, /blackout/);
 });
 
+test('DMC never replaces its pre-open bias with the 09:00–10:00 cash-overlapping hour', () => {
+  const candles = dmcCandles();
+  // Complete 09:00–10:00 with a very wide range that would invalidate the bias
+  // if selected. A later eligible five-minute confirmation keeps entry testable.
+  const future = Array.from({ length: 30 }, (_, i) => ({
+    timestamp: new Date(Date.parse('2026-02-03T14:35:00Z') + i * 60000).toISOString(),
+    open: i >= 25 ? 100.25 + (i - 25) * 0.1 : 103,
+    close: i >= 25 ? 100.35 + (i - 25) * 0.1 : 103,
+    high: i === 0 ? 180 : i >= 25 ? 100.35 + (i - 25) * 0.1 : 104,
+    low: i === 1 ? 60 : i === 25 ? 100 : i >= 25 ? 100.2 + (i - 25) * 0.1 : 102,
+    volume: 140
+  }));
+  const result = detectDmcMarketOpenSignal([...candles, ...future], config, { trades: [] });
+  assert.equal(result.found, true, result.reason);
+  assert.equal(result.sweepTimestamp, '2026-02-03T13:59:00.000Z');
+  assert.equal(result.setup.stop, 97.5);
+  assert.equal(result.metadata.pattern, 'failure-to-lose');
+});
+
 test('DMC aggregation rejects duplicate or missing minutes and resolves New York expiry through DST', () => {
   const candles = dmcCandles().slice(0, 60);
   assert.equal(completeBars(candles, 60).length, 1);

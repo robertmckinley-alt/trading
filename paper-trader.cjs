@@ -564,6 +564,11 @@ async function main() {
     accountType: strategyDefinition.accountType || 'baseline',
     challengerExperiment: strategyDefinition.experiment || null
   };
+  if (command === 'watch-live') {
+    const release = require('./lib/watcher-process.cjs').acquireWatcherLock(BASE, strategySlug);
+    process.once('exit', release);
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => process.exit(0));
+  }
   const state = loadState(config, statePath);
 
   if (!command) {
