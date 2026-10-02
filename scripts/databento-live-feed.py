@@ -9,6 +9,7 @@ import sys
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import math
 
 
 PRICE_SCALE = 1_000_000_000
@@ -31,6 +32,52 @@ def atomic_write_json(output_path, payload):
     os.replace(temporary_path, output_path)
 
 
+def retained_live_bars(output_path, args):
+    """Warm context only from the exact existing LIVE stream; never historical files."""
+    try:
+        payload = json.loads(output_path.read_text(encoding='utf-8'))
+        expected = {'mode': 'live', 'provider': 'databento-live', 'dataset': args.dataset,
+                    'symbol': args.symbol, 'schema': args.schema, 'stypeIn': args.stype_in}
+        if any(payload.get(k) != v for k, v in expected.items()):
+            return OrderedDict()
+        valid = {}
+        for candle in payload.get('candles', []):
+            try:
+                at = datetime.fromisoformat(candle['timestamp'].replace('Z', '+00:00'))
+                values = [candle[k] for k in ('open', 'high', 'low', 'close', 'volume')]
+                if at.tzinfo is None or at.second or at.microsecond or at > datetime.now(timezone.utc):
+                    continue
+                if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values):
+                    continue
+                if candle['low'] > min(candle['open'], candle['close']) or candle['high'] < max(candle['open'], candle['close']) or candle['volume'] < 0:
+                    continue
+                timestamp = at.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+                valid[timestamp] = {**candle, 'timestamp': timestamp}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+        return OrderedDict(sorted(valid.items())[-max(1, args.max_bars):])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return OrderedDict()
+
+
+def merge_live_bar(bars, candle, max_bars):
+    bars[candle['timestamp']] = candle
+    # Reconnect replay arrives before already retained candles; never regress latest.
+    return OrderedDict(sorted(bars.items())[-max(1, max_bars):])
+
+
+def acquire_writer_lock(output_path):
+    import fcntl
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    owner = output_path.with_name(output_path.name + '.writer.lock').open('a')
+    try:
+        fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        owner.close()
+        raise RuntimeError(f'Another live feed owns {output_path.name}; refusing a second cache writer') from exc
+    return owner
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--key-env", default="DATABENTO_API_KEY")
@@ -40,7 +87,7 @@ def main():
     parser.add_argument("--stype-in", default="continuous")
     parser.add_argument("--output", default="runtime/databento-live.json")
     parser.add_argument("--replay-hours", type=float, default=23)
-    parser.add_argument("--max-bars", type=int, default=1600)
+    parser.add_argument("--max-bars", type=int, default=4800)
     args = parser.parse_args()
 
     api_key = os.environ.get(args.key_env)
@@ -55,7 +102,8 @@ def main():
         ) from exc
 
     output_path = Path(args.output).resolve()
-    bars = OrderedDict()
+    owner_lock = acquire_writer_lock(output_path)  # Keep open for the process lifetime.
+    bars = retained_live_bars(output_path, args)
     started_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     client = db.Live(key=api_key, reconnect_policy="reconnect")
 
@@ -72,15 +120,17 @@ def main():
             "startedAt": started_at,
             "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "latestCandleAt": latest_at,
+            "writerPid": os.getpid(),
             "candles": candles,
         })
 
     def on_record(record):
+        nonlocal bars
         required = ("ts_event", "open", "high", "low", "close")
         if not all(hasattr(record, name) for name in required):
             return
         timestamp = timestamp_to_iso(record.ts_event)
-        bars[timestamp] = {
+        candle = {
             "timestamp": timestamp,
             "open": price_to_float(record.open),
             "high": price_to_float(record.high),
@@ -88,9 +138,7 @@ def main():
             "close": price_to_float(record.close),
             "volume": int(getattr(record, "volume", 0)),
         }
-        bars.move_to_end(timestamp)
-        while len(bars) > max(1, args.max_bars):
-            bars.popitem(last=False)
+        bars = merge_live_bar(bars, candle, args.max_bars)
         write_cache()
 
     def on_exception(error):
@@ -119,6 +167,7 @@ def main():
     )
     client.start()
     client.block_for_close()
+    owner_lock.close()
 
 
 if __name__ == "__main__":

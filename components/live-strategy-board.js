@@ -1181,6 +1181,7 @@ function StrategyCard({ strategy, isBridgeFallback }) {
       )}
 
       <StrategyOutcome strategy={strategy} isBridgeFallback={isBridgeFallback} />
+      <ScanEvidence strategy={strategy} />
 
       {strategy.mode === 'live-watcher' && strategy.live?.latestError ? (
         <p className="live-inline-error">Latest feed issue: {strategy.live.latestError.message}</p>
@@ -1232,6 +1233,21 @@ function compactWatcherStatus(strategy, orb) {
   return { label: 'Offline', tone: '', title: watcher.statusLabel || 'No active watcher process or saved live evidence.' };
 }
 
+function ScanEvidence({ strategy, compact = false }) {
+  const scan = strategy.live?.scanAudit;
+  if (!scan) return null;
+  return (
+    <span className="live-inline-meta" aria-label={`${strategy.name} scan evidence`}>
+      <span>Scanning every {Math.round(scan.pollIntervalMs / 1000)}s · {scan.candleChecks} candles checked · {scan.observedSessions} eligible sessions</span>
+      <br />
+      <span>{scan.setupChecks} eligible checks · {scan.signals} setups · {scan.orders} paper orders</span>
+      {!compact ? <><br /><span>{scan.unfilledOrders} unfilled orders · {scan.riskRejections} order blocks · {scan.feedErrors} feed/run errors</span>
+        <br /><span>Tracking since {formatStamp(scan.startedAt)} · {scan.rulesVersion === 'baseline' ? 'Baseline rules' : 'Unvalidated paper collection v2'}</span>
+        {scan.lastSetupReason ? <><br /><span>Last eligible check: {scan.lastSetupReason} ({formatStamp(scan.lastSetupCheckAt)})</span></> : null}</> : null}
+    </span>
+  );
+}
+
 function CompactStrategyTable({ strategies, orb }) {
   const ranked = strategies.slice().sort((a, b) => (
     Number(isWatchlistStrategy(a)) - Number(isWatchlistStrategy(b)) ||
@@ -1262,6 +1278,7 @@ function CompactStrategyTable({ strategies, orb }) {
                 <tr key={strategy.slug}>
                   <th scope="row">
                     <Link href={strategy.route}><strong>{strategy.name}</strong><span>{strategy.paperAccountLabel}{isWatchlistStrategy(strategy) ? ' · Watchlist' : ''}</span></Link>
+                    <ScanEvidence strategy={strategy} compact />
                   </th>
                   <td><span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span></td>
                   <td>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</td>
@@ -1292,6 +1309,7 @@ function CompactStrategyTable({ strategies, orb }) {
                 <span><strong>{strategy.name}</strong><small>{strategy.paperAccountLabel}{isWatchlistStrategy(strategy) ? ' · Watchlist' : ''}</small></span>
                 <span className={`table-status ${status.tone === 'good' ? 'table-status-good' : status.tone === 'warn' ? 'table-status-warn' : ''}`} title={status.title}><i aria-hidden="true" />{status.label}</span>
               </span>
+              <ScanEvidence strategy={strategy} compact />
               <span className="command-strategy-row-metrics">
                 <span><small>Balance</small><strong>{formatUsd(journal.balanceUsd ?? strategy.bankrollUsd ?? 0)}</strong></span>
                 <span><small>Today</small><strong className={today >= 0 ? 'number-positive' : 'number-negative'}>{formatUsd(today)}</strong></span>

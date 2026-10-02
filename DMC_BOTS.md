@@ -1,5 +1,7 @@
 # DMC level-to-level paper experiments
 
+Active-rule notice (October 2, 2026 UTC): [forward paper collection v2](PAPER_COLLECTION.md) is enabled by user request. It replaces the M15-only/first-test/morning-only contract below with explicitly versioned M5 paper rules. The original text remains baseline documentation, not a description of the active v2 thresholds.
+
 Research date: September 29, 2026. Sources are historical creator lessons and current Discord posts, not verified trading performance. These are independent implementations, not Hunter's proprietary signal-bot code. No community executable or source file was downloaded or run.
 
 ## Existing and new accounts

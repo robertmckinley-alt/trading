@@ -34,7 +34,7 @@ function fixture(progression = false) {
     : { open: 101, close: 102, high: 102.25, low: 97.75 }));
   return candles;
 }
-function config(slug = bots.SLUGS[0]) { return { ...structuredClone(base), strategySlug: slug, detectorStrategySlug: slug }; }
+function config(slug = bots.SLUGS[0]) { const cfg = structuredClone(base); cfg.live.paperCollection = { enabled: false }; return { ...cfg, strategySlug: slug, detectorStrategySlug: slug }; }
 function mirrored(candles) { return candles.map(c => ({ ...c, open: 214 - c.open, close: 214 - c.close, high: 214 - c.low, low: 214 - c.high })); }
 
 test('DMC failed-level reversal has symmetric long and short structural plans', () => {

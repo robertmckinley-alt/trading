@@ -1,5 +1,7 @@
 # Hunter DMC Market-Open Translation
 
+Active-rule notice (October 2, 2026 UTC): the user-approved [forward paper collection v2](PAPER_COLLECTION.md) overrides the entry window, reaction/quality rules, execution swing stop and entry/exit model below. This document preserves the baseline contract for comparison and rollback. Neither version is verified profitable or an exact creator replication.
+
 This repository implements a deterministic, paper-only translation of the Hunter DMC educational method. Creator performance claims are not treated as verified results.
 
 ## Frozen strategy contract

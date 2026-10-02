@@ -277,6 +277,8 @@ function persistClosedTrade(statePath, state, config, strategyDefinition, plan, 
 }
 
 async function runWatchLive(config, state, strategyDefinition, intervalMs, statePath) {
+  const observation = require('./lib/watcher-observation.cjs');
+  observation.initialize(state, config);
   const liveConfig = normalizeStrategyConfig(config);
   let lastSignature = null;
   const actualIntervalMs = intervalMs || liveConfig.pollIntervalMs;
@@ -295,6 +297,7 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
       error: null
     };
     const adaptiveDecision = evaluateAdaptiveBots(candles, config, state);
+    const detectedSignal = observation.evaluateFreshCandles({ candles, config, state, detect: detectSignalFromCandles });
     state.live.adaptive = adaptiveDecision;
     state.learning = adaptiveDecision.learning;
     synchronizeLearningAutomation(state, config, strategyDefinition);
@@ -310,6 +313,7 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
         : candles;
       const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false });
       if (clearTerminalUnfilledPlan(state, lifecycle)) {
+        observation.record(state.live.scanAudit, 'unfilledOrders', lastCandle.timestamp, lifecycle.exitReason);
         summaryLines.push(`No trade: Paper order ${lifecycle.exitReason}; shared risk reservation released`);
         saveLiveState(statePath, state);
         const signature = JSON.stringify({
@@ -378,7 +382,6 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
       return;
     }
 
-    const detectedSignal = detectSignalFromCandles(candles, config, state);
     if (detectedSignal.found) {
       detectedSignal.metadata = {
         ...detectedSignal.metadata,
@@ -439,10 +442,9 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
       }
       const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
-      if (plan.setup.execution === 'next-bar-market' || require('./lib/dmc-level-bots.cjs').SLUGS.includes(config.detectorStrategySlug)) {
-        // Forward paper fills cannot precede the time this watcher actually observed the signal.
-        plan.setup.signalAvailableAt = new Date(Math.max(Date.now(), Date.parse(plan.setup.signalAvailableAt) || 0)).toISOString();
-      }
+      observation.bindForwardObservation(plan);
+      plan.signalContext = { ...(plan.signalContext || {}), rulesVersion: state.live.scanAudit.rulesVersion,
+        observedAt: plan.setup.observedAt };
       plan.adaptive = adaptiveDecision;
       const portfolioDecision = reservePortfolioRisk({
         rootDir: BASE,
@@ -468,6 +470,8 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
           };
           saveLiveState(statePath, { ...state, live: nextLiveState });
           state.live = nextLiveState;
+          observation.record(state.live.scanAudit, 'orders', signal.triggerTimestamp);
+          saveLiveState(statePath, state);
         }
       });
       if (!portfolioDecision.allowed) {
@@ -477,6 +481,8 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
         throw new Error(`Shared portfolio risk guard: ${portfolioDecision.reason}`);
       }
     } catch (error) {
+      observation.record(state.live.scanAudit, 'riskRejections', lastCandle.timestamp, error.message);
+      saveLiveState(statePath, state);
       summaryLines.push(`No trade: ${error.message}`);
       const signature = JSON.stringify({
         mode: 'rejected-signal',
@@ -513,6 +519,7 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
     try {
       await tick();
     } catch (error) {
+      state.live.scanAudit.feedErrors++;
       state.live.heartbeat = {
         ...(state.live.heartbeat || {}),
         at: new Date().toISOString(),

@@ -59,3 +59,21 @@ test('HTF session sweep backtest evaluates every minute in its entry window', ()
   assert.equal(checkpoints.at(-1), 689);
   assert.equal(checkpoints.length, 210);
 });
+
+test('collection HTF stop uses the confirmed rejection swing, not the whole London extreme', () => {
+  const candles = validLongSetup();
+  candles[390].low = 80;
+  const cfg = { ...structuredClone(config), strategySlug: 'nq-htf-session-sweep' };
+  const signal = detectHtfSessionSweepSignal(candles, cfg, { trades: [] });
+  assert.equal(signal.found, true, signal.reason);
+  assert.equal(signal.setup.stop, 98.5);
+  assert.equal(signal.metadata.rulesVersion, require('../lib/paper-collection.cjs').VERSION);
+  assert.ok(signal.metadata.stopDistancePoints <= 24);
+  cfg.live.paperCollection.enabled = false;
+  const baseline = detectHtfSessionSweepSignal(candles, cfg, { trades: [] });
+  assert.equal(baseline.found, false);
+  assert.match(baseline.reason, /Structural stop/);
+  cfg.live.paperCollection.enabled = true;
+  candles[400].high = 111;
+  assert.match(detectHtfSessionSweepSignal(candles, cfg, { trades: [] }).reason, /both sides/);
+});
