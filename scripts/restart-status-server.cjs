@@ -37,12 +37,14 @@ async function main() {
   child.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await wait(250);
-    if (!matchingPids().includes(child.pid)) continue;
+    // A supervisor may have restarted this same checkout before our child bound.
+    const managedPids = matchingPids();
+    if (!managedPids.length) continue;
     try {
       const response = await fetch(`http://127.0.0.1:${Number(process.env.LIVE_STATUS_PORT || 3210)}/healthz`, { signal: AbortSignal.timeout(1000) });
       const health = await response.json();
-      if (response.ok && health.ok && health.pid === child.pid) {
-        console.log(`HEALTHY status PID ${child.pid}. The daily backtest worker starts automatically.`);
+      if (response.ok && health.ok && managedPids.includes(health.pid)) {
+        console.log(`HEALTHY status PID ${health.pid}. The daily backtest worker starts automatically.`);
         console.log('Progress: runtime/backtest-results.json.progress.json');
         return;
       }
