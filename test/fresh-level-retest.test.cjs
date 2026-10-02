@@ -57,3 +57,27 @@ test('actual detector accepts first retest, targets fresh resistance, rejects re
  candles.push({timestamp:'2026-09-30T14:06:00.000Z',open:104,high:105,low:100,close:103,volume:10});
  assert.equal(rules.detect(candles,config,{trades:[]}).found,false);
 });
+test('session anchor needs 24 pre-entry hours, not prior UTC midnight',()=>{
+ assert.equal(new Date(rules.contextStartForDate('2026-10-02')).toISOString(),'2026-10-01T13:35:00.000Z');
+ assert.equal(new Date(rules.contextStartForDate('2026-12-02')).toISOString(),'2026-12-01T14:35:00.000Z');
+ const candles=[];
+ for(let t=Date.parse('2026-10-01T13:35:00Z');t<=Date.parse('2026-10-02T14:05:00Z');t+=60000)candles.push({timestamp:new Date(t).toISOString(),open:80,high:81,low:79,close:80});
+ function set(time,v){Object.assign(candles.find(c=>c.timestamp===`2026-10-02T${time}:00.000Z`),v);}
+ set('12:10',{high:120});set('13:00',{high:100});
+ for(let m=0;m<5;m++)set(`14:0${m}`,{open:103,high:106,low:102,close:105});
+ set('14:05',{open:104,high:105,low:100,close:103});
+ assert.equal(rules.contextStatus(candles,'2026-10-02').ready,true);
+ const result=rules.detect(candles,config,{trades:[]});assert.equal(result.found,true,JSON.stringify(result));
+ const missing=rules.detect(candles.slice(1),config,{trades:[]});assert.equal(missing.found,false);assert.match(missing.reason,/need 24-hour pre-session context/);
+});
+test('live context remains fixed across the trading window',()=>{
+ for(const at of ['2026-10-02T13:35:00Z','2026-10-02T19:29:00Z'])assert.equal(rules.contextStartForDate(rules.parts(Date.parse(at)).date),Date.parse('2026-10-01T13:35:00Z'));
+});
+
+test('watcher audit exposes corrected version and actual context coverage',()=>{
+ const state={trades:[],live:{}};
+ const candles=[{timestamp:'2026-10-01T13:35:00Z',open:80,high:81,low:79,close:80},{timestamp:'2026-10-02T14:00:00Z',open:80,high:81,low:79,close:80}];
+ require('../lib/watcher-observation.cjs').evaluateFreshCandles({candles,config:{...config,strategySlug:rules.SLUG},state,detect:()=>({found:false,reason:'fixture'}),now:Date.parse('2026-10-02T14:01:00Z')});
+ assert.equal(state.live.scanAudit.rulesVersion,rules.VERSION);assert.equal(state.live.scanAudit.contextCoverage.ready,true);
+ assert.equal(state.live.scanAudit.contextCoverage.requiredStartAt,'2026-10-01T13:35:00.000Z');
+});
