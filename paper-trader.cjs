@@ -563,6 +563,7 @@ async function main() {
   const baseConfig = loadConfig();
   const config = {
     ...baseConfig,
+    ...(detectorStrategySlug === 'nq-fresh-level-retest' ? {...require('./lib/fresh-level-retest.cjs').ACCOUNT,live:{...baseConfig.live,lookbackBars:6000}} : {}),
     ...(detectorStrategySlug === 'mgc-open-ema12' ? require('./lib/gold-open-ema.cjs').config(baseConfig) : {}),
     ...(detectorStrategySlug === 'nq-vwap-stretch-reversion' ? require('./lib/vwap-stretch.cjs').ACCOUNT : {}),
     strategySlug,

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import FreshLevelHistory from './fresh-level-history';
 import OrbLearningPanel from './orb-learning-panel';
 import OrbDiscoveryPanel from './orb-discovery-panel';
 
@@ -50,6 +51,7 @@ function BacktestCard({ strategy, validation, qualification }) {
         <div><dt>Trailing 30% trades</dt><dd>{review.holdout.trades}</dd></div>
         <div><dt>Trailing expectancy</dt><dd>{money(review.holdout.expectancyUsd)}</dd></div>
       </dl>
+      {strategy.slug === 'nq-fresh-level-retest' && <FreshLevelHistory source={source} accountView={accountView} />}
       <div className="backtest-gates" aria-label={`${strategy.name} backtest gates`}>
         {Object.entries(review.gates).map(([gate, passed]) => (
           <span className={passed ? 'backtest-gate-pass' : 'backtest-gate-fail'} key={gate}>{passed ? 'Pass' : 'Fail'} · {gate.replace('lockedHoldout', 'trailingSample').replace('positiveHoldout', 'positiveTrailingSample').replace(/([A-Z])/g, ' $1')}</span>
@@ -203,6 +205,7 @@ export default function BacktestRunner({ view = 'all' }) {
         {pending && <div className="orb-progress" role="status"><strong>Simulation running</strong><p>{progress?.strategy ? `Strategy ${progress.strategyIndex} of ${progress.strategyTotal}: ${progress.strategy}` : progress?.phase || 'Preparing worker'}</p>{progress?.daysTotal ? <><progress max={progress.daysTotal} value={progress.daysCompleted || 0} /><p>{progress.daysCompleted || 0} of {progress.daysTotal} dates processed for this strategy · {progress.date || ''}</p></> : null}<small>Latest update: {progress?.updatedAt || 'waiting for first progress report'}. The previous completed report stays visible below.</small></div>}
       </section>
 
+      {!orbView && !result?.strategies?.some(s => s.slug === 'nq-fresh-level-retest') && <section className="backtest-card"><h2><Link href="/strategies/nq-fresh-level-retest">Fresh Level Retest</Link></h2><p>Registered for a separate $50,000 paper account with a $250 risk cap. Historical simulation pending on the data server. Equity, drawdown and monthly results will appear after the run completes.</p></section>}
       {result ? (
         <section className="backtest-results" aria-labelledby="backtest-results-title">
           <div className="section-heading">

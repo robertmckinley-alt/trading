@@ -828,11 +828,11 @@ test('challenger experiment rejects only its frozen underperforming segment', ()
   assert.equal(allowed.found, true);
 });
 
-test('strategy registry gives all thirteen bots isolated runtime files and risk families', () => {
-  assert.equal(STRATEGIES.length, 13);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 13);
+test('strategy registry gives all fourteen bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 14);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 14);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 13);
+  assert.equal(new Set(paths).size, 14);
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
@@ -841,7 +841,7 @@ test('strategy registry gives all thirteen bots isolated runtime files and risk 
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
   assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
-  assert.equal(BACKTEST_STRATEGIES.length, 32);
+  assert.equal(BACKTEST_STRATEGIES.length, 33);
   assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });
