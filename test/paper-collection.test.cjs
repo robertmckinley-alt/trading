@@ -41,6 +41,7 @@ test('collection market-open uses a completed M5 reaction and real three-minute 
   c.splice(-5,5,...reaction);
   const cfg=config('nq-dmc-market-open'),s=dmc.detectDmcMarketOpenSignal(c,cfg);
   assert.equal(s.found,true,s.reason);assert.equal(s.setup.execution,'next-bar-market');
+  assert.equal(Date.parse(s.setup.orderExpiresAt)-Date.parse(s.setup.signalAvailableAt),180000);
   assert.equal(s.setup.stop,98.75);assert.equal(s.metadata.executionSwingMinutes,3);
   assert.equal(s.setup.exitAllAtTarget,true);assert.equal(s.setup.targets.length,1);
   const plan=live.buildPlanFromSignal(s,cfg,core.createEmptyState(cfg));assert.ok(plan.sizing.actualRiskUsd<=500);

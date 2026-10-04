@@ -1,3 +1,4 @@
+const {businessDate,completeCash}=require('../test-support/session-fixtures.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -52,7 +53,7 @@ function researchTrades(count, pnlForIndex = (index) => index % 2 === 0 ? 100 : 
       date: at.toISOString().slice(0, 10),
       createdAt: at.toISOString(),
       realizedPnlUsd: pnlForIndex(index),
-      rMultiple: pnlForIndex(index) / 100,
+      rMultiple: pnlForIndex(index) / 100, actualRiskUsd: 100, maeUsd: -50,
       side: index % 2 ? 'short' : 'long',
       session: 'New York',
       exitReason: pnlForIndex(index) > 0 ? 'target' : 'stop'
@@ -237,31 +238,31 @@ test('daily historical cache reuses overlapping windows and fetches only missing
       const end = Date.parse(url.searchParams.get('end'));
       calls.push({ start, end, symbol: url.searchParams.get('symbols') });
       const rows = [];
-      for (let time = start; time < end; time += 86_400_000) rows.push({
+      for (let time = start; time < end; time += 60_000) { const p=require('../lib/session-quality.cjs').parts(time); const d=new Date(p.date+'T12:00Z').getUTCDay(); if(d===6||(d===0&&p.minute<1080)||(d===5&&p.minute>=1020)||(p.minute>=1020&&p.minute<1080)||(p.minute>=975&&p.minute<990))continue; rows.push({
         ts_event: new Date(time).toISOString(), open: 100, high: 102, low: 99, close: 101, volume: 10
-      });
+      }); }
       return { ok: true, text: async () => JSON.stringify(rows) };
     }
   };
-  const window = { start: '2025-01-01T00:00:00.000Z', end: '2025-01-03T00:00:00.000Z' };
+  const window = { start: '2025-02-04T00:00:00.000Z', end: '2025-02-06T00:00:00.000Z' };
   try {
     const first = await fetchDatabentoHistoricalCandles({ ...options, window });
     const second = await fetchDatabentoHistoricalCandles({ ...options, window, apiKey: '', env: {}, fetchImpl: () => { throw new Error('Cache should avoid network'); } });
     assert.deepEqual(second.candles, first.candles);
     assert.equal(calls.length, 1);
-    const overlap = await fetchDatabentoHistoricalCandles({ ...options, window: { start: '2025-01-02T00:00:00.000Z', end: '2025-01-04T00:00:00.000Z' } });
-    assert.equal(overlap.candles.length, 2);
+    const overlap = await fetchDatabentoHistoricalCandles({ ...options, window: { start: '2025-02-05T00:00:00.000Z', end: '2025-02-07T00:00:00.000Z' } });
+    assert.equal(overlap.candles.length, 2730);
     assert.equal(calls.length, 2);
-    assert.equal(calls[1].start, Date.parse('2025-01-03T00:00:00Z'));
+    assert.equal(calls[1].start, Date.parse('2025-02-06T00:00:00Z'));
     assert.ok(events.some((event) => event.phase === 'cache-read' && event.cachedDays === 2));
     await fetchDatabentoHistoricalCandles({ ...options, window, symbol: 'MNQ.v.0' });
     assert.equal(calls.length, 3);
     assert.equal(calls[2].symbol, 'MNQ.v.0');
-    const identityDir = fs.readdirSync(cacheDir).find((directory) => JSON.parse(fs.readFileSync(path.join(cacheDir, directory, '2025-01-01.json'))).identity.includes('"symbol":"NQ.v.0"'));
-    fs.writeFileSync(path.join(cacheDir, identityDir, '2025-01-01.json'), 'broken');
+    const identityDir = fs.readdirSync(cacheDir).find((directory) => JSON.parse(fs.readFileSync(path.join(cacheDir, directory, '2025-02-04.json'))).identity.includes('"symbol":"NQ.v.0"'));
+    fs.writeFileSync(path.join(cacheDir, identityDir, '2025-02-04.json'), 'broken');
     await fetchDatabentoHistoricalCandles({ ...options, window });
     assert.equal(calls.length, 4);
-    assert.equal(calls[3].end, Date.parse('2025-01-02T00:00:00Z'));
+    assert.equal(calls[3].end, Date.parse('2025-02-05T00:00:00Z'));
   } finally {
     fs.rmSync(cacheDir, { recursive: true, force: true });
   }
@@ -348,7 +349,7 @@ test('historical strategies are evaluated inside their actual entry windows', ()
 test('60-day backtest fills only after the detection checkpoint and reaches its separate 50-trade gate', () => {
   const candles = [];
   for (let day = 0; day < 60; day += 1) {
-    const first = new Date(Date.UTC(2026, 0, day + 1, 15, 0));
+    const first = new Date(Date.parse(businessDate(day)+'T15:00Z'));
     const second = new Date(first.getTime() + 60_000);
     const third = new Date(first.getTime() + 120_000);
     const fourth = new Date(first.getTime() + 180_000);
@@ -362,8 +363,9 @@ test('60-day backtest fills only after the detection checkpoint and reaches its 
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
   let sequence = 0;
   const definition = { slug: 'test-strategy', name: 'Test strategy', strategyFamily: 'test', strategyFamilyName: 'Test' };
-  const result = runStrategyBacktest(candles, config, definition, {
+  const result = runStrategyBacktest(completeCash(candles), config, definition, {
     detectSignal(context) {
+      if(context.at(-1)._padding)return {found:false};
       if (context.length < 2) return { found: false };
       const trigger = context.at(-2);
       const date = trigger.timestamp.slice(0, 10);
@@ -401,7 +403,7 @@ test('historical recommendations never use the forward-paper promotion label', (
 test('an untradeable signal does not abort the remaining historical sessions', () => {
   const candles = [];
   for (let day = 0; day < 3; day += 1) {
-    const first = new Date(Date.UTC(2026, 0, day + 1, 15));
+    const first = new Date(Date.parse(businessDate(day)+'T15:00Z'));
     const second = new Date(first.getTime() + 60_000);
     const third = new Date(first.getTime() + 120_000);
     const fourth = new Date(first.getTime() + 180_000);
@@ -414,13 +416,14 @@ test('an untradeable signal does not abort the remaining historical sessions', (
   }
   const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
   let plans = 0;
-  const result = runStrategyBacktest(candles, config, {
+  const result = runStrategyBacktest(completeCash(candles), config, {
     slug: 'test-strategy',
     name: 'Test strategy',
     strategyFamily: 'test',
     strategyFamilyName: 'Test'
   }, {
     detectSignal(context) {
+      if(context.at(-1)._padding)return {found:false};
       if (context.length < 2) return { found: false };
       const trigger = context.at(-2);
       return {
@@ -750,7 +753,7 @@ test('negative rolling expectancy can reduce risk without changing strategy rule
   assert.match(learned.adjustment.reason, /expectancy is negative/);
 });
 
-test('learning nominates a structured challenger only after a losing twenty-trade sample', () => {
+test('learning nominates a structured challenger only after fifty forward trades and a losing recent twenty-trade sample', () => {
   const trades = Array.from({ length: 20 }, (_, index) => ({
     id: `segment-${index + 1}`,
     date: `2026-09-${String(index + 1).padStart(2, '0')}`,
@@ -762,7 +765,7 @@ test('learning nominates a structured challenger only after a losing twenty-trad
   const early = synchronizeStrategyLearning(trades.slice(0, 19), { strategySlug: 'nq-opening-range-breakout' });
   assert.equal(early.experimentRecommendation, null);
 
-  const learned = synchronizeStrategyLearning(trades, { strategySlug: 'nq-opening-range-breakout' });
+  const learned = synchronizeStrategyLearning([...Array.from({length:30},(_,i)=>({id:`warm-${i}`,realizedPnlUsd:0,evidenceType:'forward-paper'})),...trades.map(t=>({...t,evidenceType:'forward-paper'}))], { strategySlug: 'nq-opening-range-breakout' });
   assert.equal(learned.rolling.profitFactor, 0.5);
   assert.equal(learned.experimentRecommendation.action, 'create-paper-challenger');
   assert.equal(learned.experimentRecommendation.catalogId, 'exclude-underperforming-segment-v1');
@@ -782,7 +785,7 @@ test('eligible learning creates one isolated fifty-thousand-dollar challenger ac
     rMultiple: index < 10 ? -1 : 0.5,
     adaptive: { market: { regime: index < 10 ? 'quiet-chop' : 'trending' } }
   }));
-  const learning = synchronizeStrategyLearning(trades, { strategySlug: parentDefinition.slug });
+  const learning = synchronizeStrategyLearning([...Array.from({length:30},(_,i)=>({id:`warm-${i}`,realizedPnlUsd:0,evidenceType:'forward-paper'})),...trades.map(t=>({...t,evidenceType:'forward-paper'}))], { strategySlug: parentDefinition.slug });
   const config = { startingBalanceUsd: 50000, maxAccountDrawdownPercent: 10 };
   const created = synchronizeChallengerAccount({
     rootDir: directory,
@@ -1153,6 +1156,7 @@ test('research scorecard only promotes a strategy after every paper gate passes'
   const trades = Array.from({ length: 50 }, (_, index) => ({
     date: `2026-08-${String((index % 25) + 1).padStart(2, '0')}`,
     realizedPnlUsd: index % 5 === 0 ? -100 : 100,
+    actualRiskUsd: 100, maeUsd: -100,
     rMultiple: index % 5 === 0 ? -1 : 1
   }));
   const evaluation = evaluateStrategyJournal({ trades });

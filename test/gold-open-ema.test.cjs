@@ -35,6 +35,6 @@ test('live gold reader rejects a mislabeled NQ cache before using prices',async(
 });
 test('gold backtest executes a genuine next-bar trade using the same exit engine',()=>{
  const c=bars();c.push({timestamp:'2026-09-08T13:35:00Z',open:2502,high:2503,low:2490,close:2495,volume:100});
- const result=require('../lib/backtest-engine.cjs').runAllBacktests(c,config,{strategies:[require('../lib/strategy-registry.cjs').requireStrategyDefinition(gold.SLUG)]});
+ const result=require('../lib/backtest-engine.cjs').runAllBacktests(require('../test-support/session-fixtures.cjs').completeCash(c),config,{strategies:[require('../lib/strategy-registry.cjs').requireStrategyDefinition(gold.SLUG)]});
  assert.equal(result.strategies.length,1);assert.equal(result.strategies[0].trades.length,1);assert.ok(result.strategies[0].trades[0].realizedPnlUsd<0);
 });

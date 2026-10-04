@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import ExecutionComparison from './execution-comparison';
 import FreshLevelHistory from './fresh-level-history';
 import OrbLearningPanel from './orb-learning-panel';
 import OrbDiscoveryPanel from './orb-discovery-panel';
@@ -51,6 +52,7 @@ function BacktestCard({ strategy, validation, qualification }) {
         <div><dt>Trailing 30% trades</dt><dd>{review.holdout.trades}</dd></div>
         <div><dt>Trailing expectancy</dt><dd>{money(review.holdout.expectancyUsd)}</dd></div>
       </dl>
+      {review.total.constantRisk && <p>Equal-risk evidence: expectancy {review.total.constantRisk.expectancyR?.toFixed(3) ?? '—'}R; standard error {review.total.constantRisk.expectancyStandardErrorR?.toFixed(3) ?? '—'}R; MAE-inclusive drawdown {review.total.constantRisk.maxDrawdownR.toFixed(2)}R. {review.total.constantRisk.bandMethod}</p>}
       {strategy.slug === 'nq-fresh-level-retest' && <FreshLevelHistory source={source} accountView={accountView} />}
       <div className="backtest-gates" aria-label={`${strategy.name} backtest gates`}>
         {Object.entries(review.gates).map(([gate, passed]) => (
@@ -177,6 +179,7 @@ export default function BacktestRunner({ view = 'all' }) {
 
   return (
     <div className="backtest-runner">
+      <ExecutionComparison audit={result?.executionAudit} progress={result?.executionAuditProgress} />
       <section className="backtest-control panel" aria-labelledby="backtest-control-title">
         <div>
           <span className="section-kicker">January 2025 to present · retrospective research</span>

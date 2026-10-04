@@ -137,6 +137,7 @@ def main():
             "low": price_to_float(record.low),
             "close": price_to_float(record.close),
             "volume": int(getattr(record, "volume", 0)),
+            "instrumentId": int(record.instrument_id),
         }
         bars = merge_live_bar(bars, candle, args.max_bars)
         write_cache()

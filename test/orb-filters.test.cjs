@@ -56,16 +56,15 @@ test('ORB missing or duplicate minutes cannot form a complete opening range or c
   assert.equal(signal(bars.map((bar, i) => i === 5 ? { ...bars[4] } : bar)).found, false);
 });
 
-test('ORB structural stops are preserved even when wider than the old 20-point clamp', () => {
+test('ORB rejects structural stops wider than configured 20-point cap without clamping', () => {
   const bars = triggerSession();
   for (let i = 15; i < 30; i += 1) {
     const n = i - 15;
     Object.assign(bars[i], { open: 10_004 + n * 3, low: 10_003 + n * 3, high: 10_008 + n * 3, close: 10_006 + n * 3 });
   }
   const found = signal(bars);
-  assert.equal(found.found, true, found.reason);
-  assert.equal(found.setup.stop, 10_002.75);
-  assert.ok(found.setup.entry - found.setup.stop > 20);
+  assert.equal(found.found, false);
+  assert.match(found.reason, /maximumStopPoints/);
 });
 
 test('ORB feature context uses prior sessions and the matching time slot without future leakage', () => {

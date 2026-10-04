@@ -31,15 +31,24 @@ async function run() {
   let state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : forward.createState(config);
   if (state.version !== forward.version(config)) {
     LEGACY_COMPATIBLE_VERSIONS.add(forward.version(config, 'orb-forward-paper-v1'));
+    LEGACY_COMPATIBLE_VERSIONS.add(forward.version(config, 'orb-forward-paper-v2-cash-session'));
     const expectedSlugs = forward.DEFINITIONS.map((definition) => definition.slug);
     const savedSlugs = (state.accounts || []).map((account) => account.slug);
     const legacyCompatible = LEGACY_COMPATIBLE_VERSIONS.has(state.version)
-      && JSON.stringify(savedSlugs) === JSON.stringify(expectedSlugs);
+      && expectedSlugs.every(slug => savedSlugs.includes(slug));
     if (legacyCompatible) {
-      for (const account of state.accounts) if (account.active) account.active.rulesVersion ||= state.version;
+      for (const account of state.accounts) {
+        if (account.active) {
+          account.active.rulesVersion ||= state.version;
+          if (!account.active.result?.filledAt) {
+            if (account.attempts.length) account.attempts.at(-1).outcome = 'cancelled for execution-policy migration';
+            account.consumedDay = account.active.day; account.active = null;
+          }
+        }
+      }
       state.migrations = [...(state.migrations || []), {
         at: new Date().toISOString(), from: state.version, to: forward.version(config),
-        reason: 'Cash-session calendar and scheduled-close repair. Existing journals retained; old gap trades remain unverified.'
+        reason: 'Execution repair epoch. Existing journals and filled positions retained; unfilled old orders cancelled. Old evidence is not relabeled.'
       }];
       state.version = forward.version(config);
       forward.atomic(stateFile, state);
@@ -80,8 +89,8 @@ async function run() {
       }
     } catch (error) {
       state.heartbeat = new Date().toISOString();
-      state.status = /Missing .*environment variable/.test(error.message) ? 'missing-data-configuration' : /Databento live candle is stale/.test(error.message) ? 'waiting-for-fresh-feed' : 'feed-or-processing-error';
-      state.lastError = { at: state.heartbeat, message: error.message };
+      state.status = error.code === 'MARKET_CLOSED' ? 'market-closed' : /Missing .*environment variable/.test(error.message) ? 'missing-data-configuration' : /Databento live candle is stale/.test(error.message) ? 'waiting-for-fresh-feed' : 'feed-or-processing-error';
+      state.lastError = error.code === 'MARKET_CLOSED' ? null : { at: state.heartbeat, message: error.message };
       forward.atomic(stateFile, state);
       console.error(`${state.heartbeat} ${error.message}`);
     }

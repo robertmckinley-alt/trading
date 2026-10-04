@@ -1,3 +1,4 @@
+const {businessDate,completeCash}=require('../test-support/session-fixtures.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { runStrategyBacktest } = require('../lib/backtest-engine.cjs');
@@ -7,15 +8,16 @@ const config = core.normalizeConfig(require('../config.json'));
 
 test('all-strategy research continues unchanged after losses exhaust the guarded account', () => {
   const candles = Array.from({ length: 30 }, (_, day) => {
-    const time = Date.UTC(2025, 0, day + 1, 15);
+    const time = Date.parse(businessDate(day,'2025-01-02')+'T15:00Z');
     return [
       { timestamp: new Date(time).toISOString(), open: 100, high: 101, low: 99, close: 100 },
       { timestamp: new Date(time + 60000).toISOString(), open: 100, high: 100, low: 75, close: 80 }
     ];
   }).flat();
-  const result = runStrategyBacktest(candles, config, { slug: 'test-losses', name: 'Loss sequence' }, {
+  const result = runStrategyBacktest(completeCash(candles), config, { slug: 'test-losses', name: 'Loss sequence' }, {
     detectSignal(context) {
       const candle = context.at(-1);
+      if(candle._padding)return {found:false};
       return { found: true, triggerTimestamp: candle.timestamp, setup: {
         symbol: 'NQ', date: candle.timestamp.slice(0, 10), session: 'test', side: 'long',
         entry: 100, stop: 76, targets: [124], thesis: 'loss regression', setup: {}
@@ -28,18 +30,20 @@ test('all-strategy research continues unchanged after losses exhaust the guarded
   assert.ok(result.trades.length < 30);
   assert.ok(result.rejectedSignals > 0);
   assert.equal(new Set(result.research.trades.map(t => t.contracts)).size, 1);
-  assert.equal(result.research.trades.at(-1).date, '2025-01-30');
+  assert.equal(result.research.trades.at(-1).date, businessDate(29,'2025-01-02'));
   assert.equal('drawdown' in result.research.review.gates, false);
 });
 
-test('research reports drawdown without treating account loss floor as a performance gate', () => {
+test('research gates MAE-inclusive R drawdown independently of the account loss floor', () => {
   const trades = Array.from({ length: 100 }, (_, i) => ({
     date: new Date(Date.UTC(2025, 0, i + 1)).toISOString().slice(0, 10),
+    actualRiskUsd: 500, maeUsd: -500,
     realizedPnlUsd: i < 12 ? -500 : 300, rMultiple: i < 12 ? -1 : .6
   }));
   const research = reviewBacktestEvidence(trades, { enforceAccountDrawdown: false });
   assert.ok(research.total.maxDrawdownUsd > 5000);
-  assert.equal(research.recommendation, 'ADVANCE TO FORWARD TEST');
+  assert.equal(research.recommendation, 'REVISE AND RETEST');
+  assert.equal(research.gates.constantRiskDrawdown, false);
   assert.equal(reviewBacktestEvidence(trades).recommendation, 'REVISE AND RETEST');
   assert.equal('drawdown' in research.gates, false);
 });
@@ -87,7 +91,7 @@ test('one-contract ORB research never increases size for narrow stops or fills a
   assert.equal(crossed.exitReason, 'entry gap beyond stop or target');
 });
 
-test('real ORB detector produces research fills on ordinary wide-range sessions, with audited outcomes', () => {
+test('real ORB detector rejects over-cap sessions in both research and guarded accounts', () => {
   const candles = ['2026-02-02', '2026-02-03'].flatMap(date => Array.from({ length: 390 }, (_, minute) => {
     const bar = { timestamp: new Date(Date.parse(`${date}T14:30:00Z`) + minute * 60000).toISOString(),
       open: 10000, high: 10010, low: 9990, close: 10000, volume: 100, instrumentId: 1 };
@@ -99,13 +103,8 @@ test('real ORB detector produces research fills on ordinary wide-range sessions,
     return bar;
   }));
   const result = runStrategyBacktest(candles, config, { slug: 'nq-15m-orb-close-confirmation', name: 'ORB' });
-  assert.equal(result.signals, 2);
+  assert.equal(result.signals, 0);
   assert.equal(result.trades.length, 0);
-  assert.equal(result.rejectedSignals, 2);
-  assert.equal(result.research.mode, 'fixed-contract');
-  assert.equal(result.research.rejectedSignals, 0);
-  assert.equal(result.research.trades.length, 2);
-  assert.ok(result.research.trades.every(trade => trade.contracts === 1 && trade.actualRiskUsd > 500));
-  assert.equal(result.research.signalAudit.length, 2);
-  assert.equal(result.research.sizing.riskCapUsd, null);
+  assert.equal(result.research.trades.length, 0);
+  assert.equal(result.research.signalAudit.length, 0);
 });

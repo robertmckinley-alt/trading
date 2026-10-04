@@ -76,8 +76,8 @@ test('market orders reject crossed structural prices and unaffordable gap risk',
   }
 });
 
-test('limit-touch retains its entry but charges exit slippage and one round-trip fee', () => {
-  const { plan, config } = fixture({ execution: 'limit-touch' }, { maxRiskPerTradeUsd: 120 });
+test('legacy flag: limit-touch retains its entry but charges exit slippage and one round-trip fee', () => {
+  const { plan, config } = fixture({ execution: 'limit-touch' }, { maxRiskPerTradeUsd: 120, limitFillModel: 'legacy-touch' });
   const result = core.replayPlan(plan, [candle(1, 101, 102, 100, 101), candle(2, 102, 111, 101, 110)], config);
   assert.equal(result.filledEntryPrice, 100);
   assert.equal(result.finalExitPrice, 109.75);

@@ -22,6 +22,7 @@ async function main() {
   process.chdir(root);
   const envFile = process.env.ENV_FILE || path.join(root, '.env.local');
   if (fs.existsSync(envFile)) require('dotenv').config({ path: envFile, quiet: true });
+  require('../lib/bridge-security.cjs').settings();
   // Validate modules before interrupting the existing calculation.
   require('../lib/backtest-service.cjs');
   fs.mkdirSync(path.join(root, 'runtime'), { recursive: true });

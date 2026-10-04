@@ -255,7 +255,7 @@ function synchronizeLearningAutomation(state, config, strategyDefinition) {
 }
 
 function persistClosedTrade(statePath, state, config, strategyDefinition, plan, lifecycle) {
-  const trade = toJournalTrade(plan, lifecycle);
+  const trade = { ...toJournalTrade(plan, lifecycle), evidenceType: 'forward-paper', executionPolicyVersion: plan.setup.executionPolicyVersion || 'legacy' };
   state.trades.push(trade);
   state.realizedPnlUsd = Math.round((state.realizedPnlUsd + trade.realizedPnlUsd) * 100) / 100;
   state.startingBalanceUsd = config.startingBalanceUsd;
@@ -311,7 +311,8 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
       const liveCandles = state.live.openTriggeredAt
         ? candles.filter((candle) => new Date(candle.timestamp).getTime() >= new Date(state.live.openTriggeredAt).getTime())
         : candles;
-      const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false });
+      const lifecycle = trackTradeLifecycle(state.live.openPlan, liveCandles, config, { closeOpenAtEnd: false, now: Date.now() });
+      state.live.openLifecycle = lifecycle;
       if (clearTerminalUnfilledPlan(state, lifecycle)) {
         observation.record(state.live.scanAudit, 'unfilledOrders', lastCandle.timestamp, lifecycle.exitReason);
         summaryLines.push(`No trade: Paper order ${lifecycle.exitReason}; shared risk reservation released`);
@@ -465,6 +466,8 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
             researchCouncil,
             openSignalKey: key,
             openPlan: plan,
+            openLifecycle: { status: 'not-filled' },
+            consumedOrderDay: plan.setup.date,
             openTriggeredAt: signal.triggerTimestamp,
             signalHistory: [...state.live.signalHistory, key]
           };
@@ -519,20 +522,23 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
     try {
       await tick();
     } catch (error) {
-      state.live.scanAudit.feedErrors++;
+      observation.expirePending(state);
+      const marketClosed = error.code === 'MARKET_CLOSED';
+      if (!marketClosed) state.live.scanAudit.feedErrors++;
       state.live.heartbeat = {
         ...(state.live.heartbeat || {}),
         at: new Date().toISOString(),
-        ok: false,
+        ok: marketClosed,
+        marketClosed,
         pollIntervalMs: actualIntervalMs,
-        error: error.message
+        error: marketClosed ? null : error.message
       };
       try {
         saveLiveState(statePath, state);
       } catch {
         // Preserve the original feed error in the watcher log.
       }
-      throw error;
+      if (!marketClosed) throw error;
     } finally {
       inFlight = false;
     }

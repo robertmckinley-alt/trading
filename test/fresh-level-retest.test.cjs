@@ -34,7 +34,7 @@ test('stop wins same-bar conflict and modeled costs count',()=>{
  assert.ok(r.realizedPnlUsd<0);assert.match(r.exitReason,/stop-loss/);assert.ok(r.actualRiskUsd<=250);
 });
 test('multi-trade historical loop carries wins and stops after fourth trade loss',()=>{
- const candles=Array.from({length:90},(_,i)=>({timestamp:new Date(Date.UTC(2026,8,30,13,30+i)).toISOString(),open:100,high:i===41?101:111,low:i===41?94:99,close:100,volume:1}));
+ const candles=Array.from({length:390},(_,i)=>({timestamp:new Date(Date.UTC(2026,8,30,13,30+i)).toISOString(),open:100,high:i===41?101:111,low:i===41?94:99,close:100,volume:1}));
  const slots=new Set([10,20,30,40,50]);
  const result=require('../lib/fresh-level-backtest.cjs').run(candles,config,{name:'Test',strategyFamilyName:'Test'},{detect:(context)=>{
    const last=context.at(-1),index=candles.findIndex(c=>c.timestamp===last.timestamp);

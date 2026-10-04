@@ -53,7 +53,7 @@ test('monitor excludes gap trades and needs enough complete observations', () =>
 test('a research override changes real ORB targets without mutating the baseline config', () => {
   const { runStrategyBacktest } = require('../lib/backtest-engine.cjs');
   const start = Date.parse('2026-02-03T14:30:00Z');
-  const candles = Array.from({ length: 60 }, (_, i) => ({ timestamp: new Date(start + i * 60000).toISOString(),
+  const candles = Array.from({ length: 390 }, (_, i) => ({ timestamp: new Date(start + i * 60000).toISOString(),
     open: i < 15 ? 10000 : i < 30 ? 10004 + (i - 15) * .6 : 10014,
     high: i < 15 ? 10010 : i < 30 ? 10006 + (i - 15) * .8 : 10080,
     low: i < 15 ? 9990 : i < 30 ? 10003 + (i - 15) * .6 : 10013,

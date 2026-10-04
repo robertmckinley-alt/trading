@@ -19,7 +19,7 @@ test('two net losses pause session, wins do not reset count, next day resets',()
  assert.equal(vwap.detect(c,config,{balanceUsd:47500,trades:[]}).found,false);
 });
 test('repeat historical setups stop at two losses without overlapping positions',()=>{
- const c=candles(100);
+ const c=candles(390);
  for(const i of [20,50,80]) {Object.assign(c[i],{open:100,high:100,low:89,close:90});Object.assign(c[i+1],{open:90,high:91,low:80,close:81});}
  const r=require('../lib/vwap-backtest.cjs').run(c,config,{slug:vwap.SLUG,name:'VWAP'});
  assert.equal(r.trades.length,2);assert.equal(r.research.trades.length,2);

@@ -17,8 +17,8 @@ const { readBacktestResult, runBacktestWorker } = require('../lib/backtest-worke
 const { BACKTEST_STRATEGIES } = require('../lib/strategy-registry.cjs');
 
 const port = Number(process.env.LIVE_STATUS_PORT || 3210);
-const host = process.env.LIVE_STATUS_HOST || '0.0.0.0';
-const statusToken = process.env.LIVE_STATUS_TOKEN || '';
+const bridgeSecurity = require('../lib/bridge-security.cjs');
+const { host, token: statusToken } = bridgeSecurity.settings();
 const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname, '..', 'runtime', 'backtest-results.json');
 const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
 const backtestStartYear = Number(process.env.BACKTEST_START_YEAR || 2025);
@@ -94,7 +94,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (statusToken && req.headers.authorization !== `Bearer ${statusToken}`) {
+  if (!bridgeSecurity.authorized(req.headers.authorization, statusToken)) {
     res.writeHead(401, {
       'content-type': 'application/json',
       'cache-control': 'no-store'
@@ -133,7 +133,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 202, { ok: true, result: null, ...backtestStatus() });
         return;
       }
-      sendJson(res, 200, { ok: true, result: readBacktestResult(backtestCachePath), ...backtestStatus() });
+      sendJson(res, 200, { ok: true, result: require('../lib/backtest-dashboard-report.cjs').readReport(backtestCachePath), ...backtestStatus() });
     } catch (error) {
       sendJson(res, 503, { ok: false, error: error.message });
     }

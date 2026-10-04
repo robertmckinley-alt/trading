@@ -131,7 +131,7 @@ test('all extensions run through research backtests and preserve the nine locked
       ? [{ open: 10014, high: 10015, low: 9999, close: 10000 }]
       : [{ open: 10024, high: 10055, low: 10023, close: 10050 }];
     const definition = ORB_EXTENSION_VARIANTS.find(s => s.slug === slug);
-    const result = runAllBacktests([...bars, ...future(bars, subsequent)], config, { strategies: [definition] }).strategies[0];
+    const result = runAllBacktests(require('../test-support/session-fixtures.cjs').completeCash([...bars, ...future(bars, subsequent)]), config, { strategies: [definition] }).strategies[0];
     assert.equal(result.research.trades.length, 1);
     assert.equal(result.research.trades[0].contracts, 1);
     assert.equal(result.research.signalAudit[0].filledAt, '2026-02-03T15:00:00.000Z');
