@@ -1,46 +1,18 @@
-import fs from 'fs';
-import path from 'path';
 import Link from 'next/link';
 import AppHeader from '../components/app-header';
 import LiveStrategyBoard from '../components/live-strategy-board';
 import { getStrategySnapshots } from '../lib/live-status.cjs';
-import { normalizeConfig } from '../lib/trader-core.cjs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const config = normalizeConfig(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8')));
   const liveStatus = await getStrategySnapshots();
-  const accountCount = Array.isArray(liveStatus?.strategies) ? liveStatus.strategies.length : 0;
   const orbAccountCount = Number(liveStatus?.orbForward?.supervisedAccounts || 0);
 
   return (
     <main className="page-shell command-page" id="main-content">
       <AppHeader section="Live paper operations" />
-
-      <section className="command-hero">
-        <div>
-          <p className="eyebrow">Live operations · {accountCount} independent paper accounts</p>
-          <h1>See what matters. Act on what changed.</h1>
-          <p>
-            A focused view of system health, portfolio performance, current risk, and every strategy running on its live paper feed.
-          </p>
-          <div className="hero-actions">
-            <Link className="primary-link" href="/orb">Open ORB forward lab</Link>
-            <Link className="secondary-link" href="/comparison">Compare historical results</Link>
-          </div>
-        </div>
-        <aside className="command-hero-summary" aria-label="Paper account structure">
-          <span>Capital framework</span>
-          <strong>${(config.startingBalanceUsd * accountCount).toLocaleString()}</strong>
-          <p>{accountCount} × ${config.startingBalanceUsd.toLocaleString()} independent paper accounts</p>
-          <dl>
-            <div><dt>Trade cap</dt><dd>${config.maxRiskPerTradeUsd.toLocaleString()}</dd></div>
-            <div><dt>Network cap</dt><dd>${config.maxPortfolioOpenRiskUsd.toLocaleString()}</dd></div>
-          </dl>
-        </aside>
-      </section>
 
       <div id="strategy-network">
         <LiveStrategyBoard compact initialData={liveStatus} />

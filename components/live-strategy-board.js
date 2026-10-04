@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import DailyTradingDashboard from './daily-trading-dashboard';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const timestampFormatter = new Intl.DateTimeFormat('en-US', {
@@ -1482,9 +1483,12 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
         if (!cancelled && response.ok && payload?.strategies) {
           setData(payload);
           setNowMs(Date.now());
+          setRefreshState({ busy: false, error: '' });
+        } else if (!cancelled) {
+          setRefreshState({ busy: false, error: 'Status refresh failed. Showing the last good snapshot.' });
         }
       } catch {
-        // Keep the last good snapshot visible.
+        if (!cancelled) setRefreshState({ busy: false, error: 'Status refresh failed. Showing the last good snapshot.' });
       }
     }
 
@@ -1508,7 +1512,7 @@ export default function LiveStrategyBoard({ initialData, compact = false }) {
   const watcherCount = strategies.filter((strategy) => strategy.mode === 'live-watcher').length;
 
   if (compact) {
-    return <CompactDashboard data={data} strategies={strategies} nowMs={nowMs} refreshData={refreshData} refreshState={refreshState} />;
+    return <DailyTradingDashboard data={data} strategies={strategies} refreshData={refreshData} refreshState={refreshState} />;
   }
 
   return (
