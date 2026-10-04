@@ -21,3 +21,15 @@ test('history totals only closed journal results; dates are New York calendar da
   assert.deepEqual(dashboardHistory([account('a', 10), account('b', -4, [], { activeUnrealizedPnlUsd: 90 })]), [{ date, realized: 6, cumulative: 6 }]);
   assert.equal(sessionDate('2026-10-04T01:00:00Z'), '2026-10-03');
 });
+test('lifetime groups are independent of the selected daily results', () => {
+  const { lifetimeView } = require('../lib/dashboard-view.cjs');
+  const a = { slug: 'lifetime-winner', journal: { realizedPnlUsd: 100, trades: 5, dailyRecaps: [{ date, realizedPnlUsd: -50, trades: 1, tradesList: [{ id: 'loss', realizedPnlUsd: -50 }] }] } };
+  const b = { slug: 'lifetime-loser', journal: { realizedPnlUsd: -200, trades: 3 } };
+  const flat = { slug: 'flat', journal: { realizedPnlUsd: 0, trades: 2 } };
+  const idle = { slug: 'idle', journal: { realizedPnlUsd: 0, trades: 0 } };
+  const groups = lifetimeView([a,b,flat,idle]);
+  assert.deepEqual(groups.positive.map(s=>s.slug), ['lifetime-winner']);
+  assert.deepEqual(groups.negative.map(s=>s.slug), ['lifetime-loser']);
+  assert.equal(groups.flat.length, 1); assert.equal(groups.idle.length, 1);
+  assert.equal(dashboardView([a], date).negative.length, 1);
+});
