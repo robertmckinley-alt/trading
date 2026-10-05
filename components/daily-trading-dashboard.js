@@ -73,8 +73,22 @@ export default function DailyTradingDashboard({ data, strategies, refreshData, r
     {lifetime.unavailable.length > 0 && <p className="day-alert">{lifetime.unavailable.length} accounts have unavailable lifetime totals.</p>}
     {popup && <DayPopup day={day} date={date} onClose={()=>setPopup(false)} />}
     <CoordinationPanel report={data?.coordinationShadow} snapshotAt={data?.generatedAt} />
+    <RegimePanel report={data?.regimeExperiment} snapshotAt={data?.generatedAt} />
     <details className="day-card day-health"><summary><strong>System health</strong><span>{issues.length ? `${issues.length} accounts need review` : `${strategies.length} accounts · no watcher issues reported`}</span></summary><div>{(issues.length ? issues : strategies).map(s => <div className="day-idle-row" key={s.slug}><Link href={s.route || `/strategies/${s.slug}`}>{s.name}</Link><span>{s.watcher?.statusLabel || 'Unknown'}</span><small>{s.live?.latestError?.message || s.watcher?.staleStatusHint || 'No current error reported'}</small></div>)}</div></details>
   </div>;
+}
+
+function RegimePanel({ report, snapshotAt }) {
+  const stale=report?.updatedAt && Date.parse(snapshotAt)-Date.parse(report.updatedAt)>30000;
+  const labels={control:'Control', 'simple-filter':'Simple filter', 'hmm-filter':'HMM filter', 'hmm-sizing':'HMM sizing'};
+  return <section className="day-card"><header><div><span className="day-eyebrow">Independent $50,000 paper accounts · original strategies unchanged</span><h2>Market regime experiment</h2></div><span>{stale?'Worker heartbeat stale':report?.status || 'not-started'}</span></header>
+    <p>Compares the same admitted signals with fixed risk, a simple trend/volatility filter, an HMM filter, and HMM sizing at full or half risk. Results stay separate from your main totals.</p>
+    {report?.error && <p role="status" className="day-alert">{report.error}</p>}
+    <p className="day-footnote">{report?.regime?.status==='ready'?`Current state: ${report.regime.label} · ${Math.round(report.regime.probability*100)}% model probability${report.regime.uncertain?' · uncertain':''}. This is not a trade win probability.`:'Waiting for a trained model and fresh completed candles. No results are assumed.'} Updated: {stamp(report?.updatedAt)}.</p>
+    {!report?.accounts?.length?<p className="day-empty">No experiment trades yet. The original accounts continue normally.</p>:<div className="day-table-scroll"><table><thead><tr><th>Strategy / account</th><th>Balance</th><th>Closed trades</th><th>Net P&amp;L</th><th>Max observed drawdown</th><th>Losses avoided</th><th>Profit missed</th><th>Resolved difference vs control</th><th>Status</th></tr></thead><tbody>{report.accounts.map(a=><tr key={a.id}><td>{a.parent}<br /><strong>{labels[a.arm]}</strong></td><td>{money(a.balanceUsd)}</td><td>{a.trades}</td><td className={tone(a.realizedPnlUsd)}>{money(a.realizedPnlUsd)}<br /><small>{money(a.unrealizedPnlUsd)} open · {money(a.partialPnlUsd)} partial</small></td><td>{money(a.maxDrawdownUsd)}</td><td>{money(a.lossesAvoided)}</td><td>{money(a.missedProfit)}</td><td className={tone(a.pairedDeltaUsd)}>{money(a.pairedDeltaUsd)}<br /><small>{a.pairedComparisons} resolved comparisons</small></td><td>{a.status}{a.open?' · open order/position':''}</td></tr>)}</tbody></table></div>}
+    <p className="day-footnote">Fees, slippage, whole-contract rounding and account loss limits apply. Avoided losses and missed profits require a closed control trade. These are unvalidated paper experiments, with no automatic promotion. {report?.excludedSignals || 0} signals excluded for timing or unavailable model state.</p>
+    <details className="day-history-table"><summary>Blocked signals and decisions</summary><div className="day-table-scroll"><table><thead><tr><th>Observed (ET)</th><th>Parent</th><th>Market state</th><th>Account / decision / outcome</th></tr></thead><tbody>{report?.events?.map(e=><tr key={e.id}><td>{stamp(e.decisionAt||e.observedAt)}</td><td>{e.parent}</td><td>{e.regime?.label||e.reason}</td><td>{Object.entries(e.arms||{}).map(([arm,a])=><div key={arm}>{labels[arm]}: {a.decision}{a.reason?` (${a.reason})`:''} · {a.outcome?`${a.outcome.status}: ${money(a.outcome.pnlUsd)}`:'pending / skipped'}</div>)}</td></tr>)}</tbody></table></div></details>
+  </section>;
 }
 
 function CoordinationPanel({ report, snapshotAt }) {
