@@ -170,7 +170,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, host, () => {
-  const ensureRegime = () => { try { require('./regime-paper.cjs').ensure(); } catch (error) { console.error('Regime supervisor:', error.message); } };
+  const ensureRegime = () => { try { require('./regime-paper.cjs').ensure(); require('./profit-paper.cjs').ensure(); } catch (error) { console.error('Regime supervisor:', error.message); } };
   ensureRegime();
   setInterval(ensureRegime, 60000).unref();
   const { ensure } = require('./orb-forward-paper.cjs');

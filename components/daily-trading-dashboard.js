@@ -73,6 +73,7 @@ export default function DailyTradingDashboard({ data, strategies, refreshData, r
     {lifetime.unavailable.length > 0 && <p className="day-alert">{lifetime.unavailable.length} accounts have unavailable lifetime totals.</p>}
     {popup && <DayPopup day={day} date={date} onClose={()=>setPopup(false)} />}
     <CoordinationPanel report={data?.coordinationShadow} snapshotAt={data?.generatedAt} />
+    <ProfitPanel report={data?.profitExperiment} snapshotAt={data?.generatedAt} />
     <RegimePanel report={data?.regimeExperiment} snapshotAt={data?.generatedAt} />
     <details className="day-card day-health"><summary><strong>System health</strong><span>{issues.length ? `${issues.length} accounts need review` : `${strategies.length} accounts · no watcher issues reported`}</span></summary><div>{(issues.length ? issues : strategies).map(s => <div className="day-idle-row" key={s.slug}><Link href={s.route || `/strategies/${s.slug}`}>{s.name}</Link><span>{s.watcher?.statusLabel || 'Unknown'}</span><small>{s.live?.latestError?.message || s.watcher?.staleStatusHint || 'No current error reported'}</small></div>)}</div></details>
   </div>;
@@ -99,5 +100,16 @@ function CoordinationPanel({ report, snapshotAt }) {
     <p className="day-footnote">Updated: {stamp(report?.updatedAt)}. Modeled exits include fees and slippage. Zero resolved comparisons means no evidence yet.</p>
     {report?.activePauses?.map(p => <p key={p.id}>{p.symbol}: proposed pause until {stamp(p.until)}. Actual trading continues.</p>)}
     <details className="day-history-table"><summary>View proposed actions and outcomes ({report?.proposals || 0})</summary>{!report?.events?.length ? <p>No proposals recorded yet.</p> : <div className="day-table-scroll"><table><thead><tr><th>Proposed (ET)</th><th>Strategy / action</th><th>Hypothetical exit</th><th>Baseline P&amp;L</th><th>Shadow P&amp;L</th><th>Difference</th><th>Status</th></tr></thead><tbody>{report.events.map(e => <tr key={e.id}><td>{stamp(e.proposedAt)}</td><td>{e.strategy}<br />{e.kind}<br /><small>{e.reason}</small></td><td>{stamp(e.shadowExitAt)}<br />{e.shadowExitPrice ?? '—'}</td><td>{e.baselinePnlUsd == null ? '—' : money(e.baselinePnlUsd)}</td><td>{e.shadowPnlUsd == null ? '—' : money(e.shadowPnlUsd)}</td><td>{e.deltaUsd == null ? '—' : money(e.deltaUsd)}</td><td>{e.status}</td></tr>)}</tbody></table></div>}</details>
+  </section>;
+}
+
+
+function ProfitPanel({report, snapshotAt}) {
+  const stale=report?.updatedAt && Date.parse(snapshotAt)-Date.parse(report.updatedAt)>30000;
+  const labels={control:'Unchanged exits','profit-lock':'Profit lock','partial-trail':'Partial + trail','trend-confirm':'Trend confirmation','reversal-confirm':'Reversal confirmation'};
+  return <section className="day-card"><header><div><span className="day-eyebrow">Matched $50,000 paper accounts</span><h2>Profit preservation</h2></div><span>{stale?'Worker heartbeat stale':report?.status || 'not-started'}</span></header>
+    <p className="day-footnote">Profit lock: completed close at 1R moves the next stop to cost-adjusted breakeven. From 2R, trail one initial risk unit behind the best completed close. Partial + trail also exits half at 1R, rounded to whole contracts. One contract exits fully. Gaps can still lose money.</p>
+    <p className="day-footnote">Original exits stay unchanged. POC and hourly sweep also test trend and reversal confirmation separately. Only new admitted parent signals are compared. Updated: {stamp(report?.updatedAt)}</p>
+    {!report?.accounts?.length?<p>Waiting for new signals after activation. Historical trades are not rewritten.</p>:<div className="day-table-scroll"><table><thead><tr><th>Parent / experiment</th><th>Trades</th><th>Realized P&amp;L</th><th>Open P&amp;L</th><th>Paired results</th><th>Net vs control</th><th>Improved / sacrificed</th></tr></thead><tbody>{report.accounts.map(a=><tr key={a.id}><td>{a.parent}<br/>{labels[a.arm]||a.arm} · {a.status}</td><td>{a.trades}</td><td>{money(a.realizedPnlUsd)}</td><td>{money((a.unrealizedPnlUsd||0)+(a.partialPnlUsd||0))}</td><td>{a.pairedComparisons}</td><td>{money(a.pairedDeltaUsd)}</td><td>{money(a.improvedUsd)} / {money(a.sacrificedUsd)}</td></tr>)}</tbody></table></div>}
   </section>;
 }

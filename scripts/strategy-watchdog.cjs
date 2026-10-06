@@ -83,6 +83,7 @@ if (require.main === module) {
         if(r.status!==0)process.exitCode=1;
       }
       require('./regime-paper.cjs').ensure();
+      require('./profit-paper.cjs').ensure();
     }
   }
   catch (error) { console.error(`Strategy watchdog failed: ${error.message}`); process.exitCode = 1; }

@@ -38,6 +38,14 @@ class MonitorTests(unittest.TestCase):
         issues = m.evaluate(data, now)
         self.assertIn('crypto:large:mark', issues)
         self.assertIn('crypto:large:mark:p', issues)
+    def test_profit_worker_errors_and_stale_heartbeat(self):
+        now, data = self.sample()
+        data['futures']['profitExperiment'] = {'enabled': True, 'status': 'collecting', 'updatedAt': now}
+        self.assertEqual(m.evaluate(data, now), {})
+        data['futures']['profitExperiment']['status'] = 'data-gap'
+        self.assertIn('futures:profit-protection', m.evaluate(data, now))
+        data['futures']['profitExperiment'].update(status='collecting', updatedAt=now - 301)
+        self.assertIn('futures:profit-protection', m.evaluate(data, now))
     def test_deduplication_hourly_reminder_and_recovery(self):
         issues = {'down': 'worker down'}
         fingerprint, notify = m.should_notify({}, issues, 10000)

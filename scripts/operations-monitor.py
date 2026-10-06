@@ -64,6 +64,9 @@ def evaluate(data, now):
         regime = f.get('regimeExperiment', {})
         if regime.get('status') in ('not-started', 'awaiting-trained-model', 'error') or stale(regime.get('updatedAt'), 300):
             add('futures:regime', 'HMM experiment is not operational (training, error, or stale worker)')
+        profit = f.get('profitExperiment', {})
+        if profit.get('enabled') and (profit.get('status') in ('error', 'data-gap') or stale(profit.get('updatedAt'), 300) or (not closed and profit.get('status') == 'waiting-for-fresh-feed')):
+            add('futures:profit-protection', 'Profit preservation paper worker has stale data, an error, or a missing heartbeat')
         risk = f.get('portfolioRisk', {})
         if risk.get('reservedRiskUsd', 0) > risk.get('capUsd', float('inf')) + .01:
             add('futures:risk', 'Reserved futures risk exceeds configured portfolio cap')

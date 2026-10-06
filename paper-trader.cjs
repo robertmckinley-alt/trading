@@ -473,6 +473,7 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
           };
           saveLiveState(statePath, { ...state, live: nextLiveState });
           state.live = nextLiveState;
+          try { require('./lib/profit-experiment.cjs').capture(BASE, config, plan); } catch(error) { console.error('Profit experiment capture:', error.message); }
           observation.record(state.live.scanAudit, 'orders', signal.triggerTimestamp);
           saveLiveState(statePath, state);
         }
