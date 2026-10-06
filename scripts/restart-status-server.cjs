@@ -12,8 +12,9 @@ function matchingPids() {
     try {
       const cwd = fs.readlinkSync(`/proc/${name}/cwd`);
       const args = fs.readFileSync(`/proc/${name}/cmdline`, 'utf8').split('\0').filter(Boolean);
-      return cwd === root && path.basename(args[0] || '') === 'node' &&
-        args.length === 2 && path.resolve(cwd, args[1]) === serverFile ? [Number(name)] : [];
+      const entry = args.slice(1).find(arg => !arg.startsWith('-'));
+      return path.basename(args[0] || '') === 'node' && entry &&
+        path.resolve(cwd,entry) === serverFile ? [Number(name)] : [];
     } catch { return []; }
   });
 }
@@ -22,7 +23,8 @@ async function main() {
   process.chdir(root);
   const envFile = process.env.ENV_FILE || path.join(root, '.env.local');
   if (fs.existsSync(envFile)) require('dotenv').config({ path: envFile, quiet: true });
-  require('../lib/bridge-security.cjs').settings();
+  const bridgeSecurity = require('../lib/bridge-security.cjs');
+  bridgeSecurity.settings(bridgeSecurity.listenerEnvironment(root));
   // Validate modules before interrupting the existing calculation.
   require('../lib/backtest-service.cjs');
   fs.mkdirSync(path.join(root, 'runtime'), { recursive: true });

@@ -1,5 +1,17 @@
 # Frozen market-regime paper experiment
 
+## Repair an existing Docker-published status port
+
+If the local API works but Docker forwards port 3210 to a container with a
+loopback-only listener, run `node scripts/repair-bridge-binding.cjs` inside that
+container. This explicitly enables `0.0.0.0` in `runtime/bridge-listener.json`,
+keeps the existing mandatory bearer token, and restarts only the status service.
+It verifies HTTP 401 without a token and account data with the token through the
+container IPv4 interface. It does not modify trade journals or Docker/firewall
+settings. The existing published port becomes reachable on its existing host
+interfaces; retain the deployment's intended firewall/TLS controls. Other installs
+still default to loopback. Removing the override and restarting restores loopback.
+
 This is an unvalidated forward paper experiment, not a replacement for existing strategies.
 It reads admitted parent plans and the NQ cache. It never modifies original accounts,
 blocks their trades, reserves their portfolio risk, or submits broker orders.

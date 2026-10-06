@@ -18,7 +18,7 @@ const { BACKTEST_STRATEGIES } = require('../lib/strategy-registry.cjs');
 
 const port = Number(process.env.LIVE_STATUS_PORT || 3210);
 const bridgeSecurity = require('../lib/bridge-security.cjs');
-const { host, token: statusToken } = bridgeSecurity.settings();
+const { host, token: statusToken } = bridgeSecurity.settings(bridgeSecurity.listenerEnvironment(path.resolve(__dirname,'..')));
 const backtestCachePath = process.env.BACKTEST_CACHE_PATH || path.join(__dirname, '..', 'runtime', 'backtest-results.json');
 const backtestRefreshMs = Math.max(60 * 60 * 1000, Number(process.env.BACKTEST_REFRESH_MS || 24 * 60 * 60 * 1000));
 const backtestStartYear = Number(process.env.BACKTEST_START_YEAR || 2025);
