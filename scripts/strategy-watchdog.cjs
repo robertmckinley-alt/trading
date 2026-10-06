@@ -16,12 +16,13 @@ function atomicWrite(file, data) {
   fs.renameSync(temp, file);
 }
 
-function run() {
+function run(options = {}) {
   fs.mkdirSync(RUNTIME, { recursive: true });
   const state = (() => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { strategies: {} }; } })();
   state.strategies ||= {};
   let changed = false;
   for (const strategy of STRATEGIES) {
+    if (options.slugs && !options.slugs.includes(strategy.slug)) continue;
     const files = runtimeFilesForStrategy(ROOT, strategy.slug);
     const pids = matchingPids(strategy.slug);
     if (pids === null) throw new Error('Strategy watchdog requires Linux process discovery');
@@ -33,7 +34,7 @@ function run() {
     }
     const previous = state.strategies[strategy.slug] || {};
     const now = Date.now();
-    if (Number(previous.nextStartAt || 0) > now) {
+    if (!options.retryNow && Number(previous.nextStartAt || 0) > now) {
       state.strategies[strategy.slug] = { ...previous, status: 'restart-cooldown', checkedAt: new Date(now).toISOString() };
       changed = true;
       continue;
@@ -61,10 +62,20 @@ function run() {
     changed = true;
   }
   if (changed) atomicWrite(STATE_FILE, state);
+  return state;
 }
 
 if (require.main === module) {
-  try { process.chdir(ROOT); require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true }); run(); }
+  try {
+    process.chdir(ROOT); require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
+    const args = process.argv.slice(2);
+    const slugs = args.filter(a => a.startsWith('--strategy=')).map(a => a.slice(11));
+    if (slugs.some(slug => !STRATEGIES.some(s => s.slug === slug))) throw new Error('Unknown strategy');
+    const state = run({ slugs: slugs.length ? slugs : undefined, retryNow: args.includes('--retry-now') });
+    for (const [slug, status] of Object.entries(state.strategies)) {
+      if (!slugs.length || slugs.includes(slug)) console.log(JSON.stringify({ strategy: slug, ...status }));
+    }
+  }
   catch (error) { console.error(`Strategy watchdog failed: ${error.message}`); process.exitCode = 1; }
 }
 module.exports = { isManagedWatcher, matchingPids, run };

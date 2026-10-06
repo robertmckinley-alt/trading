@@ -9,6 +9,42 @@ const { buildLiveStrategy } = require('../lib/live-status.cjs');
 const slug = 'nq-dmc-market-open';
 const args = ['node', 'paper-trader.cjs', 'watch-live', '--provider=databento-live', '--interval=60000', `--strategy=${slug}`];
 
+test('lock ownership distinguishes zombies, reused PIDs, real writers and unreadable identities', () => {
+  const { inspectLockOwner } = require('../lib/watcher-process.cjs');
+  const proc = fs.mkdtempSync(path.join(os.tmpdir(), 'watcher-proc-'));
+  const dir = path.join(proc, '123'); fs.mkdirSync(dir);
+  const writeStat = state => fs.writeFileSync(path.join(dir, 'stat'), `123 (node worker) ${[state, ...Array(18).fill('0'), '999'].join(' ')}`);
+  const owner = { pid: 123, startTicks: '999' };
+  try {
+    writeStat('Z');
+    assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, false);
+    writeStat('S');
+    fs.symlinkSync(ROOT, path.join(dir, 'cwd'));
+    fs.writeFileSync(path.join(dir, 'cmdline'), args.join('\0'));
+    assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, true);
+    assert.equal(inspectLockOwner({ pid: 123 }, ROOT, slug, proc).active, true);
+    assert.equal(inspectLockOwner({ pid: 123, startTicks: '998' }, ROOT, slug, proc).active, false);
+    fs.writeFileSync(path.join(dir, 'cmdline'), ['node', 'other.cjs'].join('\0'));
+    assert.equal(inspectLockOwner({ pid: 123 }, ROOT, slug, proc).active, false);
+    fs.unlinkSync(path.join(dir, 'cmdline'));
+    assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, true);
+    assert.equal(inspectLockOwner({ pid: 456 }, ROOT, slug, proc).active, false);
+  } finally { fs.rmSync(proc, { recursive: true, force: true }); }
+});
+
+test('legacy lock with a live unrelated PID is recovered without killing that process', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'watcher-reused-'));
+  fs.mkdirSync(path.join(root, 'runtime'));
+  const file = path.join(root, 'runtime', `${slug}-watch.lock`);
+  try {
+    fs.writeFileSync(file, JSON.stringify({ pid: process.pid, token: 'legacy' }));
+    const release = acquireWatcherLock(root, slug, { findPids: () => [] });
+    assert.notEqual(JSON.parse(fs.readFileSync(file)).token, 'legacy');
+    assert.doesNotThrow(() => process.kill(process.pid, 0));
+    release();
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('watcher identity accepts absolute node and script paths but rejects another checkout or slug prefix', () => {
   assert.equal(isManagedWatcher(ROOT, args, slug), true);
   assert.equal(isManagedWatcher(ROOT, ['/usr/local/bin/node', path.join(ROOT, 'paper-trader.cjs'), ...args.slice(2)], slug), true);
