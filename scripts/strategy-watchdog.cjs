@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { STRATEGIES, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
+const { getStrategyDefinitions, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 const { isManagedWatcher, matchingPids } = require('../lib/watcher-process.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -21,7 +21,7 @@ function run(options = {}) {
   const state = (() => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { strategies: {} }; } })();
   state.strategies ||= {};
   let changed = false;
-  for (const strategy of STRATEGIES) {
+  for (const strategy of getStrategyDefinitions(ROOT)) {
     if (options.slugs && !options.slugs.includes(strategy.slug)) continue;
     const files = runtimeFilesForStrategy(ROOT, strategy.slug);
     const pids = matchingPids(strategy.slug);
@@ -70,10 +70,19 @@ if (require.main === module) {
     process.chdir(ROOT); require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
     const args = process.argv.slice(2);
     const slugs = args.filter(a => a.startsWith('--strategy=')).map(a => a.slice(11));
-    if (slugs.some(slug => !STRATEGIES.some(s => s.slug === slug))) throw new Error('Unknown strategy');
+    if (slugs.some(slug => !getStrategyDefinitions(ROOT).some(s => s.slug === slug))) throw new Error('Unknown strategy');
     const state = run({ slugs: slugs.length ? slugs : undefined, retryNow: args.includes('--retry-now') });
     for (const [slug, status] of Object.entries(state.strategies)) {
       if (!slugs.length || slugs.includes(slug)) console.log(JSON.stringify({ strategy: slug, ...status }));
+    }
+    // Supervise already-enabled auxiliary workers on normal cron passes too.
+    if (!slugs.length) {
+      const {spawnSync}=require('node:child_process');
+      if (fs.existsSync(path.join(RUNTIME,'coordination-shadow','state.json'))) {
+        const r=spawnSync(process.execPath,['scripts/coordination-shadow.cjs','--start'],{cwd:ROOT,env:process.env,stdio:'inherit',timeout:10000});
+        if(r.status!==0)process.exitCode=1;
+      }
+      require('./regime-paper.cjs').ensure();
     }
   }
   catch (error) { console.error(`Strategy watchdog failed: ${error.message}`); process.exitCode = 1; }

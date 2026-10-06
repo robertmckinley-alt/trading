@@ -26,6 +26,11 @@ test('lock ownership distinguishes zombies, reused PIDs, real writers and unread
     assert.equal(inspectLockOwner({ pid: 123, startTicks: '998' }, ROOT, slug, proc).active, false);
     fs.writeFileSync(path.join(dir, 'cmdline'), ['node', 'other.cjs'].join('\0'));
     assert.equal(inspectLockOwner({ pid: 123 }, ROOT, slug, proc).active, false);
+    fs.writeFileSync(path.join(dir, 'cmdline'), ['node', 'scripts/coordination-shadow.cjs'].join('\0'));
+    assert.equal(inspectLockOwner(owner, ROOT, 'coordination-shadow', proc, 'scripts/coordination-shadow.cjs').active, true);
+    writeStat('Z');
+    assert.equal(inspectLockOwner(owner, ROOT, 'coordination-shadow', proc, 'scripts/coordination-shadow.cjs').active, false);
+    writeStat('S');
     fs.unlinkSync(path.join(dir, 'cmdline'));
     assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, true);
     assert.equal(inspectLockOwner({ pid: 456 }, ROOT, slug, proc).active, false);

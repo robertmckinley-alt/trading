@@ -8,6 +8,7 @@ const model = require('../lib/coordination-shadow.cjs');
 const { getStrategyDefinitions, runtimeFilesForStrategy } = require('../lib/strategy-registry.cjs');
 const { normalizeConfig } = require('../lib/trader-core.cjs');
 const read = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
+const ownerActive = pid => Number.isInteger(pid) && pid > 0 && require('../lib/watcher-process.cjs').inspectLockOwner({pid},root,'coordination-shadow','/proc','scripts/coordination-shadow.cjs').active;
 function tick() {
   const base = read(path.join(root, 'config.json'));
   if (!base) throw Error('Config unavailable');
@@ -31,7 +32,7 @@ function main() {
   fs.mkdirSync(folder, { recursive: true });
   if (process.argv.includes('--start')) {
     const pid = read(path.join(folder, 'worker.pid'));
-    if (pid) { try { process.kill(pid, 0); console.log(`Shadow controller already running: ${pid}`); return; } catch {} }
+    if (ownerActive(pid)) { console.log(`Shadow controller already running: ${pid}`); return; }
     const fd = fs.openSync(path.join(folder, 'worker.log'), 'a');
     const child = spawn(process.execPath, [__filename], { cwd: root, detached: true, stdio: ['ignore', fd, fd] });
     child.on('error', e => { console.error(e.message); process.exitCode = 1; });
@@ -44,8 +45,8 @@ function main() {
   catch (e) {
     if (e.code !== 'EEXIST') throw e;
     const pid = read(lock);
-    try { process.kill(pid, 0); throw Error(`Controller already running: ${pid}`); }
-    catch (err) { if (err.code !== 'ESRCH') throw err; }
+    if (!Number.isInteger(pid) || pid <= 0) throw Error('Invalid coordination owner; inspect worker.pid before recovery');
+    if (ownerActive(pid)) throw Error(`Controller already running: ${pid}`);
     fs.unlinkSync(lock); fs.writeFileSync(lock, JSON.stringify(process.pid), { flag: 'wx' });
   }
   const clean = () => { if (read(lock) === process.pid) fs.unlinkSync(lock); };

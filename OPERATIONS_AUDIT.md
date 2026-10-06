@@ -39,3 +39,7 @@ Read-only VPS evidence: `node scripts/diagnose-operations.cjs`. Inspect `/var/li
 ## Before any live-money trial
 
 Resolve the open defects; replay order timing against captured candles; exercise disconnect, restart, stale data, duplicate execution, corrupt state, and kill-switch scenarios; reconcile broker orders/fills/positions against journals; and validate exchange-side stops and loss caps in the intended broker's test environment. Operational tests alone do not establish positive expected returns.
+
+## Follow-up repair prepared
+
+`scripts/repair-remaining-workers-host.sh` repairs existing challenger supervision, restarts the coordination observer using verified process identity, and enables HMM after validating a trained model. The ordinary strategy watchdog now includes registered challenger accounts and supervises already-enabled auxiliary workers. The repair uses an isolated Python 3.12 Docker container for training, avoiding the unavailable ensurepip package in OpenClaw. Only cached history is used; insufficient input stops training. It preserves existing models, journals, and balances. All 220 Node tests pass. Production recovery still requires the host command and subsequent heartbeat verification.

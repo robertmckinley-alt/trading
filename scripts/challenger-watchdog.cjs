@@ -32,7 +32,7 @@ function startChallenger(definition, options = {}) {
   const files = runtimeFilesForStrategy(rootDir, definition.slug);
   fs.mkdirSync(path.dirname(files.logPath), { recursive: true });
   const existingPid = readPid(files.pidPath);
-  if (pidIsRunning(existingPid)) {
+  if (existingPid && require('../lib/watcher-process.cjs').inspectLockOwner({pid:existingPid},rootDir,definition.slug).active) {
     return { state: 'running', slug: definition.slug, pid: existingPid };
   }
 
@@ -47,7 +47,7 @@ function startChallenger(definition, options = {}) {
       `--strategy=${definition.slug}`
     ], {
       cwd: rootDir,
-      detached: false,
+      detached: true,
       env: process.env,
       stdio: ['ignore', logFd, logFd],
       windowsHide: true
@@ -73,6 +73,7 @@ function parseOptions(argv) {
 }
 
 async function main() {
+  require('dotenv').config({path:path.join(ROOT_DIR,'.env.local'),quiet:true});
   const options = parseOptions(process.argv.slice(2));
   const run = () => {
     const results = checkChallengers();
