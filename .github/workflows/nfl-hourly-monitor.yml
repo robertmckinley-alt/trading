@@ -28,6 +28,11 @@ jobs:
           except urllib.error.HTTPError as exc:
             print('Monitor HTTP error:',exc.code,exc.read().decode()[:400]);raise SystemExit(1)
           print(json.dumps({k:v for k,v in data.items() if k!='lines'},indent=2))
+          credits=data.get('remainingCredits')
+          if credits is not None:
+            try:
+              if float(credits)<10000: print('WARNING: ParlayAPI credits below 10,000')
+            except (TypeError,ValueError): pass
           warnings=data.get('warnings',[])
           if warnings and os.getenv('TELEGRAM_TOKEN') and os.getenv('TELEGRAM_CHAT'):
             message='NFL EDGE monitoring alert: '+'; '.join(warnings[:5])
