@@ -14,3 +14,7 @@ deploy/systemd/trading.env
 # Local paper-trader state
 state.json
 state*.json.*.tmp
+
+.vercel
+.env.local
+.env.*.local
