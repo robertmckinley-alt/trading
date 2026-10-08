@@ -68,6 +68,8 @@ def evaluate(data, now):
         if profit.get('enabled') and (profit.get('status') in ('error', 'data-gap') or stale(profit.get('updatedAt'), 300) or (not closed and profit.get('status') == 'waiting-for-fresh-feed')):
             add('futures:profit-protection', 'Profit preservation paper worker has stale data, an error, or a missing heartbeat')
         risk = f.get('portfolioRisk', {})
+        if risk.get('status') == 'state-error' or risk.get('issues'):
+            add('futures:risk-state', 'Account state is unreadable or invalid; new futures entries are blocked')
         if risk.get('reservedRiskUsd', 0) > risk.get('capUsd', float('inf')) + .01:
             add('futures:risk', 'Reserved futures risk exceeds configured portfolio cap')
     c = data.get('crypto')

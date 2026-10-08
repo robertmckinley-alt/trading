@@ -16,6 +16,11 @@ class MonitorTests(unittest.TestCase):
             'tap': {'accounts': [{'name': str(i), 'lastRun': now} for i in range(4)]},
             'flow': {'account': {'lastRun': now * 1000}},
         }
+    def test_account_state_error_alerts(self):
+        now, data = self.sample()
+        data['futures']['portfolioRisk'] = {'status': 'state-error', 'issues': [{'reason': 'Unreadable account'}]}
+        self.assertIn('futures:risk-state', m.evaluate(data, now))
+
     def test_healthy_and_market_closure(self):
         now, data = self.sample()
         self.assertEqual(m.evaluate(data, now), {})

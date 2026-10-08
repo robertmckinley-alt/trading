@@ -38,7 +38,7 @@ async function main() {
   child.unref();
   fs.closeSync(log);
   child.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     await wait(250);
     // A supervisor may have restarted this same checkout before our child bound.
     const managedPids = matchingPids();

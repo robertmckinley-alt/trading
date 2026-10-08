@@ -51,8 +51,9 @@ function loadConfig() {
 
 function loadState(config, statePath) {
   try {
-    return loadLiveState(hydrateState(loadJson(statePath), config));
-  } catch {
+    return loadLiveState(hydrateState(require('./lib/portfolio-risk.cjs').readAccountState(statePath) || createEmptyState(config), config));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
     return loadLiveState(createEmptyState(config));
   }
 }
