@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchNflMonitor } from '../lib/nfl-monitor.js';
+import { fetchNflMonitor } from '../lib/nfl-monitor.mjs';
 const headers = { get: () => null };
 test('missing key fails closed without contacting provider',async()=>{
  const result=await fetchNflMonitor({key:'',fetcher:()=>{throw Error('must not fetch')}});
