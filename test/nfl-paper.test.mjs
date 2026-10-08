@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {NFL_STRATEGIES,createPaperAccounts,removeTwoWayVig,expectedValue,settlePaperPosition,summarizePaperAccount} from '../lib/nfl-paper.mjs';
-test('six isolated accounts start with 50k each',()=>{
+test('seven isolated accounts start with 50k each',()=>{
  const accounts=createPaperAccounts();
- assert.equal(accounts.length,6);assert.equal(new Set(accounts.map(a=>a.strategy)).size,6);
- assert.equal(accounts.reduce((sum,a)=>sum+a.equity,0),300000);
+ assert.equal(accounts.length,7);assert.equal(new Set(accounts.map(a=>a.strategy)).size,7);
+ assert.equal(accounts.reduce((sum,a)=>sum+a.equity,0),350000);
 });
 test('vig removal normalizes implied probabilities',()=>{
  const p=removeTwoWayVig(-110,-110);
