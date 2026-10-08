@@ -7,6 +7,7 @@ const strategies = [
   ["Passing yards", "Dropbacks, pace and pressure"],
   ["Touchdown props", "Red-zone usage and opportunity"],
   ["Injury-driven props", "Depth-chart changes and market repricing"],
+  ["Public Fade", "80%+ tickets with independent money divergence and pregame line checks"],
 ];
 
 export const metadata = {
@@ -23,12 +24,13 @@ export default function NFLPage() {
         <span style={{border:"1px solid #64748b",padding:"8px 12px",borderRadius:20}}>PAPER MODE ONLY</span>
       </div>
       <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,margin:"28px 0"}}>
-        {[["Simulated capital","$300,000"],["Strategies","6"],["Verified picks","0"],["Live feed","ParlayAPI adapter ready"]].map(([label,value])=><article key={label} style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:20}}><div style={{color:"#94a3b8",fontSize:13}}>{label}</div><strong style={{fontSize:25}}>{value}</strong></article>)}
+        {[["Simulated capital","$350,000"],["Strategies","7"],["Verified picks","0"],["Live feed","ParlayAPI adapter ready"]].map(([label,value])=><article key={label} style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:20}}><div style={{color:"#94a3b8",fontSize:13}}>{label}</div><strong style={{fontSize:25}}>{value}</strong></article>)}
       </section>
       <section style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:22,marginBottom:20}}>
         <h2 style={{fontSize:22,marginBottom:8}}>Top prop opportunities</h2>
         <p style={{color:"#94a3b8"}}>No picks yet. Odds, injury and projection providers must be verified and connected before this board publishes opportunities. No fabricated projections or EV estimates.</p>
       </section>
+      <section style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:22,marginBottom:20}}><h2 style={{fontSize:22,marginBottom:8}}>Public Fade signal quality</h2><p style={{color:"#94a3b8"}}>Qualified: timestamped pregame ticket and money splits, 100+ tickets, 80%+ public concentration, 12+ point ticket-money divergence, valid opposing price and matching lines, plus recorded line movement. Watchlist: core filters pass but movement remains unverified. Rejected: one or more required checks fail. No live picks until licensed split data is connected.</p></section>
       <section><h2 style={{fontSize:22,marginBottom:16}}>Strategy research accounts</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(270px,1fr))",gap:14}}>{strategies.map(([name,desc])=><article key={name} style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:18}}><strong>{name}</strong><p style={{color:"#94a3b8",margin:"8px 0"}}>{desc}</p><p style={{fontSize:13,color:"#a7f3d0"}}>$50,000 simulated • Awaiting validation</p></article>)}</div></section>
       <p style={{color:"#94a3b8",fontSize:13,marginTop:28}}>ParlayAPI odds, injury tags and optional prediction-market discovery are implemented but remain inactive until deployment credentials are verified. LineMate is a manual research reference only; its terms do not permit an automated feed. NFL EDGE is research software, not a betting service.</p>
     </main>
