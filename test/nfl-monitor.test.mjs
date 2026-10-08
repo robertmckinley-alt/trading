@@ -2,13 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchNflMonitor, normalizeParlayProps } from '../lib/nfl-monitor.mjs';
 const headers = { get: () => null };
+const marketFetcher = (data, headerForMarket = () => headers) => async (url) => {
+ const market = new URL(String(url)).searchParams.get('markets');
+ return {
+  ok:true,
+  json:async()=>({data:data.filter((row)=>row.market_key===market)}),
+  headers:headerForMarket(market),
+ };
+};
 test('missing key fails closed without contacting provider',async()=>{
- const result=await fetchNflMonitor({key:'',fetcher:()=>{throw Error('must not fetch')}});
+ const result=await fetchNflMonitor({key:'',includeGameMarkets:false,fetcher:()=>{throw Error('must not fetch')}});
  assert.equal(result.status,'missing_parlay_api_key');
  assert.equal(result.ok,false);
 });
 test('provider errors fail closed',async()=>{
- const result=await fetchNflMonitor({key:'test',fetcher:async()=>({ok:false,status:429})});
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:async()=>({ok:false,status:429})});
  assert.equal(result.httpStatus,429);
  assert.equal(result.ok,false);
 });
@@ -18,7 +26,7 @@ test('identical player lines compare across sportsbooks only',async()=>{
   {market_key:'player_pass_yds',event_id:'game1',bookmaker:'bookB',player:'Quarterback',line:250.5,over_price:115,under_price:-115,period:'FULL',last_update:new Date().toISOString()},
   {market_key:'player_pass_yds',event_id:'game1',bookmaker:'bookC',player:'Quarterback',line:260.5,over_price:200,under_price:-250,period:'FULL',last_update:new Date().toISOString()},
  ];
- const result=await fetchNflMonitor({key:'test',fetcher:async()=>({ok:true,json:async()=>({data}),headers})});
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:marketFetcher(data)});
  assert.equal(result.linesCount,6);
  assert.equal(result.discrepancies.length,1);
  assert.equal(result.discrepancies[0].point,250.5);
@@ -26,7 +34,7 @@ test('identical player lines compare across sportsbooks only',async()=>{
  assert.equal(result.discrepancies[0].actionable,false);
 });
 test('unexpected provider payload does not count as successful monitoring',async()=>{
- const result=await fetchNflMonitor({key:'test',fetcher:async()=>({ok:true,json:async()=>({unexpected:true}),headers})});
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:async()=>({ok:true,json:async()=>({unexpected:true}),headers})});
  assert.equal(result.status,'invalid_payload');
  assert.equal(result.ok,false);
 });
@@ -53,12 +61,17 @@ test('preserves completeness and current credit headers',async()=>{
   ['x-result-degraded','bookA'],['x-requests-remaining','99997'],['x-requests-last','3'],['x-request-id','request-1'],
  ]);
  const data=[{market_key:'player_pass_yds',canonical_event_id:'game1',bookmaker:'fanduel',player:'Quarterback',line:250.5,over_price:-110,under_price:-110,age_seconds:10}];
- const result=await fetchNflMonitor({key:'test',fetcher:async()=>({ok:true,json:async()=>data,headers:{get:(name)=>values.get(name)||null}})});
+ const cleanHeaders={get:(name)=>({
+  'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
+  'x-result-has-more':'false','x-result-truncated':'false',
+ }[name]||null)};
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:marketFetcher(data,(market)=>market==='player_pass_yds'?{get:(name)=>values.get(name)||null}:cleanHeaders)});
  assert.equal(result.status,'checked_incomplete');
  assert.equal(result.completeness.truncated,true);
+ assert.deepEqual(result.completeness.truncatedMarkets,['player_pass_yds']);
  assert.deepEqual(result.completeness.degradedBooks,['bookA']);
  assert.equal(result.remainingCredits,'99997');
- assert.equal(result.requestCost,'3');
+ assert.equal(result.requestCost,null);
  assert.equal(result.snapshot.lines.length,2);
 });
 test('DFS rows cannot create sportsbook price-gap diagnostics',async()=>{
@@ -66,7 +79,50 @@ test('DFS rows cannot create sportsbook price-gap diagnostics',async()=>{
   {market_key:'player_receptions',canonical_event_id:'game1',bookmaker:'prizepicks',player:'Receiver',line:5.5,over_price:-137,under_price:-137,age_seconds:10},
   {market_key:'player_receptions',canonical_event_id:'game1',bookmaker:'underdog',player:'Receiver',line:5.5,over_price:120,under_price:-150,age_seconds:10},
  ];
- const result=await fetchNflMonitor({key:'test',fetcher:async()=>({ok:true,json:async()=>data,headers})});
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:marketFetcher(data)});
  assert.equal(result.discrepancies.length,0);
  assert.equal(result.coverage.bySourceType.dfs,4);
+});
+
+test('requests each prop market separately and aggregates request credits',async()=>{
+ const requested=[];
+ const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:async(url)=>{
+  requested.push(new URL(String(url)).searchParams.get('markets'));
+  return {ok:true,json:async()=>({data:[]}),headers:{get:(name)=>({
+   'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
+   'x-result-has-more':'false','x-result-truncated':'false','x-requests-remaining':'99982','x-requests-last':'3',
+  }[name]||null)}};
+ }});
+ assert.equal(requested.length,6);
+ assert.equal(new Set(requested).size,6);
+ assert.equal(result.completeness.requestMode,'per_market');
+ assert.equal(result.completeness.boardExhausted,true);
+ assert.equal(result.requestCost,'18');
+ assert.equal(result.remainingCredits,'99982');
+});
+
+test('adds moneyline, spread and total coverage to the full monitor',async()=>{
+ const now=new Date().toISOString();
+ const result=await fetchNflMonitor({key:'test',fetcher:async(url)=>{
+  const parsed=new URL(String(url));
+  const responseHeaders={get:(name)=>({
+   'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
+   'x-result-has-more':'false','x-result-truncated':'false','x-requests-remaining':'99979','x-requests-last':'3',
+  }[name]||null)};
+  if(parsed.pathname.endsWith('/odds')) return {ok:true,headers:responseHeaders,json:async()=>[{
+   id:'game-1',commence_time:'2026-10-11T20:25:00Z',home_team:'Home Team',away_team:'Away Team',bookmakers:[{
+    key:'book-a',title:'Book A',last_update:now,markets:[
+     {key:'h2h',last_update:now,outcomes:[{name:'Home Team',price:-120},{name:'Away Team',price:110}]},
+     {key:'spreads',last_update:now,outcomes:[{name:'Home Team',price:-110,point:-2.5},{name:'Away Team',price:-110,point:2.5}]},
+     {key:'totals',last_update:now,outcomes:[{name:'Over',price:-110,point:44.5},{name:'Under',price:-110,point:44.5}]},
+    ],
+   }],
+  }]};
+  return {ok:true,headers:responseHeaders,json:async()=>({data:[]})};
+ }});
+ assert.equal(result.gameMarkets.ok,true);
+ assert.equal(result.gameMarkets.gamesCount,1);
+ assert.equal(result.gameMarkets.games[0].marketLeader,'Home Team');
+ assert.equal(result.requestCost,'21');
+ assert.equal(result.status,'checked');
 });
