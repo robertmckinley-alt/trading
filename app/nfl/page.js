@@ -23,7 +23,7 @@ export default function NFLPage() {
         <span style={{border:"1px solid #64748b",padding:"8px 12px",borderRadius:20}}>PAPER MODE ONLY</span>
       </div>
       <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,margin:"28px 0"}}>
-        {[["Simulated capital","$300,000"],["Strategies","6"],["Verified picks","0"],["Live feed","Not connected"]].map(([label,value])=><article key={label} style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:20}}><div style={{color:"#94a3b8",fontSize:13}}>{label}</div><strong style={{fontSize:25}}>{value}</strong></article>)}
+        {[["Simulated capital","$300,000"],["Strategies","6"],["Verified picks","0"],["Live feed","Integration pending"]].map(([label,value])=><article key={label} style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:20}}><div style={{color:"#94a3b8",fontSize:13}}>{label}</div><strong style={{fontSize:25}}>{value}</strong></article>)}
       </section>
       <section style={{background:"#162238",border:"1px solid #334155",borderRadius:12,padding:22,marginBottom:20}}>
         <h2 style={{fontSize:22,marginBottom:8}}>Top prop opportunities</h2>
