@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchNflMonitor } from '../../../../lib/nfl-monitor';
+import { fetchNflMonitor } from '../../../../lib/nfl-monitor.mjs';
 export const dynamic='force-dynamic';
 export const maxDuration=30;
 export async function GET(request){
