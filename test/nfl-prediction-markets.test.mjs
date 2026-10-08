@@ -1,6 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchNflPredictionMarketDiscovery, normalizePredictionMarketDiscovery } from '../lib/nfl-prediction-markets.mjs';
+import {
+ fetchNflPredictionMarketDiscovery,
+ fetchNflSportPredictionMarkets,
+ normalizeNflPredictionMarkets,
+ normalizePredictionMarketDiscovery,
+} from '../lib/nfl-prediction-markets.mjs';
+
+test('normalizes source-native NFL game contracts without converting them into picks',()=>{
+ const markets=normalizeNflPredictionMarkets([{event_id:'game-1',sport_key:'americanfootball_nfl',commence_time:'2026-10-11T20:25:00Z',home_team:'Seattle Seahawks',away_team:'Los Angeles Rams',source:'kalshi',selection:'Seattle Seahawks',yes_price:0.58,no_price:0.44,yes_implied_prob:0.58,no_implied_prob:0.44,volume_24h_usd:24000}]);
+ assert.equal(markets.length,1);
+ assert.equal(markets[0].selection,'Seattle Seahawks');
+ assert.equal(markets[0].yesPrice,0.58);
+ assert.equal(markets[0].actionable,false);
+});
+
+test('uses the dedicated NFL prediction-market endpoint for game contracts',async()=>{
+ let requestedUrl='';
+ const result=await fetchNflSportPredictionMarkets({key:'test',fetcher:async(url)=>{
+  requestedUrl=String(url);
+  return {ok:true,headers:{get:(name)=>({'x-requests-last':'1','x-requests-remaining':'99999'}[name]||null)},json:async()=>({data:[{event_id:'game-1',source:'polymarket',selection:'Rams',yes_price:0.49,no_price:0.53}]})};
+ }});
+ assert.match(requestedUrl,/prediction-markets\/americanfootball_nfl/);
+ assert.equal(new URL(requestedUrl).searchParams.get('sources'),'kalshi,polymarket');
+ assert.equal(result.ok,true);
+ assert.equal(result.marketsCount,1);
+ assert.equal(result.creditUsage.cost,'1');
+});
 
 test('normalizes source-native prediction-market discovery without creating a signal',()=>{
  const markets=normalizePredictionMarketDiscovery({markets:[{
