@@ -29,3 +29,11 @@ The activation preflights state, backs up active parent journals, reloads existi
 238 Node tests and 6 Python monitor tests passed. Regressions cover long/short limits, legacy plan replay, gap rejection/resizing, aggregate reservations, corrupt account/manifest admission, and cohort separation. The dashboard production build passed with webpack. A pre-existing NFL CSS Modules selector was scoped to that page to make the production build valid.
 
 These are execution/accounting repairs, not evidence of profitability. Stop gaps can still exceed initial modeled risk. The same-candle historical old/new comparison still requires the VPS candle cache (`node scripts/compare-execution-backtests.cjs`). No market data was purchased for these repairs. Operational recovery must be confirmed from fresh VPS heartbeats after activation; local tests do not prove remote worker health.
+
+## Saved report / current cache mismatch
+
+A report may contain an uncached partial UTC day. Updated cache files can also differ from its original input. Strict reproduction still rejects any fingerprint mismatch.
+
+For a new comparison using available local candles, run `node scripts/compare-execution-backtests.cjs --current-cache`. This makes no network/data-provider requests. It validates cache checksums and identity, freezes the candles and config once, and runs BOTH engines against that same array. The output explicitly says it is a new cache replay, not reproduction of the published report. The published backtest and trading journals are untouched.
+
+Each run retains its original report, frozen candles, config, input manifest and both results under `runtime/execution-audit/run-<time>-<pid>/`. Only a completed comparison updates the dashboard comparison pointer. Inspect the before/after coverage issues before drawing conclusions: missing cached sessions are not silently filled. The original report window is retained to expose missing-session coverage.

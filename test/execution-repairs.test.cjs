@@ -103,5 +103,8 @@ test('comparison input loader checks cached data against the original fingerprin
  try{fs.writeFileSync(path.join(dir,'2026-02-03.json'),JSON.stringify({identity,candles:c,checksum:createHash('sha256').update(JSON.stringify(c)).digest('hex')}));
  const report={window:{start:'2026-02-03T00:00Z',end:'2026-02-04T00:00Z'},provenance:{dataFingerprint:runner.hash(c)}};
  assert.deepEqual(runner.loadCandles(root,config,report),c);report.provenance.dataFingerprint='wrong';assert.throws(()=>runner.loadCandles(root,config,report),/fingerprint/);
+ assert.deepEqual(runner.loadCandles(root,config,report,{currentCache:true}),c);
+ const file=path.join(dir,'2026-02-03.json');const broken=JSON.parse(fs.readFileSync(file));broken.candles[0].close+=1;fs.writeFileSync(file,JSON.stringify(broken));
+ assert.throws(()=>runner.loadCandles(root,config,report,{currentCache:true}),/checksum/);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
