@@ -116,3 +116,13 @@ test('DMC backtest checks only completed five-minute bars with time left before 
   const records = Array.from({ length: 70 }, (_, index) => ({ minute: 570 + index, candle: { timestamp: new Date(index * 60_000).toISOString() } }));
   assert.deepEqual(checkpointsForDay('nq-dmc-market-open', records).map((record) => record.minute), [574, 579, 584, 589, 594, 599, 604, 609, 614, 619, 624]);
 });
+
+test('paper collection observes the pre-open ATR band without vetoing the session', () => {
+ const c=structuredClone(config);c.detectorStrategySlug='nq-dmc-market-open';
+ c.live.paperCollection={enabled:true};
+ c.live.dmcMarketOpen={...c.live.dmcMarketOpen,minimumBiasAtrRatio:100,maximumBiasAtrRatio:101};
+ const result=detectDmcMarketOpenSignal(dmcCandles(),c,{trades:[]});
+ assert.doesNotMatch(result.reason||'',/pre-open hour failed/);
+ c.live.paperCollection.enabled=false;
+ assert.match(detectDmcMarketOpenSignal(dmcCandles(),c,{trades:[]}).reason,/pre-open hour failed/);
+});
