@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchNflMonitor } from '../../../../lib/nfl-monitor.mjs';
 import { saveNflSnapshot } from '../../../../lib/nfl-storage.js';
 export const dynamic='force-dynamic';
-export const maxDuration=30;
+export const maxDuration=45;
 export async function GET(request){
  const token=process.env.NFL_MONITOR_SECRET;
  if(!token) return NextResponse.json({ok:false,error:'monitor_secret_not_configured'},{status:503});

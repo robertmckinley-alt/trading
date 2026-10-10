@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { fetchNflMonitor } from '../../lib/nfl-monitor.mjs';
+import { buildNflSetups } from '../../lib/nfl-setups.mjs';
 import styles from './nfl.module.css';
 
 export const metadata = {
@@ -15,6 +16,9 @@ const getPublicBoard = unstable_cache(async () => {
     includeGameMarkets: true,
     includePredictionMarkets: process.env.NFL_PREDICTION_MARKETS_ENABLED === 'true',
   });
+  const setups = buildNflSetups(result.gameMarkets?.games || [], {
+    now: Date.parse(result.checkedAt),
+  });
   return {
     ok: result.ok,
     configured: result.configured,
@@ -26,6 +30,8 @@ const getPublicBoard = unstable_cache(async () => {
     staleLines: result.staleLines || 0,
     unknownAgeLines: result.unknownAgeLines || 0,
     coverage: result.coverage || { bookmakers: [], byMarket: {}, bySourceType: {} },
+    setups,
+    playerSetups: result.playerSetups || { plays: [], parlays: [], actionablePlays: 0, matchedGroups: 0 },
     gameMarkets: result.gameMarkets ? {
       ...result.gameMarkets,
       games: (result.gameMarkets.games || []).map(({ books, ...game }) => game),
@@ -37,7 +43,7 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v3'], { revalidate: 3600, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v4'], { revalidate: 900, tags: ['nfl-public-board'] });
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
@@ -60,6 +66,10 @@ function formatPercent(value) {
 function formatLine(value) {
   if (!Number.isFinite(value)) return '—';
   return value > 0 ? `+${value}` : String(value);
+}
+
+function formatReturn(value) {
+  return Number.isFinite(value) ? `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%` : '—';
 }
 
 function formatDate(value, includeDate = true) {
@@ -89,7 +99,57 @@ function Moneyline({ team, quote }) {
   );
 }
 
-function GameCard({ game }) {
+function SetupCard({ setup }) {
+  return (
+    <article className={styles.setupCard}>
+      <header>
+        <div><span>{setup.category}</span><strong>{setup.decision}</strong></div>
+        <b className={setup.confidence === 'High' ? styles.highConfidence : styles.moderateConfidence}>{setup.confidence}</b>
+      </header>
+      <h3>{setup.selection}</h3>
+      <p className={styles.matchup}>{setup.matchup} · {formatDate(setup.kickoff)}</p>
+      <div className={styles.setupMetrics}>
+        {Number.isFinite(setup.probability) && <div><span>Win probability</span><strong>{formatPercent(setup.probability)}</strong></div>}
+        {Number.isFinite(setup.odds) && <div><span>Entry price</span><strong>{formatAmerican(setup.odds)}</strong></div>}
+        {Number.isFinite(setup.expectedReturn) && <div><span>Modeled edge</span><strong className={setup.expectedReturn >= 0 ? styles.positiveText : styles.warningText}>{formatReturn(setup.expectedReturn)}</strong></div>}
+        {Number.isFinite(setup.lineAdvantage) && <div><span>Line advantage</span><strong className={styles.positiveText}>{setup.lineAdvantage.toFixed(1)} pts</strong></div>}
+      </div>
+      <dl className={styles.setupDetails}>
+        <div><dt>Entry</dt><dd>{setup.entry}</dd></div>
+        <div><dt>Book</dt><dd>{setup.bookTitle || setup.book}</dd></div>
+        <div><dt>Risk / reward</dt><dd>Risk 1u to win {Number.isFinite(setup.targetProfit) ? `${setup.targetProfit.toFixed(2)}u` : '—'}</dd></div>
+        <div><dt>Invalidation</dt><dd>{setup.invalidation}</dd></div>
+      </dl>
+      <footer>{setup.basis}</footer>
+    </article>
+  );
+}
+
+function ParlayCard({ parlay }) {
+  return (
+    <article className={`${styles.setupCard} ${styles.parlayCard}`}>
+      <header>
+        <div><span>{parlay.category}</span><strong>{parlay.decision}</strong></div>
+        <b className={parlay.decision === 'PLAY' ? styles.highConfidence : styles.caution}>{parlay.bookTitle || parlay.book}</b>
+      </header>
+      <ol>{parlay.legs.map((leg) => <li key={`${leg.eventId}-${leg.selection}`}><strong>{leg.selection}{parlay.market === 'player_parlay' ? '' : ' ML'}</strong><span>{formatAmerican(leg.odds)} · {formatPercent(leg.probability)}</span></li>)}</ol>
+      <div className={styles.setupMetrics}>
+        <div><span>Estimated price</span><strong>{formatAmerican(parlay.offeredOdds)}</strong></div>
+        <div><span>Estimated hit rate</span><strong>{formatPercent(parlay.jointProbability)}</strong></div>
+        <div><span>Modeled edge</span><strong className={parlay.expectedReturn >= 0 ? styles.positiveText : styles.warningText}>{formatReturn(parlay.expectedReturn)}</strong></div>
+        <div><span>Risk / reward</span><strong>1u → {parlay.targetProfit.toFixed(2)}u</strong></div>
+      </div>
+      <p className={styles.invalidation}><strong>Invalidation:</strong> {parlay.invalidation}</p>
+      <footer>{parlay.basis}</footer>
+    </article>
+  );
+}
+
+function SetupEmpty({ children }) {
+  return <div className={styles.setupEmpty}><strong>PASS</strong><p>{children}</p></div>;
+}
+
+function GameCard({ game, winner }) {
   const isFresh = game.freshness?.staleQuotes === 0 && game.freshness?.unknownAgeQuotes === 0;
   return (
     <article className={styles.gameCard}>
@@ -104,10 +164,10 @@ function GameCard({ game }) {
       </header>
 
       <div className={styles.winnerCallout}>
-        <span>Straight-up market leader</span>
-        <strong>{game.marketLeader || 'No consensus'}</strong>
-        <b>{formatPercent(game.marketLeaderProbability)} fair market probability</b>
-        <p>Market-implied leader. This is not an independent NFL EDGE pick.</p>
+        <span>{winner ? 'NFL EDGE consensus call' : 'Straight-up market leader'}</span>
+        <strong>{winner?.selection || game.marketLeader || 'No consensus'}</strong>
+        <b>{formatPercent(winner?.probability ?? game.marketLeaderProbability)} win probability</b>
+        <p>{winner ? `${winner.confidence} confidence · ${winner.sourceBooks} comparison books` : 'Insufficient current books for a published model call.'}</p>
       </div>
 
       <div className={styles.gameGrid}>
@@ -125,8 +185,8 @@ function GameCard({ game }) {
       </div>
 
       <footer className={styles.gameFooter}>
-        <span>Decision: <strong>NO TRADE</strong></span>
-        <p>{game.reason}</p>
+        <span>Decision: <strong>{winner?.decision || 'PASS'}</strong></span>
+        <p>{winner?.entry || game.reason}</p>
       </footer>
     </article>
   );
@@ -160,19 +220,36 @@ export default async function NFLPage() {
       coverage: { bookmakers: [], byMarket: {}, bySourceType: {} },
       gameMarkets: null,
       predictionMarkets: null,
+      setups: null,
     };
   }
 
   const allGames = board.gameMarkets?.games || [];
+  const checkedAtMillis = Date.parse(board.checkedAt || '');
+  const now = Number.isFinite(checkedAtMillis) ? checkedAtMillis : 0;
   const upcomingGames = allGames
-    .filter((game) => game.state === 'pregame')
+    .filter((game) => game.state === 'pregame' && Number.isFinite(Date.parse(game.kickoff)) && Date.parse(game.kickoff) > now)
     .sort((a, b) => Date.parse(a.kickoff || 0) - Date.parse(b.kickoff || 0));
   const games = upcomingGames.slice(0, 20);
   const gameStatus = board.gameMarkets?.status || 'unavailable';
-  const dataCurrent = board.ok && board.gameMarkets?.ok && gameStatus === 'checked';
+  const dataCurrent = Boolean(
+    board.gameMarkets?.ok
+    && board.gameMarkets?.staleQuotes === 0
+    && board.gameMarkets?.unknownAgeQuotes === 0
+  );
   const predictionCount = board.predictionMarkets?.marketsCount || board.predictionMarkets?.markets?.length || 0;
   const sourceCount = board.gameMarkets?.bookmakers?.length || 0;
   const propMarkets = Object.entries(board.coverage?.byMarket || {});
+  const liveSetup = (setup) => Number.isFinite(Date.parse(setup.kickoff || '')) ? Date.parse(setup.kickoff) > now : true;
+  const setups = board.setups || { winners: [], moneylines: [], spreads: [], totals: [], parlays: [], actionableSetups: 0, publishedSetups: 0 };
+  const winners = (setups.winners || []).filter(liveSetup);
+  const winnerMap = new Map(winners.map((winner) => [winner.eventId, winner]));
+  const valuePlays = [...(setups.moneylines || []), ...(setups.spreads || []), ...(setups.totals || [])].filter(liveSetup);
+  const parlays = (setups.parlays || []).filter((parlay) => parlay.legs?.every(liveSetup));
+  const playerPlays = (board.playerSetups?.plays || []).filter(liveSetup);
+  const playerParlays = (board.playerSetups?.parlays || []).filter((parlay) => parlay.legs?.every(liveSetup));
+  const actionableCount = [...winners, ...valuePlays, ...parlays, ...playerPlays, ...playerParlays].filter((setup) => setup.decision === 'PLAY').length;
+  const publishedCount = winners.length + valuePlays.length + parlays.length + playerPlays.length + playerParlays.length;
 
   return (
     <main id="main-content" className={styles.page}>
@@ -183,9 +260,9 @@ export default async function NFLPage() {
 
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>NFL EDGE / FULL MARKET SUITE</p>
-          <h1>The whole board.<br /><em>One disciplined read.</em></h1>
-          <p className={styles.lede}>Straight-up winners, moneylines, spreads, totals, player props and prediction markets. Current prices are shown. Unverified edge stays NO TRADE.</p>
+          <p className={styles.eyebrow}>NFL EDGE / CONSENSUS MODEL V1</p>
+          <h1>Best setups.<br /><em>Clear calls.</em></h1>
+          <p className={styles.lede}>Ranked winner projections, moneyline value, ATS and total line edges, plus same-book parlay constructions. Every call includes its price, probability, risk and invalidation.</p>
         </div>
         <aside className={styles.analysisTicket}>
           <div><span>Analysis time</span><strong>{formatDate(board.checkedAt, false)}</strong></div>
@@ -200,14 +277,15 @@ export default async function NFLPage() {
         <DataPill label="Sportsbook sources" value={String(sourceCount)} />
         <DataPill label="Player-prop prices" value={(board.linesCount || 0).toLocaleString('en-US')} />
         <DataPill label="Prediction contracts" value={String(predictionCount)} />
-        <DataPill label="Actionable picks" value="0" tone="warning" />
+        <DataPill label="Published setups" value={String(publishedCount)} tone={publishedCount ? 'positive' : 'warning'} />
+        <DataPill label="Actionable plays" value={String(actionableCount)} tone={actionableCount ? 'positive' : 'warning'} />
       </section>
 
       <section className={styles.suiteStrip} aria-label="NFL Edge suite coverage">
         {[
-          ['SU', 'Game winners', 'Market-implied leader + best moneyline'],
-          ['ATS', 'Spreads', 'Cross-book consensus line'],
-          ['O/U', 'Totals', 'Consensus game total'],
+          ['SU', 'Game winners', 'Ranked consensus probability'],
+          ['ATS', 'Spreads', 'Winner side + line advantage'],
+          ['O/U', 'Totals', 'Half-point-or-better market edge'],
           ['PROP', 'Player props', 'Six full-game markets'],
           ['PM', 'Prediction markets', 'Kalshi + Polymarket discovery'],
         ].map(([code, name, detail]) => (
@@ -217,10 +295,50 @@ export default async function NFLPage() {
 
       <section className={styles.section}>
         <div className={styles.sectionHeading}>
-          <div><p className={styles.sectionKicker}>STRAIGHT-UP + CORE LINES</p><h2>Game winner board</h2></div>
-          <p>The favorite is de-vigged across available books. It is a market consensus, not a guaranteed winner.</p>
+          <div><p className={styles.sectionKicker}>TOP CALLS</p><h2>Straight-up winner projections</h2></div>
+          <p>Predictions use de-vigged consensus from independent books. PLAY requires a current executable price that also clears the value gate; PREDICTION is the winner call without a qualified price edge.</p>
         </div>
-        {games.length ? <div className={styles.gameList}>{games.map((game) => <GameCard key={game.eventId || `${game.away}-${game.home}`} game={game} />)}</div> : <EmptyBoard configured={board.configured} status={gameStatus} />}
+        {winners.length ? <div className={styles.setupGrid}>{winners.slice(0, 6).map((setup) => <SetupCard key={setup.id} setup={setup} />)}</div> : <SetupEmpty>No current game has enough fresh, agreeing books to publish a winner projection.</SetupEmpty>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>PRICE + LINE EDGE</p><h2>Best bet setups</h2></div>
+          <p>These are the setups that beat the cross-book benchmark now. They disappear when the quote gets stale, the price moves, or the line advantage closes.</p>
+        </div>
+        {valuePlays.length ? <div className={styles.setupGrid}>{valuePlays.slice(0, 8).map((setup) => <SetupCard key={setup.id} setup={setup} />)}</div> : <SetupEmpty>No moneyline, spread or total currently clears the minimum price and line-shopping gates.</SetupEmpty>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>PARLAY BUILDER</p><h2>Best same-book combinations</h2></div>
+          <p>Only distinct games are combined. PLAY requires positive modeled value; PASS tickets are shown as the best available construction, not a recommendation.</p>
+        </div>
+        {parlays.length ? <div className={styles.setupGrid}>{parlays.map((parlay) => <ParlayCard key={parlay.id} parlay={parlay} />)}</div> : <SetupEmpty>No two- or three-leg same-book parlay has enough current, independent support.</SetupEmpty>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>PLAYER EDGE</p><h2>Best player props</h2></div>
+          <p>Exact player, event, market, side and line matches only. A PLAY requires at least three other books, current prices, positive modeled value and no unresolved injury tag.</p>
+        </div>
+        {playerPlays.length ? <div className={styles.setupGrid}>{playerPlays.slice(0, 8).map((setup) => <SetupCard key={setup.id} setup={setup} />)}</div> : <SetupEmpty>No player prop currently clears the exact-match, freshness, injury and price-edge gates.</SetupEmpty>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>PLAYER PARLAYS</p><h2>Best cross-game player combinations</h2></div>
+          <p>Two- and three-leg player parlays use one sportsbook and different games. Same-game combinations are excluded until their correlation can be measured.</p>
+        </div>
+        {playerParlays.length ? <div className={styles.setupGrid}>{playerParlays.map((parlay) => <ParlayCard key={parlay.id} parlay={parlay} />)}</div> : <SetupEmpty>No cross-game player parlay currently clears the exact-line and positive-value gates at one sportsbook.</SetupEmpty>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>FULL SLATE</p><h2>Game-by-game board</h2></div>
+          <p>Every game shows the model call, current best moneylines, consensus spread and total, or PASS when the required evidence is missing.</p>
+        </div>
+        {games.length ? <div className={styles.gameList}>{games.map((game) => <GameCard key={game.eventId || `${game.away}-${game.home}`} game={game} winner={winnerMap.get(game.eventId)} />)}</div> : <EmptyBoard configured={board.configured} status={gameStatus} />}
       </section>
 
       <section className={styles.secondaryGrid}>
@@ -247,12 +365,12 @@ export default async function NFLPage() {
 
         <article className={`${styles.panel} ${styles.guardrailPanel}`}>
           <p className={styles.sectionKicker}>DECISION GATE</p>
-          <h2>Why the board says NO TRADE</h2>
+          <h2>How calls are gated</h2>
           <ul>
-            <li>No independent win-probability model is validated.</li>
-            <li>Live injury and news context still needs confirmation.</li>
-            <li>No account size or maximum risk was supplied.</li>
-            <li>Entry, stop, targets and minimum risk-to-reward are not defined.</li>
+            <li>Fresh quotes and at least four comparison books are required.</li>
+            <li>PLAY requires a measurable price or line advantage; otherwise it stays PREDICTION or PASS.</li>
+            <li>Quarterback, injury and late-news changes invalidate the setup until confirmed.</li>
+            <li>Risk defaults to a one-unit maximum loss. Position size is withheld until bankroll and maximum risk are supplied.</li>
           </ul>
         </article>
       </section>
@@ -266,7 +384,7 @@ export default async function NFLPage() {
 
       <footer className={styles.footer}>
         <p><strong>LineMate remains manual-only.</strong> NFL EDGE does not log in, scrape, call undocumented endpoints or automate extraction from LineMate.</p>
-        <p>Research software only. Market prices can move. Verify the exact event, line, book, timestamp, liquidity and rules before any decision.</p>
+        <p>Paper/research mode. The model is market-derived, not a proprietary injury-adjusted forecast. Verify the exact event, line, book, timestamp and rules before any decision.</p>
       </footer>
     </main>
   );
