@@ -87,7 +87,9 @@ test('DFS rows cannot create sportsbook price-gap diagnostics',async()=>{
 test('requests each prop market separately and aggregates request credits',async()=>{
  const requested=[];
  const result=await fetchNflMonitor({key:'test',includeGameMarkets:false,fetcher:async(url)=>{
-  requested.push(new URL(String(url)).searchParams.get('markets'));
+  const parsed=new URL(String(url));
+  assert.equal(parsed.hostname,'api.parlay-api.com');
+  requested.push(parsed.searchParams.get('markets'));
   return {ok:true,json:async()=>({data:[]}),headers:{get:(name)=>({
    'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
    'x-result-has-more':'false','x-result-truncated':'false','x-requests-remaining':'99982','x-requests-last':'3',
