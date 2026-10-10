@@ -42,6 +42,8 @@ test('publishes exact-match player props and cross-game parlays', () => {
   assert.equal(result.plays[0].side, 'Over');
   assert.equal(result.plays[0].book, 'a');
   assert.equal(result.plays[0].decision, 'PLAY');
+  assert.match(result.plays[0].selection, /receptions/);
+  assert.equal(result.parlays.every((parlay) => parlay.legs.every((leg) => /receptions|passing yards/.test(leg.selection))), true);
   assert.equal(result.parlays.some((parlay) => parlay.decision === 'PLAY' && parlay.book === 'a'), true);
   assert.equal(result.parlays.every((parlay) => new Set(parlay.legs.map((leg) => leg.eventId)).size === parlay.legs.length), true);
 });
