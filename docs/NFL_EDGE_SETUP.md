@@ -25,14 +25,14 @@ The monitor endpoint is `/api/nfl/monitor`. It requires `Authorization: Bearer <
 
 - The monitor issues one 10,000-row request for each of the six supported full-game markets. This avoids the provider's cross-market serving cap while preserving selection IDs, effective DFS pricing and a 60-minute maximum age.
 - The game board calls `/odds` once with `h2h,spreads,totals`. It calculates the best listed moneyline, a cross-book median spread and total, and a two-way de-vigged market probability for each team. The higher probability is labeled **market leader**, not an independent pick.
-- Current ParlayAPI documentation prices each `/props` request at 3 credits, the three-market `/odds` request by markets served, and the sport-specific prediction-market request at 1 credit. With current observed costs, one full refresh is about 22 credits and an hourly monitor is about 15,840 credits over 30 days. The public page has a separate 15-minute server cache; continuous traffic at every cache boundary can add about 63,360 credits over 30 days, for a worst-case combined estimate near 79,200 of the reported 100,000-credit plan. Provider pricing can change; trust the aggregated live `x-requests-last` or `x-credits-cost` values.
+- Current ParlayAPI documentation prices each `/props` request at 3 credits, the three-market `/odds` request by markets served, and the sport-specific prediction-market request at 1 credit. With current observed costs, one full refresh is about 22 credits and an hourly monitor is about 15,840 credits over 30 days. The scheduled monitor retries only failed prop markets once; if all six fail and retry every hour, that adds up to 12,960 credits. The public page has a separate 15-minute server cache and does not use the retry; continuous traffic at every cache boundary can add about 63,360 credits over 30 days. The combined worst-case estimate is therefore about 92,160 of the reported 100,000-credit plan. Provider pricing can change; trust the aggregated live `x-requests-last` or `x-credits-cost` values.
 - The adapter reads both current `x-requests-*` and legacy `x-credits-*` quota headers.
 - `x-result-has-more`, `x-result-truncated`, `x-result-truncated-hint` and `x-result-degraded` are preserved. A truncated or degraded board returns `checked_incomplete`, not a false success.
 - DFS projections, exchanges and sportsbooks are classified separately. Only sportsbook rows can enter provisional price-gap diagnostics.
 
 ## Decision gate
 
-NFL EDGE produces **NO TRADE** unless all required evidence is current and verified. A price gap is not expected value. A LineMate hit rate is not a probability model. Prediction-market volume, a large trade or price movement is not directional proof.
+NFL EDGE publishes a **PLAY** only when its required price, freshness and matching evidence is current. A raw price gap is not expected value. A LineMate hit rate is not a probability model. Prediction-market volume, a large trade or price movement is not directional proof.
 
 The production board now separates model output into explicit decision classes:
 
@@ -53,14 +53,14 @@ Before any paper position is created, require:
 
 ## Current limitations
 
-- ParlayAPI player names are display names, not universal athlete IDs. Cross-book matches are marked `display_name_only`, non-actionable and excluded from automated positions.
+- ParlayAPI player names are display names, not universal athlete IDs. A displayed player setup requires the same canonical event, exact normalized name, market, side and line across books. Injury flags block publication, and no setup creates an automated position.
 - The optional prediction-market search is beta. Its clusters are text matches, not proof of equivalent contracts.
-- The straight-up leader is consensus market pricing, not a predictive model. NFL EDGE returns `NO TRADE` until an independent probability method, current injury/news context and a complete risk plan are validated.
+- Straight-up calls are consensus market projections, not an independent team-strength or injury-adjusted model. They remain **PREDICTION** unless an executable price also clears the value gate.
 - Saved snapshots support future research but do not create a validated backtest by themselves. Coverage varies by source, market and date.
 - No automated paper entries, real-money betting, averaging down or account-size assumptions are implemented.
-- Production credentials, database persistence, scheduled workflow behavior and live provider payloads still require one deployment-time verification run.
+- Database persistence remains optional and is reported as disabled when no database is configured. Scheduled monitoring and live provider payloads were deployment-verified on 2026-10-10.
 - Position size remains blank until bankroll and maximum risk are supplied. Dashboard risk/reward is normalized to a one-unit maximum loss.
 
 ## Timeout and degradation behavior
 
-The six player-prop markets are fetched independently. One slow prop market no longer discards current game moneylines, spreads and totals or causes the hourly job to report a total outage. The monitor returns `checked_incomplete`, names each failed market and continues to fail closed for that missing market. If the game-market endpoint is unavailable, the monitor still fails.
+The six player-prop markets are fetched independently. One slow prop market no longer discards current game moneylines, spreads and totals or causes the hourly job to report a total outage. The protected scheduled endpoint retries only failed prop markets once within the Vercel time limit; the public page does not retry. The monitor returns `checked_incomplete`, names any market that still failed and continues to fail closed for that missing market. If the game-market endpoint is unavailable, the monitor still fails.

@@ -153,3 +153,30 @@ test('keeps current game markets operational when one prop market times out',asy
  assert.equal(result.completeness.failedMarkets.length,1);
  assert.match(result.warnings.join(' '),/player_pass_yds: network_error/);
 });
+
+test('scheduled monitoring retries transient prop failures once',async()=>{
+ const calls=new Map();
+ const result=await fetchNflMonitor({
+  key:'test',
+  includeGameMarkets:false,
+  propAttempts:2,
+  propRetryDelayMs:0,
+  fetcher:async(url)=>{
+   const market=new URL(String(url)).searchParams.get('markets');
+   calls.set(market,(calls.get(market)||0)+1);
+   if(market==='player_pass_yds'&&calls.get(market)===1){
+    return {ok:false,status:503,headers:{get:(name)=>name==='x-requests-last'?'3':null}};
+   }
+   return {ok:true,headers:{get:(name)=>({
+    'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
+    'x-result-has-more':'false','x-result-truncated':'false','x-requests-last':'3',
+   }[name]||null)},json:async()=>({data:[]})};
+  },
+ });
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'checked');
+ assert.equal(calls.get('player_pass_yds'),2);
+ assert.deepEqual(result.completeness.retriedMarkets,['player_pass_yds']);
+ assert.equal(result.completeness.failedMarkets.length,0);
+ assert.equal(result.requestCost,'21');
+});
