@@ -92,7 +92,11 @@ test('fails closed for started games and stale quotes', () => {
     total: { ...entry.total, ageSeconds: 7200 },
   }));
   const result = buildNflSetups([started, stale], { now });
-  assert.equal(result.publishedSetups, 0);
+  assert.equal(result.winners.length, 1);
+  assert.equal(result.winners[0].decision, 'PASS');
+  assert.equal(result.winners[0].dataStatus, 'delayed_or_incomplete');
+  assert.equal(result.moneylines.length, 0);
+  assert.equal(result.parlays.length, 0);
   assert.equal(result.actionableSetups, 0);
 });
 
@@ -101,9 +105,46 @@ test('parlays use one sportsbook and distinct games', () => {
     game('game-1', 'Home One', 'Away One'),
     game('game-2', 'Home Two', 'Away Two'),
     game('game-3', 'Home Three', 'Away Three'),
+    game('game-4', 'Home Four', 'Away Four'),
   ], { now });
-  for (const parlay of result.parlays) {
+  assert.deepEqual(new Set(result.likelihoodParlays.map((parlay) => parlay.legCount)), new Set([2, 3, 4]));
+  for (const parlay of result.likelihoodParlays) {
     assert.equal(new Set(parlay.legs.map((leg) => leg.eventId)).size, parlay.legs.length);
     assert.equal(parlay.legs.every((leg) => leg.book === parlay.book), true);
   }
+  for (const size of [2, 3, 4]) {
+    const probabilities = result.likelihoodParlays
+      .filter((parlay) => parlay.legCount === size)
+      .map((parlay) => parlay.jointProbability);
+    assert.deepEqual(probabilities, [...probabilities].sort((a, b) => b - a));
+  }
+});
+
+test('publishes a prediction without calling it a play when current comparison depth is limited', () => {
+  const limited = game('limited', 'Home', 'Away');
+  limited.books = limited.books.slice(1, 4);
+  const result = buildNflSetups([limited], { now });
+  assert.equal(result.winners.length, 1);
+  assert.equal(result.winners[0].decision, 'PREDICTION');
+  assert.equal(result.winners[0].dataStatus, 'current');
+  assert.equal(result.actionableSetups, 0);
+});
+
+test('keeps delayed winner-parlay structures visible but non-actionable', () => {
+  const delayedGames = [1, 2, 3, 4].map((index) => {
+    const delayed = game(`delayed-${index}`, `Home ${index}`, `Away ${index}`);
+    delayed.books = delayed.books.map((entry) => ({
+      ...entry,
+      moneyline: { ...entry.moneyline, ageSeconds: 7200 },
+      spread: { ...entry.spread, ageSeconds: 7200 },
+      total: { ...entry.total, ageSeconds: 7200 },
+    }));
+    return delayed;
+  });
+  const result = buildNflSetups(delayedGames, { now });
+  assert.deepEqual(new Set(result.likelihoodParlays.map((parlay) => parlay.legCount)), new Set([2, 3, 4]));
+  assert.equal(result.likelihoodParlays.every((parlay) => parlay.decision === 'PASS'), true);
+  assert.equal(result.likelihoodParlays.every((parlay) => parlay.expectedReturn === null), true);
+  assert.equal(result.parlays.length, 0);
+  assert.equal(result.actionableSetups, 0);
 });
