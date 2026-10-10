@@ -139,6 +139,7 @@ function ParlayCard({ parlay }) {
         <div><span>Modeled edge</span><strong className={parlay.expectedReturn >= 0 ? styles.positiveText : styles.warningText}>{formatReturn(parlay.expectedReturn)}</strong></div>
         <div><span>Risk / reward</span><strong>1u → {parlay.targetProfit.toFixed(2)}u</strong></div>
       </div>
+      <p className={styles.invalidation}><strong>Entry:</strong> {parlay.entry}</p>
       <p className={styles.invalidation}><strong>Invalidation:</strong> {parlay.invalidation}</p>
       <footer>{parlay.basis}</footer>
     </article>
@@ -237,6 +238,9 @@ export default async function NFLPage() {
     && board.gameMarkets?.staleQuotes === 0
     && board.gameMarkets?.unknownAgeQuotes === 0
   );
+  const dataStatusLabel = dataCurrent
+    ? 'Current API snapshot'
+    : board.gameMarkets?.ok ? 'Partial — current cards only' : 'Unavailable';
   const predictionCount = board.predictionMarkets?.marketsCount || board.predictionMarkets?.markets?.length || 0;
   const sourceCount = board.gameMarkets?.bookmakers?.length || 0;
   const propMarkets = Object.entries(board.coverage?.byMarket || {});
@@ -266,7 +270,7 @@ export default async function NFLPage() {
         </div>
         <aside className={styles.analysisTicket}>
           <div><span>Analysis time</span><strong>{formatDate(board.checkedAt, false)}</strong></div>
-          <div><span>Data status</span><strong>{dataCurrent ? 'Current API snapshot' : 'Incomplete / unavailable'}</strong></div>
+          <div><span>Data status</span><strong>{dataStatusLabel}</strong></div>
           <div><span>Market session</span><strong>NFL pregame</strong></div>
           <div><span>Current price</span><strong>Listed by game</strong></div>
         </aside>
@@ -345,7 +349,7 @@ export default async function NFLPage() {
         <article className={styles.panel}>
           <p className={styles.sectionKicker}>PLAYER PROPS</p>
           <h2>Full-game prop coverage</h2>
-          <p className={styles.panelIntro}>ParlayAPI prices are grouped by market. Athlete matches remain non-actionable until identity and context are verified.</p>
+          <p className={styles.panelIntro}>The full provider board is coverage only. PLAY cards require an exact event, player, market and line match plus current prices and injury gates.</p>
           <div className={styles.coverageList}>
             {propMarkets.length ? propMarkets.map(([market, count]) => (
               <div key={market}><span>{marketNames[market] || market}</span><strong>{Number(count).toLocaleString('en-US')}</strong></div>
