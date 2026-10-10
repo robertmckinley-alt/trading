@@ -138,6 +138,12 @@
 .sectionHeading > p { max-width: 580px; margin: 0; color: var(--muted); font-size: 0.88rem; text-align: end; }
 
 .setupGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 46px; }
+.parlayGroup + .parlayGroup { margin-top: 26px; }
+.parlayGroupHeading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+.parlayGroupHeading h3 { margin: 0; color: var(--chalk); font: 800 1.05rem/1.2 Bahnschrift, "Arial Narrow", sans-serif; letter-spacing: -0.015em; }
+.parlayGroupHeading span { color: var(--teal); font: 750 0.66rem/1.2 ui-monospace, monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.parlayGroup .setupGrid { margin-bottom: 0; }
+.parlayGroups { margin-bottom: 46px; }
 .setupCard { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
 .setupCard > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: rgba(7, 17, 30, 0.48); }
 .setupCard > header > div { display: flex; align-items: center; gap: 10px; }
@@ -296,6 +302,7 @@
   .dataPill + .dataPill, .dataPill:nth-child(odd):not(:first-child) { border-left: 0; border-top: 1px solid var(--line); }
   .suiteStrip > div + div { border-top: 1px solid rgba(36, 64, 87, 0.7); }
   .gameHeader, .gameFooter { align-items: flex-start; flex-direction: column; }
+  .parlayGroupHeading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .setupMetrics, .setupDetails { grid-template-columns: 1fr 1fr; }
   .setupMetrics > div:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
   .setupMetrics > div:nth-child(4) { border-top: 1px solid var(--line); }

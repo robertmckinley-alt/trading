@@ -43,7 +43,7 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v4'], { revalidate: 900, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v5'], { revalidate: 900, tags: ['nfl-public-board'] });
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
@@ -132,7 +132,7 @@ function ParlayCard({ parlay }) {
         <div><span>{parlay.category}</span><strong>{parlay.decision}</strong></div>
         <b className={parlay.decision === 'PLAY' ? styles.highConfidence : styles.caution}>{parlay.bookTitle || parlay.book}</b>
       </header>
-      <ol>{parlay.legs.map((leg) => <li key={`${leg.eventId}-${leg.selection}`}><strong>{leg.selection}{parlay.market === 'player_parlay' ? '' : ' ML'}</strong><span>{formatAmerican(leg.odds)} · {formatPercent(leg.probability)}</span></li>)}</ol>
+      <ol>{parlay.legs.map((leg) => <li key={`${leg.eventId}-${leg.selection}`}><strong>{leg.selection}{parlay.market === 'player_parlay' ? '' : ' ML'}</strong><span>{formatAmerican(leg.odds)} · {formatPercent(leg.probability)}{Number.isFinite(leg.expectedReturn) ? ` · ${formatReturn(leg.expectedReturn)} leg` : ''}</span></li>)}</ol>
       <div className={styles.setupMetrics}>
         <div><span>Estimated price</span><strong>{formatAmerican(parlay.offeredOdds)}</strong></div>
         <div><span>Estimated hit rate</span><strong>{formatPercent(parlay.jointProbability)}</strong></div>
@@ -252,6 +252,10 @@ export default async function NFLPage() {
   const parlays = (setups.parlays || []).filter((parlay) => parlay.legs?.every(liveSetup));
   const playerPlays = (board.playerSetups?.plays || []).filter(liveSetup);
   const playerParlays = (board.playerSetups?.parlays || []).filter((parlay) => parlay.legs?.every(liveSetup));
+  const playerParlaysBySize = [2, 3, 4].map((size) => ({
+    size,
+    parlays: playerParlays.filter((parlay) => (parlay.legCount || parlay.legs?.length) === size),
+  })).filter((group) => group.parlays.length);
   const actionableCount = [...winners, ...valuePlays, ...parlays, ...playerPlays, ...playerParlays].filter((setup) => setup.decision === 'PLAY').length;
   const publishedCount = winners.length + valuePlays.length + parlays.length + playerPlays.length + playerParlays.length;
 
@@ -332,9 +336,19 @@ export default async function NFLPage() {
       <section className={styles.section}>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>PLAYER PARLAYS</p><h2>Best cross-game player combinations</h2></div>
-          <p>Two- and three-leg player parlays use one sportsbook and different games. Same-game combinations are excluded until their correlation can be measured.</p>
+          <p>Up to eight ranked tickets per size. Two-, three- and four-player combinations use one sportsbook and different games. PLAY requires at least 2% modeled value. Same-game combinations stay excluded until correlation can be measured.</p>
         </div>
-        {playerParlays.length ? <div className={styles.setupGrid}>{playerParlays.map((parlay) => <ParlayCard key={parlay.id} parlay={parlay} />)}</div> : <SetupEmpty>No cross-game player parlay currently clears the exact-line and positive-value gates at one sportsbook.</SetupEmpty>}
+        {playerParlays.length ? <div className={styles.parlayGroups}>
+          {playerParlaysBySize.map(({ size, parlays: sizeParlays }) => (
+            <div className={styles.parlayGroup} key={size}>
+              <div className={styles.parlayGroupHeading}>
+                <h3>{size}-player parlays</h3>
+                <span>{sizeParlays.filter((parlay) => parlay.decision === 'PLAY').length} PLAY · {sizeParlays.length} ranked</span>
+              </div>
+              <div className={styles.setupGrid}>{sizeParlays.map((parlay) => <ParlayCard key={parlay.id} parlay={parlay} />)}</div>
+            </div>
+          ))}
+        </div> : <SetupEmpty>No cross-game player parlay currently has positive exact-line value at one sportsbook. Reconsider when at least four fresh books price matching players and lines across two or more games.</SetupEmpty>}
       </section>
 
       <section className={styles.section}>
