@@ -94,7 +94,7 @@ function formatDate(value, includeDate = true) {
 }
 
 function DataPill({ label, value, tone = 'neutral' }) {
-  return <div className={`${styles.dataPill} ${styles[tone]}`}><span>{label}</span><strong>{value}</strong></div>;
+  return <div className={`${styles.dataPill} ${styles[tone] || ''}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function Moneyline({ team, quote }) {

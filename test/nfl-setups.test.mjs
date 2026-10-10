@@ -127,6 +127,7 @@ test('publishes a prediction without calling it a play when current comparison d
   assert.equal(result.winners.length, 1);
   assert.equal(result.winners[0].decision, 'PREDICTION');
   assert.equal(result.winners[0].dataStatus, 'current');
+  assert.match(result.winners[0].entry, /Prediction only — no bet/);
   assert.equal(result.actionableSetups, 0);
 });
 
@@ -145,6 +146,7 @@ test('keeps delayed winner-parlay structures visible but non-actionable', () => 
   assert.deepEqual(new Set(result.likelihoodParlays.map((parlay) => parlay.legCount)), new Set([2, 3, 4]));
   assert.equal(result.likelihoodParlays.every((parlay) => parlay.decision === 'PASS'), true);
   assert.equal(result.likelihoodParlays.every((parlay) => parlay.expectedReturn === null), true);
+  assert.equal(result.likelihoodParlays.every((parlay) => parlay.entry.startsWith('No entry')), true);
   assert.equal(result.parlays.length, 0);
   assert.equal(result.actionableSetups, 0);
 });
