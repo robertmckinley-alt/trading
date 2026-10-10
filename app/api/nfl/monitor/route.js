@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { fetchNflMonitor } from '../../../../lib/nfl-monitor.mjs';
 import { saveNflSnapshot } from '../../../../lib/nfl-storage.js';
 export const dynamic='force-dynamic';
-export const maxDuration=45;
+export const maxDuration=50;
 export async function GET(request){
  const token=process.env.NFL_MONITOR_SECRET;
  if(!token) return NextResponse.json({ok:false,error:'monitor_secret_not_configured'},{status:503});
  if(request.headers.get('authorization')!== 'Bearer '+token) return NextResponse.json({ok:false,error:'unauthorized'},{status:401});
  try{
-  const result=await fetchNflMonitor();
+  const result=await fetchNflMonitor({propAttempts:2});
   const {snapshot,...publicResult}=result;
   let persistence={status:'disabled'};
   const databaseConfigured=Boolean(process.env.NFL_DATABASE_URL||process.env.DATABASE_URL||process.env.POSTGRES_URL);
