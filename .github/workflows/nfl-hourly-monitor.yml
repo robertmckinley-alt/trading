@@ -24,7 +24,7 @@ jobs:
           if not secret: raise SystemExit('NFL_MONITOR_SECRET not configured')
           req=urllib.request.Request(url,headers={'Authorization':'Bearer '+secret})
           try:
-            with urllib.request.urlopen(req,timeout=40) as response: data=json.load(response)
+            with urllib.request.urlopen(req,timeout=55) as response: data=json.load(response)
           except urllib.error.HTTPError as exc:
             print('Monitor HTTP error:',exc.code,exc.read().decode()[:400]);raise SystemExit(1)
           print(json.dumps({k:v for k,v in data.items() if k!='lines'},indent=2))

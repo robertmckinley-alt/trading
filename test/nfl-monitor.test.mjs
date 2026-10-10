@@ -126,3 +126,30 @@ test('adds moneyline, spread and total coverage to the full monitor',async()=>{
  assert.equal(result.requestCost,'21');
  assert.equal(result.status,'checked');
 });
+
+test('keeps current game markets operational when one prop market times out',async()=>{
+ const now='2026-10-10T17:00:00Z';
+ const result=await fetchNflMonitor({key:'test',fetcher:async(url)=>{
+  const parsed=new URL(String(url));
+  const headers={get:(name)=>({
+   'x-result-page-size':'0','x-result-row-count':'0','x-result-limit':'10000','x-result-offset':'0',
+   'x-result-has-more':'false','x-result-truncated':'false',
+  }[name]||null)};
+  if(parsed.pathname.endsWith('/odds'))return {ok:true,headers,json:async()=>[{
+   id:'game-1',commence_time:'2026-10-11T20:00:00Z',home_team:'Home',away_team:'Away',bookmakers:[{
+    key:'book-a',title:'Book A',last_update:now,markets:[
+     {key:'h2h',last_update:now,outcomes:[{name:'Home',price:-120},{name:'Away',price:110}]},
+     {key:'spreads',last_update:now,outcomes:[{name:'Home',price:-110,point:-2.5},{name:'Away',price:-110,point:2.5}]},
+     {key:'totals',last_update:now,outcomes:[{name:'Over',price:-110,point:44.5},{name:'Under',price:-110,point:44.5}]},
+    ],
+   }],
+  }]};
+  if(parsed.searchParams.get('markets')==='player_pass_yds')throw Error('The operation was aborted due to timeout');
+  return {ok:true,headers,json:async()=>({data:[]})};
+ }});
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'checked_incomplete');
+ assert.equal(result.gameMarkets.ok,true);
+ assert.equal(result.completeness.failedMarkets.length,1);
+ assert.match(result.warnings.join(' '),/player_pass_yds: network_error/);
+});

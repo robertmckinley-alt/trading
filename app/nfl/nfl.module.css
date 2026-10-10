@@ -103,7 +103,7 @@
 
 .scoreRail {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border: 1px solid var(--line);
   background: var(--panel);
 }
@@ -136,6 +136,40 @@
 .sectionHeading { display: flex; align-items: end; justify-content: space-between; gap: 36px; margin-bottom: 22px; }
 .sectionHeading h2, .panel h2 { margin: 0; color: var(--chalk); font-family: Bahnschrift, "Arial Narrow", sans-serif; font-size: clamp(1.75rem, 3vw, 2.5rem); letter-spacing: -0.035em; }
 .sectionHeading > p { max-width: 580px; margin: 0; color: var(--muted); font-size: 0.88rem; text-align: end; }
+
+.setupGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 46px; }
+.setupCard { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+.setupCard > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: rgba(7, 17, 30, 0.48); }
+.setupCard > header > div { display: flex; align-items: center; gap: 10px; }
+.setupCard > header span { color: var(--muted); font: 750 0.66rem/1.2 ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.setupCard > header strong { border: 1px solid var(--teal); border-radius: 999px; padding: 5px 8px; color: var(--teal); font: 850 0.62rem/1 ui-monospace, monospace; letter-spacing: 0.08em; }
+.setupCard > header b { font: 750 0.66rem/1 ui-monospace, monospace; }
+.highConfidence, .positiveText { color: var(--teal); }
+.moderateConfidence, .warningText { color: var(--amber); }
+.setupCard > h3 { margin: 0; padding: 20px 20px 4px; color: var(--chalk); font: 850 clamp(1.45rem, 2.6vw, 2.1rem)/1.05 Bahnschrift, "Arial Narrow", sans-serif; letter-spacing: -0.025em; }
+.matchup { margin: 0; padding: 0 20px 18px; color: var(--muted); font-size: 0.72rem; }
+.setupMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+.setupMetrics > div { min-width: 0; padding: 12px 10px; }
+.setupMetrics > div + div { border-left: 1px solid var(--line); }
+.setupMetrics span { display: block; margin-bottom: 5px; color: var(--muted); font: 700 0.58rem/1.25 ui-monospace, monospace; letter-spacing: 0.05em; text-transform: uppercase; }
+.setupMetrics strong { display: block; overflow: hidden; color: var(--chalk); font: 800 0.82rem/1.2 ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.setupDetails { display: grid; grid-template-columns: 1fr 1fr; margin: 0; }
+.setupDetails > div { min-width: 0; padding: 13px 18px; border-bottom: 1px dashed rgba(153, 172, 186, 0.18); }
+.setupDetails > div:nth-child(odd) { border-right: 1px solid var(--line); }
+.setupDetails dt { margin-bottom: 4px; color: var(--muted); font: 700 0.6rem/1.2 ui-monospace, monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.setupDetails dd { margin: 0; color: var(--chalk); font-size: 0.72rem; line-height: 1.4; }
+.setupCard > footer { padding: 12px 18px; color: var(--muted); font-size: 0.67rem; line-height: 1.4; }
+.setupEmpty { margin-bottom: 46px; border: 1px solid var(--line); padding: 28px; background: var(--panel); text-align: center; }
+.setupEmpty strong { display: inline-block; margin-bottom: 8px; border: 1px solid var(--amber); border-radius: 999px; padding: 5px 8px; color: var(--amber); font: 800 0.62rem/1 ui-monospace, monospace; }
+.setupEmpty p { margin: 0; color: var(--muted); }
+.parlayCard ol { display: grid; gap: 0; margin: 0; padding: 10px 20px; list-style: none; counter-reset: legs; }
+.parlayCard li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px dashed rgba(153, 172, 186, 0.2); counter-increment: legs; }
+.parlayCard li:last-child { border-bottom: 0; }
+.parlayCard li strong::before { margin-right: 8px; color: var(--amber); content: counter(legs) "."; }
+.parlayCard li strong { color: var(--chalk); font-size: 0.8rem; }
+.parlayCard li span { color: var(--muted); font: 700 0.68rem/1.2 ui-monospace, monospace; }
+.invalidation { margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
+.invalidation strong { color: var(--chalk); }
 
 .gameList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .gameCard { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
@@ -227,8 +261,8 @@
 @media (max-width: 1080px) {
   .hero { grid-template-columns: 1fr 320px; gap: 38px; }
   .scoreRail { grid-template-columns: repeat(3, 1fr); }
-  .dataPill:nth-child(4) { border-left: 0; border-top: 1px solid var(--line); }
-  .dataPill:nth-child(5) { border-top: 1px solid var(--line); }
+  .dataPill:nth-child(4) { border-left: 0; }
+  .dataPill:nth-child(n + 4) { border-top: 1px solid var(--line); }
   .suiteStrip { grid-template-columns: repeat(3, 1fr); }
   .secondaryGrid { grid-template-columns: 1fr 1fr; }
   .guardrailPanel { grid-column: 1 / -1; }
@@ -245,7 +279,7 @@
   .suiteStrip { grid-template-columns: 1fr 1fr; margin-bottom: 42px; }
   .sectionHeading { align-items: flex-start; flex-direction: column; gap: 10px; }
   .sectionHeading > p { text-align: start; }
-  .gameList { grid-template-columns: 1fr; }
+  .setupGrid, .gameList { grid-template-columns: 1fr; }
   .secondaryGrid { grid-template-columns: 1fr; }
   .guardrailPanel { grid-column: auto; }
   .statusBar { grid-template-columns: 1fr 1fr; }
@@ -262,6 +296,9 @@
   .dataPill + .dataPill, .dataPill:nth-child(odd):not(:first-child) { border-left: 0; border-top: 1px solid var(--line); }
   .suiteStrip > div + div { border-top: 1px solid rgba(36, 64, 87, 0.7); }
   .gameHeader, .gameFooter { align-items: flex-start; flex-direction: column; }
+  .setupMetrics, .setupDetails { grid-template-columns: 1fr 1fr; }
+  .setupMetrics > div:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+  .setupMetrics > div:nth-child(4) { border-top: 1px solid var(--line); }
   .gameGrid { grid-template-columns: 1fr; }
   .gameGrid section + section { border-top: 1px solid var(--line); border-left: 0; }
   .winnerCallout { grid-template-columns: 1fr; }
