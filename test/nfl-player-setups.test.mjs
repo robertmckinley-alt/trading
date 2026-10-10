@@ -48,6 +48,28 @@ test('publishes exact-match player props and cross-game parlays', () => {
   assert.equal(result.parlays.every((parlay) => new Set(parlay.legs.map((leg) => leg.eventId)).size === parlay.legs.length), true);
 });
 
+test('builds a balanced 2-, 3- and 4-player parlay board from positive legs below the standalone gate', () => {
+  const lines = [
+    ...propLines('game-1', 'Receiver One', 'player_receptions', 5.5),
+    ...propLines('game-2', 'Quarterback Two', 'player_pass_yds', 249.5, '2026-10-12T00:00:00Z'),
+    ...propLines('game-3', 'Runner Three', 'player_rush_yds', 69.5, '2026-10-12T17:00:00Z'),
+    ...propLines('game-4', 'Receiver Four', 'player_reception_yds', 74.5, '2026-10-12T20:00:00Z'),
+  ];
+  const result = buildNflPlayerSetups(lines, {
+    now,
+    minExpectedReturn: 0.2,
+    maxParlaysPerSize: 3,
+  });
+  assert.equal(result.plays.length, 0);
+  assert.deepEqual(new Set(result.parlays.map((parlay) => parlay.legCount)), new Set([2, 3, 4]));
+  assert.equal(result.parlays.length, 8);
+  assert.equal(Object.values(result.parlayStats.bySize).every((size) => size.published <= 3), true);
+  assert.equal(result.parlays.every((parlay) => parlay.legs.length === parlay.legCount), true);
+  assert.equal(result.parlays.every((parlay) => parlay.legs.every((leg) => leg.expectedReturn >= 0)), true);
+  assert.equal(result.parlayStats.published, result.parlays.length);
+  assert.equal(result.parlayStats.actionable > 0, true);
+});
+
 test('rejects injury flags, stale quotes and same-game parlays', () => {
   const injured = propLines('game-1', 'Receiver One', 'player_receptions', 5.5)
     .map((line) => ({ ...line, injury: { status: 'Questionable' } }));
