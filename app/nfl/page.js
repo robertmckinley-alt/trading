@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { applyNflPlayerSnapshotFallback, fetchNflMonitor } from '../../lib/nfl-monitor.mjs';
+import { createPaperAccounts } from '../../lib/nfl-paper.mjs';
+import { getNflPaperDashboard } from '../../lib/nfl-paper-storage.js';
 import { buildNflSetups } from '../../lib/nfl-setups.mjs';
 import { latestNflPlayerSnapshot } from '../../lib/nfl-storage.js';
 import styles from './nfl.module.css';
@@ -89,6 +91,12 @@ function formatReturn(value) {
   return Number.isFinite(value) ? `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%` : '—';
 }
 
+function formatMoney(value, signed = false) {
+  if (!Number.isFinite(Number(value))) return '—';
+  const amount = Number(value);
+  return `${signed && amount > 0 ? '+' : ''}${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)}`;
+}
+
 function formatAge(value) {
   if (!Number.isFinite(value)) return 'Unknown age';
   if (value < 60) return `${Math.round(value)} sec old`;
@@ -124,6 +132,7 @@ function Moneyline({ team, quote }) {
 }
 
 function SetupCard({ setup }) {
+  const paperRisk = 100;
   return (
     <article className={styles.setupCard}>
       <header>
@@ -141,7 +150,7 @@ function SetupCard({ setup }) {
       <dl className={styles.setupDetails}>
         <div><dt>Entry</dt><dd>{setup.entry}</dd></div>
         <div><dt>Book</dt><dd>{setup.bookTitle || setup.book}</dd></div>
-        <div><dt>Risk / reward</dt><dd>Risk 1u to win {Number.isFinite(setup.targetProfit) ? `${setup.targetProfit.toFixed(2)}u` : '—'}</dd></div>
+        <div><dt>Paper risk / reward</dt><dd>{setup.decision === 'PLAY' ? `${formatMoney(paperRisk)} risk → ${formatMoney(paperRisk * setup.targetProfit)}` : 'No paper position'}</dd></div>
         <div><dt>Invalidation</dt><dd>{setup.invalidation}</dd></div>
       </dl>
       <footer>{setup.basis}</footer>
@@ -175,6 +184,7 @@ function PredictionCard({ setup }) {
         <div><dt>Entry rule</dt><dd>{setup.entry}</dd></div>
         <div><dt>Best book</dt><dd>{setup.bookTitle || setup.book}</dd></div>
         <div><dt>Quote age</dt><dd>{formatAge(setup.quoteAgeSeconds)}</dd></div>
+        <div><dt>Paper allocation</dt><dd>{setup.decision === 'PLAY' ? `${formatMoney(100)} maximum loss` : 'Forecast only — no stake'}</dd></div>
         <div><dt>Invalidation</dt><dd>{setup.invalidation}</dd></div>
       </dl>
       <footer>{setup.basis}</footer>
@@ -183,6 +193,7 @@ function PredictionCard({ setup }) {
 }
 
 function ParlayCard({ parlay }) {
+  const paperRisk = 50;
   return (
     <article className={`${styles.setupCard} ${styles.parlayCard}`}>
       <header>
@@ -194,12 +205,50 @@ function ParlayCard({ parlay }) {
         <div><span>Estimated price</span><strong>{formatAmerican(parlay.offeredOdds)}</strong></div>
         <div><span>Estimated hit rate</span><strong>{formatPercent(parlay.jointProbability)}</strong></div>
         <div><span>Modeled edge</span><strong className={Number.isFinite(parlay.expectedReturn) && parlay.expectedReturn >= 0 ? styles.positiveText : styles.warningText}>{formatReturn(parlay.expectedReturn)}</strong></div>
-        <div><span>Risk / reward</span><strong>1u → {parlay.targetProfit.toFixed(2)}u</strong></div>
+        <div><span>Paper risk / return</span><strong>{parlay.decision === 'PLAY' ? `${formatMoney(paperRisk)} → ${formatMoney(paperRisk * parlay.targetProfit)}` : 'No stake'}</strong></div>
       </div>
       <p className={styles.invalidation}><strong>Entry:</strong> {parlay.entry}</p>
       {parlay.dataStatusLabel && <p className={styles.invalidation}><strong>Data:</strong> {parlay.dataStatusLabel}</p>}
       <p className={styles.invalidation}><strong>Invalidation:</strong> {parlay.invalidation}</p>
       <footer>{parlay.basis}</footer>
+    </article>
+  );
+}
+
+function PaperAccountCard({ account }) {
+  const drawdownUsed = account.maxAllowedDrawdown ? Math.min(100, (account.currentDrawdown / account.maxAllowedDrawdown) * 100) : 0;
+  return (
+    <article className={`${styles.paperAccount} ${account.state === 'PAUSED' ? styles.paperPaused : ''}`}>
+      <header><span>{account.label}</span><strong>{account.state}</strong></header>
+      <div className={styles.paperEquity}><span>Equity</span><strong>{formatMoney(account.equity)}</strong><b className={account.pnl >= 0 ? styles.positiveText : styles.warningText}>{formatMoney(account.pnl, true)}</b></div>
+      <div className={styles.paperStats}>
+        <div><span>Record</span><strong>{account.wins}-{account.losses}-{account.pushes}</strong></div>
+        <div><span>Open risk</span><strong>{formatMoney(account.openExposure)}</strong></div>
+        <div><span>Next max</span><strong>{formatMoney(account.nextStake)}</strong></div>
+        <div><span>Evaluation</span><strong>{account.evaluation}</strong></div>
+      </div>
+      <div className={styles.drawdownRail} aria-label={`${formatMoney(account.currentDrawdown)} current drawdown of ${formatMoney(account.maxAllowedDrawdown)} maximum`}>
+        <div><span>Drawdown</span><strong>{formatMoney(account.currentDrawdown)} / {formatMoney(account.maxAllowedDrawdown)}</strong></div>
+        <i><b style={{ width: `${drawdownUsed}%` }} /></i>
+      </div>
+      <footer>Hard floor {formatMoney(account.drawdownFloor)} · {account.settled}/30 settled before evaluation</footer>
+    </article>
+  );
+}
+
+function PaperPosition({ position }) {
+  const awaiting = position.status === 'awaiting_result';
+  return (
+    <article className={styles.paperPosition}>
+      <header><span>{position.accountKey.replaceAll('_', ' ')}</span><strong className={awaiting ? styles.caution : styles.highConfidence}>{awaiting ? 'AWAITING RESULT' : 'OPEN'}</strong></header>
+      <h3>{position.selection}</h3>
+      <p>{position.matchup || position.legs?.map((leg) => leg.matchup).join(' / ')} · {formatDate(position.kickoff)}</p>
+      <dl>
+        <div><dt>Frozen entry</dt><dd>{formatAmerican(position.odds)} · {position.bookTitle || position.book || 'Source book'}</dd></div>
+        <div><dt>Risk</dt><dd>{formatMoney(position.stake)}</dd></div>
+        <div><dt>To win</dt><dd>{formatMoney(position.potentialProfit)}</dd></div>
+        <div><dt>Model edge</dt><dd>{formatReturn(position.modeledEdge)}</dd></div>
+      </dl>
     </article>
   );
 }
@@ -284,6 +333,25 @@ export default async function NFLPage() {
     };
   }
 
+  let paperDashboard;
+  try {
+    paperDashboard = await getNflPaperDashboard();
+  } catch {
+    const accounts = createPaperAccounts();
+    paperDashboard = {
+      configured: false,
+      error: true,
+      accounts,
+      totalStartingBalance: 60_000,
+      totalEquity: 60_000,
+      openPositions: [],
+      recentSettlements: [],
+      weekly: [],
+      lastCapturedAt: null,
+      settlement: { games: 'database_unavailable', players: 'awaiting_verified_stat_source' },
+    };
+  }
+
   const allGames = board.gameMarkets?.games || [];
   const checkedAtMillis = Date.parse(board.checkedAt || '');
   const now = Number.isFinite(checkedAtMillis) ? checkedAtMillis : 0;
@@ -357,7 +425,7 @@ export default async function NFLPage() {
       </header>
 
       <section className={styles.scoreRail} aria-label="Coverage summary">
-        <DataPill label="Upcoming games" value={String(games.length)} tone={games.length ? 'positive' : 'warning'} />
+        <DataPill label="Paper bankroll" value="$60K" tone="positive" />
         <DataPill label="Sportsbook sources" value={String(sourceCount)} />
         <DataPill label="Winner predictions" value={String(winners.length)} tone={winners.length ? 'positive' : 'warning'} />
         <DataPill label="Winner parlays" value={String(likelihoodParlays.length)} tone={likelihoodParlays.length ? 'positive' : 'warning'} />
@@ -378,13 +446,54 @@ export default async function NFLPage() {
       </section>
 
       <nav className={styles.sectionNav} aria-label="NFL Edge sections">
+        <a href="#paper-trading"><span>Paper accounts</span><strong>6</strong></a>
         <a href="#predicted-winners"><span>Predicted winners</span><strong>{winners.length}</strong></a>
         <a href="#winner-parlays"><span>Winner parlays</span><strong>{likelihoodParlays.length}</strong></a>
         <a href="#value-bets"><span>Value bets</span><strong>{valuePlays.length + valueParlays.length}</strong></a>
         <a href="#player-props"><span>Player props</span><strong>{playerPlays.length}</strong></a>
         <a href="#player-parlays"><span>Player parlays</span><strong>{playerParlays.length}</strong></a>
-        <a href="#full-slate"><span>Full slate</span><strong>{games.length}</strong></a>
       </nav>
+
+      <section className={styles.section} id="paper-trading">
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.sectionKicker}>PAPER PERFORMANCE</p><h2>Six isolated $10K accounts</h2></div>
+          <p>Only current PLAY cards enter the ledger. Straight plays risk up to $100, parlays risk up to $50, open exposure is capped at $300 per account, and new entries stop at $9,000 equity.</p>
+        </div>
+        <div className={`${styles.feedStatus} ${paperDashboard.configured ? styles.feedCurrent : styles.feedPaused}`}>
+          <strong>{paperDashboard.configured ? 'Ledger connected' : 'Database action needed'}</strong>
+          <span>{paperDashboard.configured
+            ? `Last paper capture ${paperDashboard.lastCapturedAt ? formatDate(paperDashboard.lastCapturedAt, false) : 'waiting for the next hourly run'} · game results settle automatically`
+            : 'The paper engine is deployed, but durable tracking cannot start until a Vercel Postgres database is connected.'}</span>
+        </div>
+        <div className={styles.paperGrid}>{paperDashboard.accounts.map((account) => <PaperAccountCard key={account.key} account={account} />)}</div>
+        <div className={styles.paperTotals}>
+          <div><span>Starting capital</span><strong>{formatMoney(paperDashboard.totalStartingBalance)}</strong></div>
+          <div><span>Current equity</span><strong>{formatMoney(paperDashboard.totalEquity)}</strong></div>
+          <div><span>Open positions</span><strong>{paperDashboard.openPositions.length}</strong></div>
+          <div><span>Settled record</span><strong>{paperDashboard.accounts.reduce((sum, account) => sum + account.wins, 0)}-{paperDashboard.accounts.reduce((sum, account) => sum + account.losses, 0)}-{paperDashboard.accounts.reduce((sum, account) => sum + account.pushes, 0)}</strong></div>
+        </div>
+        <div className={styles.subsectionHeading}>
+          <div><p className={styles.sectionKicker}>FROZEN PAPER ENTRIES</p><h3>Current actionable positions</h3></div>
+          <p>These prices and lines are frozen when an hourly PLAY first qualifies. Repeated refreshes do not create duplicate positions.</p>
+        </div>
+        {paperDashboard.openPositions.length
+          ? <div className={styles.paperPositionGrid}>{paperDashboard.openPositions.map((position) => <PaperPosition key={position.id} position={position} />)}</div>
+          : <SetupEmpty>{paperDashboard.configured ? 'No current PLAY has been captured yet. The next hourly monitor will record qualifying setups.' : 'Connect the database to begin the permanent paper ledger.'}</SetupEmpty>}
+        <div className={styles.paperNotice}>
+          <strong>Settlement boundary</strong>
+          <p>Moneylines, spreads, totals and winner parlays settle from documented ParlayAPI final scores. Player props and player parlays stay marked AWAITING RESULT until a licensed, verified player-stat source is connected; no result is inferred or fabricated.</p>
+        </div>
+        <div className={styles.subsectionHeading}>
+          <div><p className={styles.sectionKicker}>WEEKLY LEDGER</p><h3>Wins, losses and net P&amp;L</h3></div>
+          <p>Every settled position remains in the database. Results are grouped by the Sunday start of each NFL week.</p>
+        </div>
+        {paperDashboard.weekly.length ? <div className={styles.paperWeekTable} role="table" aria-label="Weekly paper results">
+          <div className={styles.paperWeekHeader} role="row"><span>Week</span><span>Account</span><span>W-L-P</span><span>Net P&amp;L</span></div>
+          {paperDashboard.weekly.map((week) => <div role="row" key={`${week.week}-${week.accountKey}`}>
+            <span>{week.week}</span><strong>{week.accountKey.replaceAll('_', ' ')}</strong><span>{week.wins}-{week.losses}-{week.pushes}</span><b className={week.pnl >= 0 ? styles.positiveText : styles.warningText}>{formatMoney(week.pnl, true)}</b>
+          </div>)}
+        </div> : <SetupEmpty>No settled paper positions yet. Weekly results will appear after final scores are verified.</SetupEmpty>}
+      </section>
 
       <section className={styles.section} id="predicted-winners">
         <div className={styles.sectionHeading}>
@@ -491,7 +600,8 @@ export default async function NFLPage() {
             <li>Fresh quotes and at least four comparison books are required.</li>
             <li>PLAY requires a measurable price or line advantage; otherwise it stays PREDICTION or PASS.</li>
             <li>Quarterback, injury and late-news changes invalidate the setup until confirmed.</li>
-            <li>Risk defaults to a one-unit maximum loss. Position size is withheld until bankroll and maximum risk are supplied.</li>
+            <li>Paper sizing is fixed: $100 maximum loss on straight plays, $50 on parlays, and $300 maximum open exposure per account.</li>
+            <li>Each $10,000 account stops accepting new entries at $9,000 equity.</li>
           </ul>
         </article>
       </section>

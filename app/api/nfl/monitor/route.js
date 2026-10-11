@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import { fetchNflMonitor } from '../../../../lib/nfl-monitor.mjs';
+import { collectPaperCandidates } from '../../../../lib/nfl-paper.mjs';
+import {
+ fetchNflScores,
+ nflPaperDatabaseConfigured,
+ syncNflPaperLedger,
+} from '../../../../lib/nfl-paper-storage.js';
+import { buildNflSetups } from '../../../../lib/nfl-setups.mjs';
 import { saveNflSnapshot } from '../../../../lib/nfl-storage.js';
 export const dynamic='force-dynamic';
 export const maxDuration=50;
@@ -8,10 +15,14 @@ export async function GET(request){
  if(!token) return NextResponse.json({ok:false,error:'monitor_secret_not_configured'},{status:503});
  if(request.headers.get('authorization')!== 'Bearer '+token) return NextResponse.json({ok:false,error:'unauthorized'},{status:401});
  try{
-  const result=await fetchNflMonitor({propAttempts:2});
+  const databaseConfigured=nflPaperDatabaseConfigured();
+  const [result,scoreResult]=await Promise.all([
+   fetchNflMonitor({propAttempts:2}),
+   databaseConfigured?fetchNflScores():Promise.resolve({ok:false,status:'database_disabled',scores:[]}),
+  ]);
   const {snapshot,...publicResult}=result;
   let persistence={status:'disabled'};
-  const databaseConfigured=Boolean(process.env.NFL_DATABASE_URL||process.env.DATABASE_URL||process.env.POSTGRES_URL);
+  let paperTrading={status:databaseConfigured?'not_synced':'database_required',captured:0,settled:0};
   if(result.ok&&snapshot&&databaseConfigured){
    try{
     const saved=await saveNflSnapshot(snapshot);
@@ -20,7 +31,16 @@ export async function GET(request){
     persistence={status:'failed'};
     publicResult.warnings=[...(publicResult.warnings||[]),'NFL snapshot persistence failed'];
    }
+   try{
+    const setups=buildNflSetups(result.gameMarkets?.games||[],{now:Date.parse(result.checkedAt)});
+    const candidates=collectPaperCandidates({setups,playerSetups:result.playerSetups,checkedAt:result.checkedAt});
+    paperTrading=await syncNflPaperLedger({candidates,scores:scoreResult.scores||[],checkedAt:result.checkedAt});
+    paperTrading.scoreStatus=scoreResult.status;
+   }catch{
+    paperTrading={status:'failed',captured:0,settled:0,scoreStatus:scoreResult.status};
+    publicResult.warnings=[...(publicResult.warnings||[]),'NFL paper ledger sync failed'];
+   }
   }
-  return NextResponse.json({...publicResult,persistence},{status:result.ok?200:503,headers:{'Cache-Control':'no-store'}});
+  return NextResponse.json({...publicResult,persistence,paperTrading},{status:result.ok?200:503,headers:{'Cache-Control':'no-store'}});
  }catch(error){return NextResponse.json({ok:false,status:'monitor_failed',checkedAt:new Date().toISOString(),error:error instanceof Error?error.message:'Unknown error'},{status:502});}
 }
