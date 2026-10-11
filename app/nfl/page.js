@@ -60,7 +60,7 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v9'], { revalidate: 900, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v10'], { revalidate: 900, tags: ['nfl-public-board'] });
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
