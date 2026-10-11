@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchNflMonitor, normalizeParlayProps } from '../lib/nfl-monitor.mjs';
+import {
+ applyNflPlayerSnapshotFallback,
+ fetchNflMonitor,
+ normalizeParlayProps,
+ retryDelayForPropFailure,
+} from '../lib/nfl-monitor.mjs';
 const headers = { get: () => null };
 const marketFetcher = (data, headerForMarket = () => headers) => async (url) => {
  const market = new URL(String(url)).searchParams.get('markets');
@@ -181,4 +186,43 @@ test('scheduled monitoring retries transient prop failures once',async()=>{
  assert.deepEqual(result.completeness.retriedMarkets,['player_pass_yds']);
  assert.equal(result.completeness.failedMarkets.length,0);
  assert.equal(result.requestCost,'21');
+});
+
+test('provider retry delay honors Retry-After instead of retrying too early',()=>{
+ assert.equal(retryDelayForPropFailure({retryAfterSeconds:5},500),5000);
+ assert.equal(retryDelayForPropFailure({retryAfterSeconds:null},750),750);
+});
+
+test('fresh saved player lines replace an empty live pull with adjusted ages',()=>{
+ const now=Date.parse('2026-10-10T22:00:00Z');
+ const snapshotCheckedAt='2026-10-10T21:50:00Z';
+ const baseLine={
+  eventId:'game-1',providerEventId:'game-1',home:'Home',away:'Away',kickoff:'2026-10-11T20:00:00Z',
+  bookmaker:'fanduel',bookmakerTitle:'FanDuel',sourceType:'sportsbook',market:'player_pass_yds',player:'Quarterback',
+  point:250.5,period:'FULL',side:'Over',odds:-110,ageSeconds:30,
+ };
+ const result=applyNflPlayerSnapshotFallback({
+  checkedAt:'2026-10-10T22:00:00Z',linesCount:0,warnings:['No supported full-game NFL player props returned'],
+  completeness:{failedMarkets:[{market:'player_pass_yds',status:'provider_error',httpStatus:503,detail:'HTTP 503'}]},
+ },{
+  checked_at:snapshotCheckedAt,
+  payload:{checkedAt:snapshotCheckedAt,lines:[baseLine,{...baseLine,bookmaker:'draftkings',ageSeconds:4000}]},
+ },{now});
+ assert.equal(result.linesCount,1);
+ assert.equal(result.staleLines,1);
+ assert.equal(result.lines[0].ageSeconds,630);
+ assert.equal(result.playerData.status,'snapshot_fallback');
+ assert.equal(result.playerData.source,'saved_snapshot');
+ assert.match(result.playerData.reason,/HTTP 503/);
+});
+
+test('stale saved player lines remain unavailable and never become plays',()=>{
+ const now=Date.parse('2026-10-10T22:00:00Z');
+ const result=applyNflPlayerSnapshotFallback({checkedAt:new Date(now).toISOString(),linesCount:0,warnings:[]},{
+  checked_at:'2026-10-10T20:00:00Z',
+  payload:{checkedAt:'2026-10-10T20:00:00Z',lines:[{ageSeconds:10}]},
+ },{now});
+ assert.equal(result.linesCount,0);
+ assert.equal(result.playerData.status,'unavailable');
+ assert.equal(result.playerData.source,'none');
 });

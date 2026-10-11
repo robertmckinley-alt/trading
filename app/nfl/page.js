@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
-import { fetchNflMonitor } from '../../lib/nfl-monitor.mjs';
+import { applyNflPlayerSnapshotFallback, fetchNflMonitor } from '../../lib/nfl-monitor.mjs';
 import { buildNflSetups } from '../../lib/nfl-setups.mjs';
+import { latestNflPlayerSnapshot } from '../../lib/nfl-storage.js';
 import styles from './nfl.module.css';
 
 export const metadata = {
@@ -12,12 +13,24 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 const getPublicBoard = unstable_cache(async () => {
-  const result = await fetchNflMonitor({
+  let result = await fetchNflMonitor({
     includeGameMarkets: true,
     includePredictionMarkets: process.env.NFL_PREDICTION_MARKETS_ENABLED === 'true',
     propAttempts: 2,
     propRetryDelayMs: 500,
   });
+  let savedSnapshot = null;
+  if (!result.linesCount && (process.env.NFL_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL)) {
+    try {
+      savedSnapshot = await latestNflPlayerSnapshot();
+    } catch (error) {
+      result = {
+        ...result,
+        warnings: [...(result.warnings || []), `Saved player-prop snapshot unavailable: ${error instanceof Error ? error.message : 'database read failed'}`],
+      };
+    }
+  }
+  result = applyNflPlayerSnapshotFallback(result, savedSnapshot, { now: Date.parse(result.checkedAt) });
   const setups = buildNflSetups(result.gameMarkets?.games || [], {
     now: Date.parse(result.checkedAt),
   });
@@ -32,6 +45,7 @@ const getPublicBoard = unstable_cache(async () => {
     staleLines: result.staleLines || 0,
     unknownAgeLines: result.unknownAgeLines || 0,
     coverage: result.coverage || { bookmakers: [], byMarket: {}, bySourceType: {} },
+    playerData: result.playerData || { status: 'unavailable', source: 'none', failures: [], warnings: [] },
     setups,
     playerSetups: result.playerSetups || { plays: [], parlays: [], actionablePlays: 0, matchedGroups: 0 },
     gameMarkets: result.gameMarkets ? {
@@ -45,7 +59,7 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v7'], { revalidate: 900, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v8'], { revalidate: 900, tags: ['nfl-public-board'] });
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
@@ -77,6 +91,7 @@ function formatReturn(value) {
 function formatAge(value) {
   if (!Number.isFinite(value)) return 'Unknown age';
   if (value < 60) return `${Math.round(value)} sec old`;
+  if (value >= 3600) return `${(value / 3600).toFixed(1)} hr old`;
   return `${Math.round(value / 60)} min old`;
 }
 
@@ -260,6 +275,7 @@ export default async function NFLPage() {
       checkedAt: new Date().toISOString(),
       warnings: [error instanceof Error ? error.message : 'NFL data request failed'],
       linesCount: 0,
+      playerData: { status: 'unavailable', source: 'none', failures: [], warnings: [], reason: 'NFL data request failed' },
       coverage: { bookmakers: [], byMarket: {}, bySourceType: {} },
       gameMarkets: null,
       predictionMarkets: null,
@@ -306,9 +322,15 @@ export default async function NFLPage() {
   const publishedItems = [...winners, ...valuePlays, ...likelihoodParlays, ...valueParlays, ...playerPlays, ...playerParlays];
   const publishedById = new Map(publishedItems.map((setup) => [setup.id, setup]));
   const actionableCount = [...publishedById.values()].filter((setup) => setup.decision === 'PLAY').length;
+  const playerData = board.playerData || {};
+  const playerFailure = playerData.reason || playerData.failures?.map((failure) => (
+    `${failure.market || 'player props'}: ${failure.status}${failure.httpStatus ? ` HTTP ${failure.httpStatus}` : ''}`
+  )).join('; ');
   const playerDataStatus = board.linesCount > 0
-    ? `${Number(board.linesCount).toLocaleString('en-US')} exact-line prices loaded`
-    : board.status === 'checked' ? 'No player props in the current slate' : 'Player-prop feed unavailable — section paused';
+    ? playerData.source === 'saved_snapshot'
+      ? `${Number(board.linesCount).toLocaleString('en-US')} freshness-adjusted prices from saved snapshot (${formatAge(playerData.snapshotAgeSeconds)}) · live pull failed: ${playerFailure}`
+      : `${Number(board.linesCount).toLocaleString('en-US')} exact-line prices loaded live`
+    : `Player-prop feed unavailable — ${playerFailure || 'no usable current rows'}${playerData.snapshotCheckedAt ? ` · latest saved snapshot ${formatAge(playerData.snapshotAgeSeconds)}` : ''}`;
 
   return (
     <main id="main-content" className={styles.page}>
