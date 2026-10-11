@@ -188,6 +188,32 @@ test('scheduled monitoring retries transient prop failures once',async()=>{
  assert.equal(result.requestCost,'21');
 });
 
+test('a combined request recovers markets that failed as separate boards',async()=>{
+ const failures=new Set(['player_pass_yds','player_receptions']);
+ const rows=[
+  {market_key:'player_pass_yds',event_id:'game1',bookmaker:'bookA',player:'Quarterback',line:250.5,over_price:-110,under_price:-110,period:'FULL',age_seconds:10},
+  {market_key:'player_receptions',event_id:'game2',bookmaker:'bookB',player:'Receiver',line:5.5,over_price:-105,under_price:-115,period:'FULL',age_seconds:10},
+ ];
+ const result=await fetchNflMonitor({
+  key:'test',
+  includeGameMarkets:false,
+  fetcher:async(url)=>{
+   const markets=new URL(String(url)).searchParams.get('markets');
+   if(failures.has(markets))return {ok:false,status:503,headers:{get:(name)=>name==='retry-after'?'0':null}};
+   const data=markets.includes(',')?rows:[];
+   return {ok:true,headers:{get:(name)=>({
+    'x-result-page-size':String(data.length),'x-result-row-count':String(data.length),'x-result-limit':'10000','x-result-offset':'0',
+    'x-result-has-more':'false','x-result-truncated':'false','x-requests-last':'3',
+   }[name]||null)},json:async()=>({data})};
+  },
+ });
+ assert.equal(result.status,'checked');
+ assert.equal(result.linesCount,4);
+ assert.deepEqual(result.completeness.failedMarkets,[]);
+ assert.equal(result.completeness.recoveryAttempted,true);
+ assert.deepEqual(result.completeness.recoveredMarkets.sort(),['player_pass_yds','player_receptions']);
+});
+
 test('provider retry delay honors Retry-After instead of retrying too early',()=>{
  assert.equal(retryDelayForPropFailure({retryAfterSeconds:5},500),5000);
  assert.equal(retryDelayForPropFailure({retryAfterSeconds:null},750),750);
