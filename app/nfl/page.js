@@ -20,7 +20,8 @@ const getPublicBoard = unstable_cache(async () => {
     propRetryDelayMs: 500,
   });
   let savedSnapshot = null;
-  if (!result.linesCount && (process.env.NFL_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL)) {
+  const playerPullIncomplete = !result.linesCount || Boolean(result.completeness?.failedMarkets?.length);
+  if (playerPullIncomplete && (process.env.NFL_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL)) {
     try {
       savedSnapshot = await latestNflPlayerSnapshot();
     } catch (error) {
@@ -59,7 +60,7 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v8'], { revalidate: 900, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v9'], { revalidate: 900, tags: ['nfl-public-board'] });
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
@@ -329,7 +330,9 @@ export default async function NFLPage() {
   const playerDataStatus = board.linesCount > 0
     ? playerData.source === 'saved_snapshot'
       ? `${Number(board.linesCount).toLocaleString('en-US')} freshness-adjusted prices from saved snapshot (${formatAge(playerData.snapshotAgeSeconds)}) · live pull failed: ${playerFailure}`
-      : `${Number(board.linesCount).toLocaleString('en-US')} exact-line prices loaded live`
+      : playerData.source === 'live_plus_saved_snapshot'
+        ? `${Number(board.linesCount).toLocaleString('en-US')} prices from live data plus ${Number(playerData.savedLinesUsed || 0).toLocaleString('en-US')} saved current prices (${formatAge(playerData.snapshotAgeSeconds)}) · partial live pull: ${playerFailure}`
+        : `${Number(board.linesCount).toLocaleString('en-US')} exact-line prices loaded live${playerData.status === 'partial_live' ? ` · partial feed: ${playerFailure}` : ''}`
     : `Player-prop feed unavailable — ${playerFailure || 'no usable current rows'}${playerData.snapshotCheckedAt ? ` · latest saved snapshot ${formatAge(playerData.snapshotAgeSeconds)}` : ''}`;
 
   return (

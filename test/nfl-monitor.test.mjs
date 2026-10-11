@@ -226,3 +226,24 @@ test('stale saved player lines remain unavailable and never become plays',()=>{
  assert.equal(result.playerData.status,'unavailable');
  assert.equal(result.playerData.source,'none');
 });
+
+test('partial live pulls restore only failed markets from a fresh saved snapshot',()=>{
+ const now=Date.parse('2026-10-10T22:00:00Z');
+ const liveLine={
+  eventId:'game-1',kickoff:'2026-10-11T20:00:00Z',bookmaker:'fanduel',bookmakerTitle:'FanDuel',sourceType:'sportsbook',
+  market:'player_pass_tds',player:'Quarterback',point:1.5,period:'FULL',side:'Over',odds:-110,ageSeconds:20,
+ };
+ const savedLine={...liveLine,market:'player_pass_yds',point:250.5,bookmaker:'draftkings',bookmakerTitle:'DraftKings',ageSeconds:30};
+ const unrelatedSaved={...savedLine,market:'player_rush_yds',player:'Running Back',point:60.5};
+ const result=applyNflPlayerSnapshotFallback({
+  checkedAt:new Date(now).toISOString(),linesCount:1,lines:[liveLine],snapshot:{lines:[liveLine]},warnings:[],
+  completeness:{failedMarkets:[{market:'player_pass_yds',status:'provider_error',httpStatus:503}]},
+ },{
+  checked_at:'2026-10-10T21:50:00Z',
+  payload:{checkedAt:'2026-10-10T21:50:00Z',lines:[savedLine,unrelatedSaved]},
+ },{now});
+ assert.equal(result.linesCount,2);
+ assert.deepEqual(result.lines.map((line)=>line.market).sort(),['player_pass_tds','player_pass_yds']);
+ assert.equal(result.playerData.source,'live_plus_saved_snapshot');
+ assert.equal(result.playerData.savedLinesUsed,1);
+});
