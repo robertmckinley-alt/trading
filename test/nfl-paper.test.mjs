@@ -13,11 +13,11 @@ import {
   summarizePaperAccount,
 } from '../lib/nfl-paper.mjs';
 
-test('six isolated accounts start with 50k each and a 45k floor', () => {
+test('seven isolated accounts start with 50k each and a 45k floor', () => {
   const accounts = createPaperAccounts();
-  assert.equal(accounts.length, 6);
+  assert.equal(accounts.length, 7);
   assert.equal(new Set(accounts.map((account) => account.key)).size, NFL_STRATEGIES.length);
-  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 300_000);
+  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 350_000);
   assert.ok(accounts.every((account) => account.drawdownFloor === 45_000));
 });
 
