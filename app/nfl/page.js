@@ -339,12 +339,13 @@ export default async function NFLPage() {
     paperDashboard = await getNflPaperDashboard();
   } catch {
     const accounts = createPaperAccounts();
+    const startingBalance = accounts.reduce((sum, account) => sum + account.startingBalance, 0);
     paperDashboard = {
       configured: false,
       error: true,
       accounts,
-      totalStartingBalance: 350_000,
-      totalEquity: 350_000,
+      totalStartingBalance: startingBalance,
+      totalEquity: startingBalance,
       openPositions: [],
       recentSettlements: [],
       weekly: [],
@@ -426,7 +427,7 @@ export default async function NFLPage() {
       </header>
 
       <section className={styles.scoreRail} aria-label="Coverage summary">
-        <DataPill label="Paper bankroll" value="$350K" tone="positive" />
+        <DataPill label="Paper bankroll" value={formatMoney(paperDashboard.totalStartingBalance)} tone="positive" />
         <DataPill label="Sportsbook sources" value={String(sourceCount)} />
         <DataPill label="Winner predictions" value={String(winners.length)} tone={winners.length ? 'positive' : 'warning'} />
         <DataPill label="Winner parlays" value={String(likelihoodParlays.length)} tone={likelihoodParlays.length ? 'positive' : 'warning'} />
@@ -450,7 +451,7 @@ export default async function NFLPage() {
 
       <section className={styles.section} id="paper-trading" data-nfl-panel="true">
         <div className={styles.sectionHeading}>
-          <div><p className={styles.sectionKicker}>PAPER PERFORMANCE</p><h2>Seven isolated $50K accounts</h2></div>
+          <div><p className={styles.sectionKicker}>PAPER PERFORMANCE</p><h2>{paperDashboard.accounts.length} isolated $10K accounts</h2></div>
           <p>Only current PLAY cards enter the ledger. Straight plays risk up to $100, parlays risk up to $50, open exposure is capped at $300 per account, and new entries stop at $9,000 equity.</p>
         </div>
         <div className={`${styles.feedStatus} ${paperDashboard.configured ? styles.feedCurrent : styles.feedPaused}`}>

@@ -9,16 +9,17 @@ import {
   gradePaperPosition,
   normalizeNflScores,
   removeTwoWayVig,
+  selectRiskPolicyVoids,
   settlePaperPosition,
   summarizePaperAccount,
 } from '../lib/nfl-paper.mjs';
 
-test('seven isolated accounts start with 50k each and a 45k floor', () => {
+test('seven isolated accounts start with 10k each and a 9k floor', () => {
   const accounts = createPaperAccounts();
   assert.equal(accounts.length, 7);
   assert.equal(new Set(accounts.map((account) => account.key)).size, NFL_STRATEGIES.length);
-  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 350_000);
-  assert.ok(accounts.every((account) => account.drawdownFloor === 45_000));
+  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 70_000);
+  assert.ok(accounts.every((account) => account.drawdownFloor === 9_000));
 });
 
 test('vig removal and expected value use normalized probabilities', () => {
@@ -35,7 +36,7 @@ test('settlement, ROI and drawdown use settled positions only', () => {
     settlePaperPosition({ stake: 100, odds: 100, settledAt: '2026-10-03' }, 'push'),
   ];
   const account = summarizePaperAccount(positions, 'moneyline');
-  assert.equal(account.equity, 50_000);
+  assert.equal(account.equity, 10_000);
   assert.equal(account.wins, 1);
   assert.equal(account.losses, 1);
   assert.equal(account.pushes, 1);
@@ -50,12 +51,24 @@ test('allocation caps simultaneous risk at 3 percent per account', () => {
     modeledEdge: 0.05 - index / 100,
   }));
   const allocated = allocatePaperCandidates(candidates);
-  assert.equal(allocated.length, 5);
-  assert.equal(allocated.reduce((sum, position) => sum + position.stake, 0), 500);
+  assert.equal(allocated.length, 3);
+  assert.equal(allocated.reduce((sum, position) => sum + position.stake, 0), 300);
+});
+
+test('risk-policy reconciliation voids only positions above the $300 account cap', () => {
+  const positions = Array.from({ length: 5 }, (_, index) => ({
+    id: `spread-${index}`,
+    accountKey: 'spread',
+    status: 'open',
+    stake: 100,
+    capturedAt: '2026-10-11T20:00:00Z',
+    probability: 0.6 - index / 100,
+  }));
+  assert.deepEqual(selectRiskPolicyVoids(positions), ['spread-3', 'spread-4']);
 });
 
 test('10 percent drawdown floor pauses new positions', () => {
-  const losses = Array.from({ length: 50 }, (_, index) => ({
+  const losses = Array.from({ length: 10 }, (_, index) => ({
     id: `loss-${index}`,
     accountKey: 'moneyline',
     stake: 100,
