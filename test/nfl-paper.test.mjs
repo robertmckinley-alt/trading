@@ -13,12 +13,12 @@ import {
   summarizePaperAccount,
 } from '../lib/nfl-paper.mjs';
 
-test('six isolated accounts start with 10k each and a 9k floor', () => {
+test('six isolated accounts start with 50k each and a 45k floor', () => {
   const accounts = createPaperAccounts();
   assert.equal(accounts.length, 6);
   assert.equal(new Set(accounts.map((account) => account.key)).size, NFL_STRATEGIES.length);
-  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 60_000);
-  assert.ok(accounts.every((account) => account.drawdownFloor === 9_000));
+  assert.equal(accounts.reduce((sum, account) => sum + account.equity, 0), 300_000);
+  assert.ok(accounts.every((account) => account.drawdownFloor === 45_000));
 });
 
 test('vig removal and expected value use normalized probabilities', () => {
@@ -35,7 +35,7 @@ test('settlement, ROI and drawdown use settled positions only', () => {
     settlePaperPosition({ stake: 100, odds: 100, settledAt: '2026-10-03' }, 'push'),
   ];
   const account = summarizePaperAccount(positions, 'moneyline');
-  assert.equal(account.equity, 10_000);
+  assert.equal(account.equity, 50_000);
   assert.equal(account.wins, 1);
   assert.equal(account.losses, 1);
   assert.equal(account.pushes, 1);
@@ -50,12 +50,12 @@ test('allocation caps simultaneous risk at 3 percent per account', () => {
     modeledEdge: 0.05 - index / 100,
   }));
   const allocated = allocatePaperCandidates(candidates);
-  assert.equal(allocated.length, 3);
-  assert.equal(allocated.reduce((sum, position) => sum + position.stake, 0), 300);
+  assert.equal(allocated.length, 5);
+  assert.equal(allocated.reduce((sum, position) => sum + position.stake, 0), 500);
 });
 
 test('10 percent drawdown floor pauses new positions', () => {
-  const losses = Array.from({ length: 10 }, (_, index) => ({
+  const losses = Array.from({ length: 50 }, (_, index) => ({
     id: `loss-${index}`,
     accountKey: 'moneyline',
     stake: 100,
@@ -63,7 +63,7 @@ test('10 percent drawdown floor pauses new positions', () => {
     status: 'loss',
     result: 'loss',
     pnl: -100,
-    settledAt: `2026-10-${String(index + 1).padStart(2, '0')}`,
+    settledAt: new Date(Date.UTC(2026,9,1+index)).toISOString(),
   }));
   const account = summarizePaperAccount(losses, 'moneyline');
   assert.equal(account.equity, 9_000);
