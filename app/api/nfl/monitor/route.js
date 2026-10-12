@@ -3,6 +3,7 @@ import { fetchNflMonitor } from '../../../../lib/nfl-monitor.mjs';
 import { collectPaperCandidates } from '../../../../lib/nfl-paper.mjs';
 import {
  fetchNflScores,
+ fetchNflPlayerResults,
  nflPaperDatabaseConfigured,
  syncNflPaperLedger,
 } from '../../../../lib/nfl-paper-storage.js';
@@ -16,14 +17,15 @@ export async function GET(request){
  if(request.headers.get('authorization')!== 'Bearer '+token) return NextResponse.json({ok:false,error:'unauthorized'},{status:401});
  try{
   const databaseConfigured=nflPaperDatabaseConfigured();
-  const [result,scoreResult]=await Promise.all([
+  const [result,scoreResult,playerResult]=await Promise.all([
    fetchNflMonitor({propAttempts:2}),
    databaseConfigured?fetchNflScores():Promise.resolve({ok:false,status:'database_disabled',scores:[]}),
+   databaseConfigured?fetchNflPlayerResults():Promise.resolve({ok:false,status:'database_disabled',results:[]}),
   ]);
   const {snapshot,...publicResult}=result;
   let persistence={status:'disabled'};
   let paperTrading={status:databaseConfigured?'not_synced':'database_required',captured:0,settled:0};
-  let diagnostics={databaseConfigured,providerOk:result.ok,linesCount:result.linesCount||0,gameCount:result.gameMarkets?.games?.length||0,playerPlays:result.playerSetups?.plays?.length||0,playerActionable:result.playerSetups?.actionablePlays||0,candidates:0,blockers:[]};
+  let diagnostics={databaseConfigured,providerOk:result.ok,linesCount:result.linesCount||0,gameCount:result.gameMarkets?.games?.length||0,playerPlays:result.playerSetups?.plays?.length||0,playerActionable:result.playerSetups?.actionablePlays||0,playerResultStatus:playerResult.status,playerResultRows:playerResult.results?.length||0,candidates:0,blockers:[]};
   if(!databaseConfigured)diagnostics.blockers.push('database_not_configured');
   if(!result.ok)diagnostics.blockers.push('provider_unavailable');
   if(result.ok&&snapshot&&databaseConfigured){
@@ -40,10 +42,13 @@ export async function GET(request){
     diagnostics.candidates=candidates.length;
     diagnostics.byAccount=Object.fromEntries([...new Set(candidates.map(c=>c.accountKey))].map(key=>[key,candidates.filter(c=>c.accountKey===key).length]));
     if(!candidates.length)diagnostics.blockers.push('no_qualified_play_candidates');
-    paperTrading=await syncNflPaperLedger({candidates,scores:scoreResult.scores||[],checkedAt:result.checkedAt});
+    paperTrading=await syncNflPaperLedger({candidates,scores:scoreResult.scores||[],playerResults:playerResult.results||[],checkedAt:result.checkedAt});
     paperTrading.scoreStatus=scoreResult.status;
+    paperTrading.playerResultStatus=playerResult.status;
+    paperTrading.playerResultRows=playerResult.results?.length||0;
+    paperTrading.playerResultUpdatedAt=playerResult.sourceUpdatedAt||null;
    }catch{
-    paperTrading={status:'failed',captured:0,settled:0,scoreStatus:scoreResult.status};
+    paperTrading={status:'failed',captured:0,settled:0,scoreStatus:scoreResult.status,playerResultStatus:playerResult.status};
     diagnostics.blockers.push('ledger_sync_failed');
     publicResult.warnings=[...(publicResult.warnings||[]),'NFL paper ledger sync failed'];
    }

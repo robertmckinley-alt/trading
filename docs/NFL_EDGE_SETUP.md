@@ -5,6 +5,7 @@ NFL EDGE is paper-only. The primary automated source is ParlayAPI. Configure its
 ## Data-source policy
 
 - **ParlayAPI:** permitted API integration for current NFL moneylines, spreads, game totals, player props, source freshness, injury tags and source-native prediction-market discovery.
+- **nflverse player results:** postgame weekly player statistics from the `nflverse-data` release under CC BY 4.0. NFL EDGE uses it only to grade paper player props after a unique player/season/week match. The source can update one to two hours after a game, so pending player positions may remain awaiting result until a later hourly run.
 - **LineMate:** manual personal-research reference only. Its published terms prohibit automated/non-human access, systematic retrieval, data mining and scraping. NFL EDGE must not log in, crawl the site, call undocumented endpoints or schedule browser extraction.
 - **LineMate imports:** only manually transcribed observations for personal, non-commercial research, or a provider export covered by written permission. They remain non-actionable context. The adapter rejects imports without collection and permission metadata.
 - **Prediction markets:** discovery leads only. Keep Kalshi, Polymarket and Novig prices source-native. Do not blend or treat a text match as arbitrage until settlement rules, bid/ask spread, depth and tradability are verified.
@@ -18,6 +19,7 @@ NFL EDGE is paper-only. The primary automated source is ParlayAPI. Configure its
 5. Optional: configure `NFL_DATABASE_URL`, `DATABASE_URL` or `POSTGRES_URL`. Successful monitor runs then persist the full normalized snapshot. Without a database, monitoring still works and reports persistence as disabled.
 6. Optional: configure `NFL_TELEGRAM_BOT_TOKEN` and `NFL_TELEGRAM_CHAT_ID` as GitHub Actions secrets.
 7. Merge the reviewed PR, deploy the trading Vercel project, and run the NFL EDGE hourly workflow manually once. Confirm HTTP 200, nonzero line counts, freshness, completeness, request cost and remaining credits.
+8. Confirm the monitor reports `playerResultStatus: checked` and a nonzero `playerResultRows` count. This activates automatic postgame grading for the six supported player markets; no new secret is required.
 
 The monitor endpoint is `/api/nfl/monitor`. It requires `Authorization: Bearer <NFL_MONITOR_SECRET>`, disables HTTP caching, returns at most 100 sample lines, and persists the full snapshot only when a database is configured.
 
@@ -57,9 +59,10 @@ Before any paper position is created, require:
 - The optional prediction-market search is beta. Its clusters are text matches, not proof of equivalent contracts.
 - Straight-up calls are consensus market projections, not an independent team-strength or injury-adjusted model. They remain **PREDICTION** unless an executable price also clears the value gate.
 - Saved snapshots support future research but do not create a validated backtest by themselves. Coverage varies by source, market and date.
-- No automated paper entries, real-money betting, averaging down or account-size assumptions are implemented.
+- Paper entries are captured automatically only from qualified PLAY cards. No real-money betting, averaging down or sportsbook submission is implemented.
+- Player-result grading is conservative. Missing players, ambiguous normalized names, unsupported markets and unavailable postgame rows remain `AWAITING RESULT`; inactivity and sportsbook-specific void rules are never guessed.
 - Database persistence remains optional and is reported as disabled when no database is configured. Scheduled monitoring and live provider payloads were deployment-verified on 2026-10-10.
-- Position size remains blank until bankroll and maximum risk are supplied. Dashboard risk/reward is normalized to a one-unit maximum loss.
+- Paper position sizing uses the approved isolated-account policy: $10,000 per account, $100 risk per straight play, $50 per parlay, $300 maximum open exposure per account and a $9,000 hard floor. These limits do not authorize or submit real-money bets.
 
 ## Timeout and degradation behavior
 

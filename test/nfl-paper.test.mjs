@@ -7,6 +7,7 @@ import {
   createPaperAccounts,
   expectedValue,
   gradePaperPosition,
+  nflSeasonWeek,
   normalizeNflScores,
   removeTwoWayVig,
   selectRiskPolicyVoids,
@@ -104,6 +105,31 @@ test('only future PLAY cards become paper candidates and duplicate parlay views 
   assert.deepEqual(candidates.map((item) => item.accountKey).sort(), ['moneyline', 'winner_parlay']);
 });
 
+test('player candidates retain structured result identity for straight and parlay grading', () => {
+  const playerLeg = {
+    eventId: 'week-6-a', market: 'player_receptions', player: 'Receiver Example', side: 'Over', line: 5.5,
+    selection: 'Receiver Example Over 5.5 receptions', matchup: 'Away @ Home', home: 'Home', away: 'Away',
+    kickoff: '2026-10-18T17:00:00Z', odds: -105, probability: 0.55,
+  };
+  const candidates = collectPaperCandidates({
+    checkedAt: '2026-10-11T20:00:00Z',
+    playerSetups: {
+      plays: [{ ...playerLeg, id: 'player-straight', point: 5.5, expectedReturn: 0.03, decision: 'PLAY' }],
+      parlays: [{
+        id: 'player-parlay', market: 'player_parlay', offeredOdds: 260, expectedReturn: 0.04, decision: 'PLAY',
+        legs: [playerLeg, { ...playerLeg, eventId: 'week-6-b', player: 'Second Player', selection: 'Second Player Under 70.5 receiving yards', market: 'player_reception_yds', side: 'Under', line: 70.5, kickoff: '2026-10-18T20:00:00Z' }],
+      }],
+    },
+  });
+  const straight = candidates.find((item) => item.accountKey === 'player_prop');
+  const parlay = candidates.find((item) => item.accountKey === 'player_parlay');
+  assert.equal(straight.player, 'Receiver Example');
+  assert.equal(straight.week, 6);
+  assert.equal(parlay.legs[0].market, 'player_receptions');
+  assert.equal(parlay.legs[0].player, 'Receiver Example');
+  assert.equal(parlay.legs[1].line, 70.5);
+});
+
 test('completed scores grade moneyline, spread, total and winner parlay', () => {
   const scores = normalizeNflScores([{
     id: 'event-a', completed: true, home_team: 'Home', away_team: 'Away',
@@ -124,4 +150,40 @@ test('completed scores grade moneyline, spread, total and winner parlay', () => 
 test('player positions are not auto-graded without a verified stat source', () => {
   assert.equal(gradePaperPosition({ accountKey: 'player_prop' }, []), null);
   assert.equal(gradePaperPosition({ accountKey: 'player_parlay' }, []), null);
+});
+
+test('Week 6 player props and cross-game player parlays grade from unique postgame rows', () => {
+  const results = [{
+    playerId: '00-1', player: 'A.J. Example', season: 2026, week: 6, gameId: '2026_06_AAA_BBB',
+    stats: { passingYards: 287, passingTds: 3, rushingYards: 24, rushingTds: 1, receptions: 0, receivingYards: 0, receivingTds: 0, specialTeamsTds: 0, defensiveTds: 0, fumbleRecoveryTds: 0 },
+  }, {
+    playerId: '00-2', player: 'Receiver Example', season: 2026, week: 6, gameId: '2026_06_CCC_DDD',
+    stats: { passingYards: 0, passingTds: 0, rushingYards: 0, rushingTds: 0, receptions: 7, receivingYards: 96, receivingTds: 1, specialTeamsTds: 0, defensiveTds: 0, fumbleRecoveryTds: 0 },
+  }];
+  const straight = gradePaperPosition({
+    id: 'player_prop|week-6-a|player_pass_yds|A.J. Example|Over|275.5', accountKey: 'player_prop', market: 'player_pass_yds', side: 'Over', line: 275.5, season: null, week: null,
+    kickoff: '2026-10-18T17:00:00Z', odds: -110,
+  }, [], results);
+  assert.equal(straight.result, 'win');
+  assert.equal(straight.evidence[0].evidence.actual, 287);
+
+  const parlay = gradePaperPosition({
+    accountKey: 'player_parlay', odds: 260, legs: [
+      { player: 'A.J. Example', market: 'player_pass_tds', side: 'Over', line: 2.5, kickoff: '2026-10-18T17:00:00Z', odds: 110 },
+      { player: 'Receiver Example', market: 'player_receptions', side: 'Over', line: 6.5, kickoff: '2026-10-18T20:00:00Z', odds: -105 },
+    ],
+  }, [], results);
+  assert.equal(parlay.result, 'win');
+  assert.equal(parlay.evidence.length, 2);
+  assert.deepEqual(nflSeasonWeek('2026-10-18T17:00:00Z'), { season: 2026, week: 6, label: '2026 Week 6' });
+});
+
+test('ambiguous player names remain awaiting result', () => {
+  const duplicate = {
+    player: 'Same Name', season: 2026, week: 6, stats: { receptions: 8 },
+  };
+  assert.equal(gradePaperPosition({
+    accountKey: 'player_prop', player: 'Same Name', market: 'player_receptions', side: 'Over', line: 4.5,
+    kickoff: '2026-10-18T17:00:00Z', odds: -110,
+  }, [], [duplicate, { ...duplicate, playerId: 'second' }]), null);
 });

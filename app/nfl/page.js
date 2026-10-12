@@ -349,8 +349,9 @@ export default async function NFLPage() {
       openPositions: [],
       recentSettlements: [],
       weekly: [],
+      activeWeeks: [],
       lastCapturedAt: null,
-      settlement: { games: 'database_unavailable', players: 'awaiting_verified_stat_source' },
+      settlement: { games: 'database_unavailable', players: 'database_unavailable' },
     };
   }
 
@@ -428,6 +429,7 @@ export default async function NFLPage() {
 
       <section className={styles.scoreRail} aria-label="Coverage summary">
         <DataPill label="Paper bankroll" value={formatMoney(paperDashboard.totalStartingBalance)} tone="positive" />
+        <DataPill label="Paper week" value={paperDashboard.activeWeeks?.join(' / ') || 'Collecting'} tone={paperDashboard.activeWeeks?.length ? 'positive' : 'warning'} />
         <DataPill label="Sportsbook sources" value={String(sourceCount)} />
         <DataPill label="Winner predictions" value={String(winners.length)} tone={winners.length ? 'positive' : 'warning'} />
         <DataPill label="Winner parlays" value={String(likelihoodParlays.length)} tone={likelihoodParlays.length ? 'positive' : 'warning'} />
@@ -457,7 +459,7 @@ export default async function NFLPage() {
         <div className={`${styles.feedStatus} ${paperDashboard.configured ? styles.feedCurrent : styles.feedPaused}`}>
           <strong>{paperDashboard.configured ? 'Ledger connected' : 'Database action needed'}</strong>
           <span>{paperDashboard.configured
-            ? `Last paper capture ${paperDashboard.lastCapturedAt ? formatDate(paperDashboard.lastCapturedAt, false) : 'waiting for the next hourly run'} · game results settle automatically`
+            ? `${paperDashboard.activeWeeks?.length ? `${paperDashboard.activeWeeks.join(', ')} active · ` : ''}Last paper capture ${paperDashboard.lastCapturedAt ? formatDate(paperDashboard.lastCapturedAt, false) : 'waiting for the next hourly run'} · game and player results settle automatically`
             : 'The paper engine is deployed, but durable tracking cannot start until a Vercel Postgres database is connected.'}</span>
         </div>
         <div className={styles.paperGrid}>{paperDashboard.accounts.map((account) => <PaperAccountCard key={account.key} account={account} />)}</div>
@@ -476,11 +478,11 @@ export default async function NFLPage() {
           : <SetupEmpty>{paperDashboard.configured ? 'No current PLAY has been captured yet. The next hourly monitor will record qualifying setups.' : 'Connect the database to begin the permanent paper ledger.'}</SetupEmpty>}
         <div className={styles.paperNotice}>
           <strong>Settlement boundary</strong>
-          <p>Moneylines, spreads, totals and winner parlays settle from documented ParlayAPI final scores. Player props and player parlays stay marked AWAITING RESULT until a licensed, verified player-stat source is connected; no result is inferred or fabricated.</p>
+          <p>Moneylines, spreads, totals and winner parlays settle from documented ParlayAPI final scores. Player props and player parlays settle from postgame <a href="https://github.com/nflverse/nflverse-data" target="_blank" rel="noreferrer">nflverse weekly player statistics</a> under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Exact player name, season and NFL week must resolve to one row; unmatched or ambiguous results stay AWAITING RESULT.</p>
         </div>
         <div className={styles.subsectionHeading}>
           <div><p className={styles.sectionKicker}>WEEKLY LEDGER</p><h3>Wins, losses and net P&amp;L</h3></div>
-          <p>Every settled position remains in the database. Results are grouped by the Sunday start of each NFL week.</p>
+          <p>Every settled position remains in the database. Results are grouped by the actual season and NFL week assigned from kickoff, including Thursday and Monday games.</p>
         </div>
         {paperDashboard.weekly.length ? <div className={styles.paperWeekTable} role="table" aria-label="Weekly paper results">
           <div className={styles.paperWeekHeader} role="row"><span>Week</span><span>Account</span><span>W-L-P</span><span>Net P&amp;L</span></div>
