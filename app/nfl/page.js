@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import NflTabs from './nfl-tabs';
 import { unstable_cache } from 'next/cache';
 import { applyNflPlayerSnapshotFallback, fetchNflMonitor } from '../../lib/nfl-monitor.mjs';
 import { createPaperAccounts } from '../../lib/nfl-paper.mjs';
@@ -342,8 +343,8 @@ export default async function NFLPage() {
       configured: false,
       error: true,
       accounts,
-      totalStartingBalance: 60_000,
-      totalEquity: 60_000,
+      totalStartingBalance: 350_000,
+      totalEquity: 350_000,
       openPositions: [],
       recentSettlements: [],
       weekly: [],
@@ -425,7 +426,7 @@ export default async function NFLPage() {
       </header>
 
       <section className={styles.scoreRail} aria-label="Coverage summary">
-        <DataPill label="Paper bankroll" value="$60K" tone="positive" />
+        <DataPill label="Paper bankroll" value="$350K" tone="positive" />
         <DataPill label="Sportsbook sources" value={String(sourceCount)} />
         <DataPill label="Winner predictions" value={String(winners.length)} tone={winners.length ? 'positive' : 'warning'} />
         <DataPill label="Winner parlays" value={String(likelihoodParlays.length)} tone={likelihoodParlays.length ? 'positive' : 'warning'} />
@@ -445,18 +446,11 @@ export default async function NFLPage() {
         ))}
       </section>
 
-      <nav className={styles.sectionNav} aria-label="NFL Edge sections">
-        <a href="#paper-trading"><span>Paper accounts</span><strong>6</strong></a>
-        <a href="#predicted-winners"><span>Predicted winners</span><strong>{winners.length}</strong></a>
-        <a href="#winner-parlays"><span>Winner parlays</span><strong>{likelihoodParlays.length}</strong></a>
-        <a href="#value-bets"><span>Value bets</span><strong>{valuePlays.length + valueParlays.length}</strong></a>
-        <a href="#player-props"><span>Player props</span><strong>{playerPlays.length}</strong></a>
-        <a href="#player-parlays"><span>Player parlays</span><strong>{playerParlays.length}</strong></a>
-      </nav>
+      <NflTabs counts={{'paper-trading':paperDashboard.accounts.length,'value-bets':valuePlays.length+valueParlays.length,'player-props':playerPlays.length,'predicted-winners':winners.length,'winner-parlays':likelihoodParlays.length,'player-parlays':playerParlays.length,'full-slate':games.length}} />
 
-      <section className={styles.section} id="paper-trading">
+      <section className={styles.section} id="paper-trading" data-nfl-panel="true">
         <div className={styles.sectionHeading}>
-          <div><p className={styles.sectionKicker}>PAPER PERFORMANCE</p><h2>Six isolated $10K accounts</h2></div>
+          <div><p className={styles.sectionKicker}>PAPER PERFORMANCE</p><h2>Seven isolated $50K accounts</h2></div>
           <p>Only current PLAY cards enter the ledger. Straight plays risk up to $100, parlays risk up to $50, open exposure is capped at $300 per account, and new entries stop at $9,000 equity.</p>
         </div>
         <div className={`${styles.feedStatus} ${paperDashboard.configured ? styles.feedCurrent : styles.feedPaused}`}>
@@ -495,7 +489,7 @@ export default async function NFLPage() {
         </div> : <SetupEmpty>No settled paper positions yet. Weekly results will appear after final scores are verified.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="predicted-winners">
+      <section className={styles.section} id="predicted-winners" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>PREDICTED WINNERS</p><h2>Who the market expects to win</h2></div>
           <p>Ranked by de-vigged sportsbook probability. PLAY adds a current positive price edge. PREDICTION names the likely winner without recommending a bet. PASS marks a delayed market lean.</p>
@@ -503,7 +497,7 @@ export default async function NFLPage() {
         {winners.length ? <div className={styles.setupGrid}>{winners.map((setup) => <PredictionCard key={setup.id} setup={setup} />)}</div> : <SetupEmpty>No game has at least two sportsbook moneylines from which to calculate a market-implied winner.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="winner-parlays">
+      <section className={styles.section} id="winner-parlays" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>MOST LIKELY PARLAYS</p><h2>Winner combinations ranked by hit rate</h2></div>
           <p>Each ticket uses one sportsbook and different games. Likelihood and value are separate: PREDICTION can be probable without being a good price, while PASS uses delayed data for structure only.</p>
@@ -523,7 +517,7 @@ export default async function NFLPage() {
         </div> : <SetupEmpty>No same-book winner combination can be built from the current provider snapshot.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="value-bets">
+      <section className={styles.section} id="value-bets" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>PRICE + LINE EDGE</p><h2>Best bet setups</h2></div>
           <p>These are the setups that beat the cross-book benchmark now. They disappear when the quote gets stale, the price moves, or the line advantage closes.</p>
@@ -536,7 +530,7 @@ export default async function NFLPage() {
         {valueParlays.length ? <div className={styles.setupGrid}>{valueParlays.map((parlay) => <ParlayCard key={parlay.id} parlay={parlay} />)}</div> : <SetupEmpty>No winner parlay currently has both fresh prices and positive modeled value.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="player-props">
+      <section className={styles.section} id="player-props" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>PLAYER EDGE</p><h2>Best player props</h2></div>
           <p>Exact player, event, market, side and line matches only. A PLAY requires at least three other books, current prices, positive modeled value and no unresolved injury tag.</p>
@@ -545,7 +539,7 @@ export default async function NFLPage() {
         {playerPlays.length ? <div className={styles.setupGrid}>{playerPlays.slice(0, 8).map((setup) => <SetupCard key={setup.id} setup={setup} />)}</div> : <SetupEmpty>No player prop currently clears the exact-match, freshness, injury and price-edge gates.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="player-parlays">
+      <section className={styles.section} id="player-parlays" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>PLAYER PARLAYS</p><h2>Best cross-game player combinations</h2></div>
           <p>Up to eight ranked tickets per size. Two-, three- and four-player combinations use one sportsbook and different games. PLAY requires at least 2% modeled value. Same-game combinations stay excluded until correlation can be measured.</p>
@@ -563,7 +557,7 @@ export default async function NFLPage() {
         </div> : <SetupEmpty>No cross-game player parlay currently has positive exact-line value at one sportsbook. Reconsider when at least four fresh books price matching players and lines across two or more games.</SetupEmpty>}
       </section>
 
-      <section className={styles.section} id="full-slate">
+      <section className={styles.section} id="full-slate" data-nfl-panel="true" hidden>
         <div className={styles.sectionHeading}>
           <div><p className={styles.sectionKicker}>FULL SLATE</p><h2>Game-by-game board</h2></div>
           <p>Every game shows the model call, current best moneylines, consensus spread and total, or PASS when the required evidence is missing.</p>
