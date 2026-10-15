@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{createHash}=require('node:crypto');
 const {cacheDayCoverage,cacheDayComplete,parts}=require('../lib/session-quality.cjs');
 const {cacheIdentity,auditHistoricalCache}=require('../lib/historical-cache-audit.cjs');
-function dayCandles(date){const start=Date.parse(date);return Array.from({length:1440},(_,i)=>start+i*60000).filter(t=>{const m=parts(t).minute;return !(m>=1020&&m<1080)&&!(m>=975&&m<990);}).map(t=>({timestamp:new Date(t).toISOString(),open:100,high:101,low:99,close:100}));}
+function dayCandles(date){const start=Date.parse(date);return Array.from({length:1440},(_,i)=>start+i*60000).filter(t=>{const m=parts(t).minute;return !(m>=1020&&m<1080);}).map(t=>({timestamp:new Date(t).toISOString(),open:100,high:101,low:99,close:100}));}
 test('UTC cache coverage distinguishes absent minutes, unexpected halt candles, duplicates and invalid prices',()=>{
  const start=Date.parse('2026-10-06'),rows=dayCandles('2026-10-06');
  assert.equal(cacheDayComplete(start,rows),true);
@@ -31,11 +31,32 @@ test('cash coverage rejects invalid prices even when all 390 timestamps are pres
  const q=require('../lib/session-quality.cjs'),rows=dayCandles('2026-10-06');assert.equal(q.cashCoverage('2026-10-06',rows).complete,true);rows.find(c=>c.timestamp==='2026-10-06T14:00:00.000Z').high=0;const coverage=q.cashCoverage('2026-10-06',rows);assert.equal(coverage.actual,390);assert.equal(coverage.invalid,1);assert.equal(coverage.complete,false);
 });
 
-test('Gold cache requires its open minutes during the NQ-specific afternoon halt',()=>{
- const start=Date.parse('2026-10-06'),nq=dayCandles('2026-10-06');
- assert.equal(cacheDayCoverage(start,nq,'MGC.v.0').missing,15);
- const gold=[...nq,...Array.from({length:15},(_,i)=>({...nq[0],timestamp:new Date(Date.parse('2026-10-06T20:15:00Z')+i*60000).toISOString()}))];
- assert.equal(cacheDayComplete(start,gold,'MGC.v.0'),true);
- assert.equal(cacheDayComplete(start,gold,'NQ.v.0'),false);
- assert.equal(cacheDayCoverage(start,gold,'UNKNOWN').reviewed,false);
+test('NQ and Gold both require the former afternoon halt minutes in 2025/26',()=>{
+ const start=Date.parse('2026-10-06'),rows=dayCandles('2026-10-06');
+ const missing=rows.filter(c=>{const m=parts(c.timestamp).minute;return !(m>=975&&m<990);});
+ for(const symbol of ['NQ.v.0','MNQ.v.0','MGC.v.0','GC.v.0']){
+  assert.equal(cacheDayCoverage(start,missing,symbol).missing,15);
+  assert.equal(cacheDayComplete(start,rows,symbol),true);
+ }
+ assert.equal(cacheDayCoverage(start,rows,'UNKNOWN').reviewed,false);
+});
+test('market clock remains open through the obsolete NQ halt and closes for actual maintenance',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'clock-audit-'));
+ try{const {clock}=require('../lib/market-feed-status.cjs');
+  assert.equal(clock(new Date('2026-10-15T20:20:00Z'),root,'NQ.v.0').regularMarketClosed,false);
+  assert.equal(clock(new Date('2026-10-15T21:20:00Z'),root,'NQ.v.0').regularMarketClosed,true);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('1380-minute persisted NQ day is reused with zero API calls; obsolete 1365-minute day is a miss',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'cache-reuse-')),cacheDir=path.join(root,'history'),config={live:{ticker:'NQ.v.0'}},identity=cacheIdentity(config);
+ const dir=path.join(cacheDir,createHash('sha256').update(identity).digest('hex'));fs.mkdirSync(dir,{recursive:true});
+ const start=Date.parse('2026-10-01'),file=path.join(dir,'2026-10-01.json'),candles=dayCandles('2026-10-01');
+ const save=rows=>fs.writeFileSync(file,JSON.stringify({identity,dayStart:start,candles:rows,checksum:createHash('sha256').update(JSON.stringify(rows)).digest('hex')}));
+ const options={cacheDir,env:{},window:{start:'2026-10-01T00:00:00Z',end:'2026-10-02T00:00:00Z'},now:new Date('2026-10-15'),fetchImpl:()=>{throw new Error('Network must not be called');}};
+ try{
+  save(candles);assert.equal(candles.length,1380);
+  const result=await require('../lib/historical-data.cjs').fetchDatabentoHistoricalCandles(options);assert.equal(result.candles.length,1380);assert.deepEqual(result.candles,candles);
+  save(candles.filter(c=>{const m=parts(c.timestamp).minute;return !(m>=975&&m<990);}));
+  await assert.rejects(require('../lib/historical-data.cjs').fetchDatabentoHistoricalCandles(options),/missing from the local cache/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

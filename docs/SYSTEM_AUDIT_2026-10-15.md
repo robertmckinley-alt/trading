@@ -13,7 +13,7 @@ The separate crypto application has a confirmed Neon database quota outage (HTTP
 | Execution | New limit plans need post-entry evidence for entry-bar targets; session expiry releases pending plans | This optimistic accounting defect did not cause all losses |
 | Hard risk | VWAP/Gold must pass daily-loss and account-floor admission before fixed sizing | No claim that this bypass caused the audited week's losses |
 | DMC/fresh retest | Require current completed M5, actual preopen H1, one contract, valid data, and uninterrupted break-to-retest observations | More valid signals or profitable signals are not guaranteed |
-| Cache/monitoring | Gold uses its own schedule; invalid bars fail validation; missing cache days are visible; Gold outages cannot hide behind NQ closure | Missing historical files are not recovered by this patch |
+| Cache/monitoring | Obsolete post-2021 NQ afternoon halt removed; all open minutes required; invalid bars fail validation; missing cache days visible; per-symbol feed monitoring | Missing historical files are not recovered by this patch |
 | Research evidence | Forward-only results drive forward candidate gates; chronological splits are no longer called sealed holdouts | No automated promotion to funded trading |
 | Crypto | Database errors become explicit HTTP 503 instead of apparently empty books | Neon quota remains an external blocker |
 
@@ -42,7 +42,7 @@ Run the read-only historical cache diagnostic:
 
 `node scripts/diagnose-historical-cache.cjs 2026-10-01T00:00:00Z 2026-10-15T00:00:00Z`
 
-It reports missing, incomplete, corrupt, and unreviewed days. The rolling 4,800-candle live cache is separate. Resolving historical tail truncation requires this actual VPS evidence; no invented candles or silent shortening of the requested comparison window.
+It reports missing, incomplete, corrupt, and unreviewed days. The rolling 4,800-candle live cache is separate. VPS evidence identified complete October 1/2 cache days rejected by the obsolete afternoon halt, plus absent October 5–9 and 12–14 files. The schedule is corrected using CME regulatory filing 20-244, effective June 28, 2021. Absent files still need authorized historical backfill; no invented candles or silent shortening of the requested comparison window.
 
 Verify fresh watcher heartbeats, entry-research report timestamps/status, retained account histories, and host monitor output after activation. A healthy monitor is evidence of operation, not an edge. Research improvements require matched terminal outcomes across new signals, costs, drawdowns, missed winners, and multiple market conditions. Current experiments are exploratory and not sealed out-of-sample validation.
 

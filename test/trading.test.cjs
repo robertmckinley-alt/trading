@@ -239,7 +239,7 @@ test('daily historical cache reuses overlapping windows and fetches only missing
       const end = Date.parse(url.searchParams.get('end'));
       calls.push({ start, end, symbol: url.searchParams.get('symbols') });
       const rows = [];
-      for (let time = start; time < end; time += 60_000) { const p=require('../lib/session-quality.cjs').parts(time); const d=new Date(p.date+'T12:00Z').getUTCDay(); if(d===6||(d===0&&p.minute<1080)||(d===5&&p.minute>=1020)||(p.minute>=1020&&p.minute<1080)||(p.minute>=975&&p.minute<990))continue; rows.push({
+      for (let time = start; time < end; time += 60_000) { const p=require('../lib/session-quality.cjs').parts(time); const d=new Date(p.date+'T12:00Z').getUTCDay(); if(d===6||(d===0&&p.minute<1080)||(d===5&&p.minute>=1020)||(p.minute>=1020&&p.minute<1080))continue; rows.push({
         ts_event: new Date(time).toISOString(), open: 100, high: 102, low: 99, close: 101, volume: 10
       }); }
       return { ok: true, text: async () => JSON.stringify(rows) };
@@ -252,7 +252,7 @@ test('daily historical cache reuses overlapping windows and fetches only missing
     assert.deepEqual(second.candles, first.candles);
     assert.equal(calls.length, 1);
     const overlap = await fetchDatabentoHistoricalCandles({ ...options, window: { start: '2025-02-05T00:00:00.000Z', end: '2025-02-07T00:00:00.000Z' } });
-    assert.equal(overlap.candles.length, 2730);
+    assert.equal(overlap.candles.length, 2760);
     assert.equal(calls.length, 2);
     assert.equal(calls[1].start, Date.parse('2025-02-06T00:00:00Z'));
     assert.ok(events.some((event) => event.phase === 'cache-read' && event.cachedDays === 2));

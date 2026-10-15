@@ -9,11 +9,15 @@ test('ATR rejects missing active hours and unknown holiday schedules',()=>{
  assert.equal(atrEvidence([bar('2026-10-13T06:00Z'),bar('2026-10-13T08:00Z')],1).valid,false);
  assert.equal(atrEvidence([bar('2026-12-25T20:00Z'),bar('2026-12-25T23:00Z')],1).valid,false);
 });
-test('Partial halt hour requires every open minute exactly once',()=>{
+test('Former afternoon halt is open: missing those fifteen minutes fails ATR',()=>{
+ const {minutePolicy}=require('../lib/dmc-atr.cjs');
+ assert.equal(minutePolicy(Date.parse('2026-10-13T20:15Z')),'open');
  const bars=[bar('2026-10-13T19:00Z'),bar('2026-10-13T22:00Z')];
- const raw=Array.from({length:60},(_,i)=>({...bar(new Date(Date.parse('2026-10-13T20:00Z')+i*60000).toISOString()),i})).filter(c=>c.i<15||c.i>=30);
- const r=atrEvidence(bars,1,raw);assert.equal(r.valid,true);assert.equal(r.gaps[0].observedOpenMinutes,45);
- assert.equal(atrEvidence(bars,1,raw.slice(1)).valid,false);
+ const raw=Array.from({length:60},(_,i)=>({...bar(new Date(Date.parse('2026-10-13T20:00Z')+i*60000).toISOString()),i}));
+ assert.equal(atrEvidence(bars,1,raw).valid,true);
+ const missing=raw.filter(c=>c.i<15||c.i>=30);
+ const rejected=atrEvidence(bars,1,missing);
+ assert.equal(rejected.valid,false);assert.match(rejected.reason,/20:15:00/);
  assert.equal(atrEvidence(bars,1,[...raw,raw[0]]).valid,false);
 });
 test('Weekend closure bridges a DST transition in New York',()=>{
