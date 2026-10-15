@@ -34,3 +34,7 @@ Restart the status server after pulling so its snapshots expose per-strategy clo
 ## Verification
 
 Regression tests cover complete/missing/corrupt UTC cache days, malformed OHLC, duplicates, unreviewed holidays, corrected post-2021 equity/Gold hours, preservation of persisted files, and stale Gold/entry-research detection. Historical request availability, existing cache reuse, execution repair, and full backtest integration tests also passed. No market-data download or production mutation was performed for this audit.
+
+## Targeted repair after the October 15 VPS diagnostic
+
+Run `node scripts/repair-historical-cache.cjs 2026-10-01T00:00:00Z 2026-10-15T00:00:00Z` to retrieve only missing/invalid completed UTC days using the existing Databento account. This is a provider retrieval, unlike the read-only diagnostic. It reuses complete files, preserves original candles and all journals, limits each invocation to 31 completed days, records before/after coverage, and exits nonzero if anything remains unresolved. Unreviewed holiday schedules remain blocked. A partial provider response cannot be promoted to complete. The dated report is saved under `runtime/execution-audit/cache-repair-*.json`. No strategy thresholds or historical P&L are changed.
