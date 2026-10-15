@@ -410,6 +410,12 @@ export default async function NFLPage() {
     size,
     parlays: playerParlays.filter((parlay) => (parlay.legCount || parlay.legs?.length) === size),
   })).filter((group) => group.parlays.length);
+  const currentPaperPositions = paperDashboard.openPositions.filter((position) => (
+    Number.isFinite(Date.parse(position.kickoff || '')) && Date.parse(position.kickoff) > now
+  ));
+  const awaitingSettlementPositions = paperDashboard.openPositions.filter((position) => (
+    Number.isFinite(Date.parse(position.kickoff || '')) && Date.parse(position.kickoff) <= now
+  ));
   const publishedItems = [...winners, ...valuePlays, ...likelihoodParlays, ...valueParlays, ...playerPlays, ...playerParlays];
   const publishedById = new Map(publishedItems.map((setup) => [setup.id, setup]));
   const actionableCount = [...publishedById.values()].filter((setup) => setup.decision === 'PLAY').length;
@@ -492,9 +498,13 @@ export default async function NFLPage() {
           <div><p className={styles.sectionKicker}>FROZEN PAPER ENTRIES</p><h3>Current actionable positions</h3></div>
           <p>These prices and lines are frozen when an hourly PLAY first qualifies. Repeated refreshes do not create duplicate positions.</p>
         </div>
-        {paperDashboard.openPositions.length
-          ? <div className={styles.paperPositionGrid}>{paperDashboard.openPositions.map((position) => <PaperPosition key={position.id} position={position} />)}</div>
+        {currentPaperPositions.length
+          ? <div className={styles.paperPositionGrid}>{currentPaperPositions.map((position) => <PaperPosition key={position.id} position={position} />)}</div>
           : <SetupEmpty>{paperDashboard.configured ? 'No current PLAY has been captured yet. The next hourly monitor will record qualifying setups.' : 'Connect the database to begin the permanent paper ledger.'}</SetupEmpty>}
+        {awaitingSettlementPositions.length > 0 && <div className={styles.paperNotice}>
+          <strong>Awaiting verified settlement</strong>
+          <p>{awaitingSettlementPositions.length} completed-game position{awaitingSettlementPositions.length === 1 ? '' : 's'} remain in the database for final grading. They are not current plays and are omitted from this actionable list.</p>
+        </div>}
         <div className={styles.paperNotice}>
           <strong>Settlement boundary</strong>
           <p>Moneylines, spreads, totals and winner parlays settle from documented ParlayAPI final scores. Player props and player parlays settle from postgame <a href="https://github.com/nflverse/nflverse-data" target="_blank" rel="noreferrer">nflverse weekly player statistics</a> under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Exact player name, season and NFL week must resolve to one row; unmatched or ambiguous results stay AWAITING RESULT.</p>
