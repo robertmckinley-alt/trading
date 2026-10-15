@@ -120,6 +120,28 @@ test('parlays use one sportsbook and distinct games', () => {
   }
 });
 
+test('value parlays include positive-edge underdogs available at the same book', () => {
+  const valueGame = (id, home, away, kickoff) => {
+    const item = game(id, home, away, kickoff);
+    item.books = [
+      book('a', { homeOdds: -350, awayOdds: 400 }),
+      ...['b', 'c', 'd', 'e', 'f'].map((key) => book(key, { homeOdds: -300, awayOdds: 240 })),
+    ];
+    return item;
+  };
+  const result = buildNflSetups([
+    valueGame('value-1', 'Favorite One', 'Underdog One', '2026-10-11T20:00:00Z'),
+    valueGame('value-2', 'Favorite Two', 'Underdog Two', '2026-10-12T00:00:00Z'),
+  ], { now });
+
+  const ticket = result.parlays.find((parlay) => parlay.book === 'a'
+    && parlay.legs.map((leg) => leg.selection).sort().join('|') === 'Underdog One|Underdog Two');
+  assert.ok(ticket);
+  assert.equal(ticket.decision, 'PLAY');
+  assert.equal(ticket.legs.every((leg) => leg.expectedReturn >= 0.015), true);
+  assert.equal(ticket.expectedReturn > 0.015, true);
+});
+
 test('publishes a prediction without calling it a play when current comparison depth is limited', () => {
   const limited = game('limited', 'Home', 'Away');
   limited.books = limited.books.slice(1, 4);
