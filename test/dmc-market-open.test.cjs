@@ -126,3 +126,13 @@ test('paper collection observes the pre-open ATR band without vetoing the sessio
  c.live.paperCollection.enabled=false;
  assert.match(detectDmcMarketOpenSignal(dmcCandles(),c,{trades:[]}).reason,/pre-open hour failed/);
 });
+
+test('DMC detects the existing setup across maintenance and rejects a real overnight feed hole',()=>{
+ const candles=dmcCandles().filter(c=>!c.timestamp.startsWith('2026-02-02T22:'));
+ const result=detectDmcMarketOpenSignal(candles,config,{trades:[]});
+ assert.equal(result.found,true,result.reason);
+ assert.equal(result.metadata.hourlyAtrEvidence.valid,true);
+ assert.equal(result.metadata.hourlyAtrEvidence.gaps.length,1);
+ const missing=candles.filter(c=>!c.timestamp.startsWith('2026-02-03T07:'));
+ assert.match(detectDmcMarketOpenSignal(missing,config,{trades:[]}).reason,/ATR unavailable.*Missing or invalid trading minute/);
+});
