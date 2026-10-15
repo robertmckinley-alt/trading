@@ -51,7 +51,11 @@ def evaluate(data, now):
                 add(key + ':process', name + ': missing or duplicate watcher')
             if stale(w.get('lastHeartbeatAt'), 300):
                 add(key + ':heartbeat', name + ': heartbeat older than five minutes')
-            if not closed and stale((live.get('lastCandle') or {}).get('timestamp'), 300):
+            # Never let an NQ-specific halt hide an open Gold feed outage.
+            strategy_closed = w.get('marketClosed') is True
+            if 'marketClosed' not in w:
+                strategy_closed = closed and str(s.get('ticker', 'NQ')).startswith('NQ')
+            if not strategy_closed and stale((live.get('lastCandle') or {}).get('timestamp'), 300):
                 add(key + ':feed', name + ': stale market candles')
             if live.get('latestError') and not live.get('recoveredFromError'):
                 add(key + ':error', name + ': current runtime error (inspect watcher log)')
@@ -67,6 +71,9 @@ def evaluate(data, now):
         profit = f.get('profitExperiment', {})
         if profit.get('enabled') and (profit.get('status') in ('error', 'data-gap') or stale(profit.get('updatedAt'), 300) or (not closed and profit.get('status') == 'waiting-for-fresh-feed')):
             add('futures:profit-protection', 'Profit preservation paper worker has stale data, an error, or a missing heartbeat')
+        research = profit.get('entryResearch', {})
+        if research.get('enabled') and (research.get('status') in ('error', 'data-gap') or stale(research.get('updatedAt'), 300) or (not closed and research.get('status') == 'waiting-for-fresh-feed')):
+            add('futures:entry-research', 'Entry research paper worker has stale data, an error, or a missing heartbeat')
         risk = f.get('portfolioRisk', {})
         if risk.get('status') == 'state-error' or risk.get('issues'):
             add('futures:risk-state', 'Account state is unreadable or invalid; new futures entries are blocked')

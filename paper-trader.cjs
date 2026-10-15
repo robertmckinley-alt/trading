@@ -31,7 +31,7 @@ const {
   trackTradeLifecycle
 } = require('./lib/live-trader.cjs');
 const { getTelegramConfig, sendTelegramAlert } = require('./lib/telegram-alerts.cjs');
-const { applyAdaptiveRisk, evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
+const { evaluateAdaptiveBots } = require('./lib/adaptive-bots.cjs');
 const { applyChallengerExperiment, synchronizeChallengerAccount } = require('./lib/challenger-accounts.cjs');
 const { synchronizeStrategyLearning } = require('./lib/strategy-learning.cjs');
 const { reservePortfolioRisk } = require('./lib/portfolio-risk.cjs');
@@ -437,12 +437,12 @@ async function runWatchLive(config, state, strategyDefinition, intervalMs, state
 
     let plan;
     try {
-      if (!['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) && !adaptiveDecision.risk.allowed) {
+      if (!adaptiveDecision.risk.allowed) {
         state.live.researchCouncil = applyRiskDecision(state.live.researchCouncil, adaptiveDecision.risk);
         saveLiveState(statePath, state);
         throw new Error(`Adaptive risk guard: ${adaptiveDecision.risk.reason}`);
       }
-      const adaptiveConfig = ['nq-vwap-stretch-reversion', 'mgc-open-ema12'].includes(config.detectorStrategySlug) ? config : applyAdaptiveRisk(config, adaptiveDecision);
+      const adaptiveConfig = require('./lib/execution-policy.cjs').entryRiskConfig(config, adaptiveDecision);
       plan = buildPlanFromSignal(signal, adaptiveConfig, state);
       observation.bindForwardObservation(plan);
       plan.signalContext = { ...(plan.signalContext || {}), rulesVersion: state.live.scanAudit.rulesVersion,

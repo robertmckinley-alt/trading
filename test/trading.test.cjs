@@ -99,14 +99,14 @@ test('research lab uses an ordered 70/30 split and computes auditable metrics', 
 });
 
 test('research reviewer promotes positive holdout evidence and rejects failed holdouts', () => {
-  const candidate = reviewEvidence(researchTrades(60));
-  const failedHoldout = reviewEvidence(researchTrades(60, (index) => index < 42 ? 100 : -100));
+  const candidate = reviewEvidence(researchTrades(60).map(t => ({...t, evidenceType: 'forward-paper'})));
+  const failedHoldout = reviewEvidence(researchTrades(60, (index) => index < 42 ? 100 : -100).map(t => ({...t, evidenceType: 'forward-paper'})));
 
   assert.equal(candidate.verdict, 'PAPER CANDIDATE');
-  assert.equal(candidate.gates.lockedHoldout, true);
+  assert.equal(candidate.gates.chronologicalSample, true);
   assert.equal(candidate.holdout.trades, 18);
   assert.equal(failedHoldout.verdict, 'REJECT');
-  assert.ok(failedHoldout.redFlags.includes('Locked holdout expectancy is not positive.'));
+  assert.ok(failedHoldout.redFlags.includes('Chronological trailing sample expectancy is not positive.'));
 });
 
 test('research data audits catch malformed trades and candle gaps', () => {
@@ -141,7 +141,8 @@ test('research lab reads closed journal entries without altering live strategy s
   const before = structuredClone(snapshot);
   const lab = buildResearchLab(snapshot);
 
-  assert.equal(lab.summary.closedTrades, 2);
+  assert.equal(lab.summary.closedTrades, 0);
+  assert.equal(lab.summary.allJournalTrades, 2);
   assert.equal(lab.reports[0].review.execution, 'paper-only');
   assert.deepEqual(snapshot, before);
 });
@@ -1154,6 +1155,7 @@ test('volume POC bot requires both distance and high-volume exhaustion', () => {
 
 test('research scorecard only promotes a strategy after every paper gate passes', () => {
   const trades = Array.from({ length: 50 }, (_, index) => ({
+    evidenceType: 'forward-paper',
     date: `2026-08-${String((index % 25) + 1).padStart(2, '0')}`,
     realizedPnlUsd: index % 5 === 0 ? -100 : 100,
     actualRiskUsd: 100, maeUsd: -100,

@@ -42,7 +42,7 @@ test('four independent accounts share future availability and preserve parent in
   assert.deepEqual(state,prior);assert.deepEqual(s,original);
   assert.equal(Object.keys(next.accounts).length,4);
   assert.ok(Object.values(next.accounts).every(a=>a.balanceUsd===50000));
-  const control=next.accounts[`${s.parent}:control`],sizing=next.accounts[`${s.parent}:hmm-sizing`];
+  const control=next.accounts[`${s.parent}:control:bounded-fill-v1:${e.INTRABAR_VERSION}`],sizing=next.accounts[`${s.parent}:hmm-sizing:bounded-fill-v1:${e.INTRABAR_VERSION}`];
   assert.equal(control.open.plan.setup.signalAvailableAt,at(121));
   assert.equal(sizing.open.plan.setup.signalAvailableAt,at(121));
   assert.ok(sizing.open.plan.sizing.maxContracts<control.open.plan.sizing.maxContracts);
@@ -73,7 +73,7 @@ test('missing execution candles block outcomes and retain position until data is
   const next=e.advance(init(),[signal()],candles,now,frozen());
   const bars=[{timestamp:at(121),open:100,close:100,high:101,low:99,volume:100,instrumentId:1},{timestamp:at(123),open:100,close:94,high:101,low:94,volume:100,instrumentId:1}];
   const broken=e.advance(next,[],[...candles,...bars],start+124*60000,frozen());
-  const a=broken.accounts[`${signal().parent}:control`];assert.equal(a.status,'data-gap');assert.equal(a.trades.length,0);assert.ok(a.open);
+  const a=broken.accounts[`${signal().parent}:control:bounded-fill-v1:${e.INTRABAR_VERSION}`];assert.equal(a.status,'data-gap');assert.equal(a.trades.length,0);assert.ok(a.open);
   const repaired=e.advance(broken,[],[{...bars[0],timestamp:at(122)}],start+124*60000,frozen());
   assert.equal(repaired.accounts[a.id].trades.length,1);
 });

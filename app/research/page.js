@@ -46,7 +46,7 @@ export default async function ResearchPage() {
         <div>
           <p className="eyebrow">Independent evidence layer</p>
           <h1>Find weak strategies before they reach live capital.</h1>
-          <p>This lab audits the paper journal, locks the newest 30% of trades as holdout evidence, compares training and holdout performance, and keeps failed ideas visible. It cannot place trades or change execution rules.</p>
+          <p>This lab audits explicitly labelled forward paper trades, compares the earlier 70% with the latest 30%, and keeps failed ideas visible. This rolling split is descriptive, not a locked or untouched holdout. It cannot place trades or change execution rules.</p>
         </div>
         <aside className="research-safety">
           <strong>Paper-only boundary</strong>
@@ -56,14 +56,14 @@ export default async function ResearchPage() {
 
       <dl className="research-summary" aria-label="Research summary">
         <div><dt>Strategies tracked</dt><dd>{lab.summary.strategies}</dd></div>
-        <div><dt>Closed trades</dt><dd>{lab.summary.closedTrades}</dd></div>
+        <div><dt>Forward closed trades</dt><dd>{lab.summary.closedTrades}</dd></div>
         <div><dt>Paper candidates</dt><dd>{lab.summary.paperCandidates}</dd></div>
         <div><dt>Data errors</dt><dd>{lab.summary.qualityErrors}</dd></div>
       </dl>
 
       <section className="research-section" id="strategy-reviews" aria-labelledby="strategy-reviews-title">
         <div className="section-heading">
-          <div><span className="section-kicker">Backtest reviewer</span><h2 id="strategy-reviews-title">Training vs. locked holdout</h2></div>
+          <div><span className="section-kicker">Backtest reviewer</span><h2 id="strategy-reviews-title">Earlier vs. latest forward sample</h2></div>
           <p>70% oldest trades / 30% newest trades</p>
         </div>
         <div className="research-review-grid">
@@ -73,9 +73,10 @@ export default async function ResearchPage() {
                 <div><span>{report.family}</span><h3>{report.name}</h3></div>
                 <strong className={`research-verdict ${verdictClass(report.review.verdict)}`}>{report.review.verdict}</strong>
               </header>
+              <p>{report.review.total.trades} explicitly labelled forward trades. {report.review.excludedTrades} legacy or replay trades excluded from validation. All journal P&amp;L: {money(report.review.allJournal.netPnlUsd)}.</p>
               <div className="research-splits">
-                <MetricSet label="Training 70%" metrics={report.review.training} />
-                <MetricSet label="Holdout 30%" metrics={report.review.holdout} />
+                <MetricSet label="Earlier 70%" metrics={report.review.training} />
+                <MetricSet label="Latest 30%" metrics={report.review.holdout} />
               </div>
               <dl className="research-total-row">
                 <div><dt>Total P&amp;L</dt><dd>{money(report.review.total.netPnlUsd)}</dd></div>

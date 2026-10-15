@@ -34,6 +34,13 @@ function main(){
   const config=require('../lib/trader-core.cjs').normalizeConfig(require('../config.json'));
   const candles=loadCandles(root,config,report,{currentCache});save(path.join(dir,'published-before.json'),report);save(path.join(dir,'frozen-config.json'),config);
   const input={mode:currentCache?'current-cache-replay':'saved-report-reproduction',originalReportFingerprint:report.provenance.dataFingerprint,dataFingerprint:hash(candles),matchesOriginal:hash(candles)===report.provenance.dataFingerprint,candleCount:candles.length,first: candles[0].timestamp,last:candles.at(-1).timestamp,requestedWindow:report.window};
+  const coverage=require('../lib/historical-cache-audit.cjs').auditHistoricalCache(root,config,report.window);
+  save(path.join(dir,'cache-coverage.json'),coverage);
+  input.cacheCoverage={persistedUtcDaysComplete:coverage.persistedUtcDaysComplete,summary:coverage.summary,
+    missingDates:coverage.days.filter(d=>d.status==='missing').map(d=>d.date),
+    incompleteDates:coverage.days.filter(d=>d.status==='incomplete'||d.status==='corrupt').map(d=>d.date),
+    note:coverage.note};
+  if(!coverage.persistedUtcDaysComplete)console.error('CACHE COVERAGE INCOMPLETE: this replay does not establish results for every requested day. See cache-coverage.json.');
   save(path.join(dir,'frozen-candles.json'),candles);save(path.join(dir,'input.json'),input);
   console.log(JSON.stringify({...input,output:dir}));
   const baselineDir=path.join(dir,BASELINE);fs.mkdirSync(baselineDir,{recursive:true});

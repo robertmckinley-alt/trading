@@ -23,7 +23,12 @@ function tick() {
     if(!def)continue;
     const parent=read(runtimeFilesForStrategy(root,slug).statePath);
     // Read only. Existing strategies and their processes remain untouched.
-    if(parent?.live?.openPlan)experiment.capture(root,{...base,strategySlug:slug,strategyFamily:def.strategyFamily,accountType:'baseline'},parent.live.openPlan);
+    if(parent?.live?.openPlan) {
+      const detector=def.detectorStrategySlug||def.parentStrategySlug||slug;
+      const overrides=detector==='nq-vwap-stretch-reversion'?require('../lib/vwap-stretch.cjs').ACCOUNT
+        :detector==='nq-fresh-level-retest'?require('../lib/fresh-level-retest.cjs').ACCOUNT:{};
+      experiment.capture(root,{...base,...overrides,strategySlug:slug,strategyFamily:def.strategyFamily,accountType:'baseline'},parent.live.openPlan);
+    }
   }
   const queue=path.join(dir,'signals');
   const files=fs.existsSync(queue)?fs.readdirSync(queue).filter(n=>/^[a-f0-9]{64}\.json$/.test(n)):[];
