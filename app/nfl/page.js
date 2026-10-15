@@ -15,7 +15,11 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-const getPublicBoard = unstable_cache(async () => {
+const PUBLIC_BOARD_CACHE_SECONDS = 900;
+const MAX_CURRENT_BOARD_AGE_SECONDS = PUBLIC_BOARD_CACHE_SECONDS + 300;
+
+const getPublicBoard = unstable_cache(async (cacheBucket) => {
+  if (!Number.isInteger(cacheBucket)) throw new Error('NFL public-board cache bucket is required');
   let result = await fetchNflMonitor({
     includeGameMarkets: true,
     includePredictionMarkets: process.env.NFL_PREDICTION_MARKETS_ENABLED === 'true',
@@ -63,7 +67,14 @@ const getPublicBoard = unstable_cache(async () => {
     remainingCredits: result.remainingCredits || null,
     requestCost: result.requestCost || null,
   };
-}, ['nfl-public-board-v11'], { revalidate: 900, tags: ['nfl-public-board'] });
+}, ['nfl-public-board-v12'], { revalidate: PUBLIC_BOARD_CACHE_SECONDS, tags: ['nfl-public-board'] });
+
+function currentBoardClock(now = Date.now()) {
+  return {
+    now,
+    cacheBucket: Math.floor(now / (PUBLIC_BOARD_CACHE_SECONDS * 1000)),
+  };
+}
 
 const marketNames = {
   player_pass_yds: 'Passing yards',
@@ -315,9 +326,10 @@ function EmptyBoard({ configured, status }) {
 }
 
 export default async function NFLPage() {
+  const boardClock = currentBoardClock();
   let board;
   try {
-    board = await getPublicBoard();
+    board = await getPublicBoard(boardClock.cacheBucket);
   } catch (error) {
     board = {
       ok: false,
@@ -357,7 +369,11 @@ export default async function NFLPage() {
 
   const allGames = board.gameMarkets?.games || [];
   const checkedAtMillis = Date.parse(board.checkedAt || '');
-  const now = Number.isFinite(checkedAtMillis) ? checkedAtMillis : 0;
+  const now = boardClock.now;
+  const boardAgeSeconds = Number.isFinite(checkedAtMillis)
+    ? Math.max(0, (now - checkedAtMillis) / 1000)
+    : Infinity;
+  const boardIsFresh = boardAgeSeconds <= MAX_CURRENT_BOARD_AGE_SECONDS;
   const upcomingGames = allGames
     .filter((game) => game.state === 'pregame' && Number.isFinite(Date.parse(game.kickoff)) && Date.parse(game.kickoff) > now)
     .sort((a, b) => Date.parse(a.kickoff || 0) - Date.parse(b.kickoff || 0));
@@ -367,14 +383,17 @@ export default async function NFLPage() {
     board.gameMarkets?.ok
     && board.gameMarkets?.staleQuotes === 0
     && board.gameMarkets?.unknownAgeQuotes === 0
+    && boardIsFresh
   );
   const dataStatusLabel = dataCurrent
     ? 'Current API snapshot'
-    : board.gameMarkets?.ok ? 'Partial — current cards only' : 'Unavailable';
+    : board.gameMarkets?.ok && !boardIsFresh ? 'Delayed snapshot — no plays' : board.gameMarkets?.ok ? 'Partial — current cards only' : 'Unavailable';
   const predictionCount = board.predictionMarkets?.marketsCount || board.predictionMarkets?.markets?.length || 0;
   const sourceCount = board.gameMarkets?.bookmakers?.length || 0;
   const propMarkets = Object.entries(board.coverage?.byMarket || {});
-  const liveSetup = (setup) => Number.isFinite(Date.parse(setup.kickoff || '')) ? Date.parse(setup.kickoff) > now : true;
+  const liveSetup = (setup) => boardIsFresh
+    && Number.isFinite(Date.parse(setup.kickoff || ''))
+    && Date.parse(setup.kickoff) > now;
   const setups = board.setups || { winners: [], moneylines: [], spreads: [], totals: [], parlays: [], likelihoodParlays: [], actionableSetups: 0, publishedSetups: 0 };
   const winners = (setups.winners || []).filter(liveSetup);
   const winnerMap = new Map(winners.map((winner) => [winner.eventId, winner]));
