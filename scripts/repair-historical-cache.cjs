@@ -15,8 +15,9 @@ async function repair(root,config,start,end,options={}){
   const at=Date.parse(day.date);
   if(!cacheDayCoverage(at,[],config.live?.ticker||'NQ.v.0').reviewed){failures.push({date:day.date,reason:'Unreviewed calendar; requires explicit session review'});continue;}
   attempted.push(day.date);
+  options.onProgress?.({phase:'repair-day',date:day.date});
   try{
-   await fetchDatabentoHistoricalCandles({window:{start:new Date(at).toISOString(),end:new Date(at+86400000).toISOString()},now,cacheDir,env:options.env||process.env,fetchImpl:options.fetchImpl,dataset:config.live?.dataset||'GLBX.MDP3',symbol:config.live?.ticker||'NQ.v.0'});
+   await fetchDatabentoHistoricalCandles({window:{start:new Date(at).toISOString(),end:new Date(at+86400000).toISOString()},now,cacheDir,env:options.env||process.env,fetchImpl:options.fetchImpl,dataset:config.live?.dataset||'GLBX.MDP3',symbol:config.live?.ticker||'NQ.v.0',requestTimeoutMs:45000,retrySleep:options.retrySleep,onProgress:p=>options.onProgress?.({...p,date:day.date})});
   }catch(error){failures.push({date:day.date,reason:String(error.message).replace(/(Bearer\s+|Basic\s+)\S+/gi,'$1[redacted]')});}
  }
  const after=auditHistoricalCache(root,config,window,{cacheDir});
@@ -27,7 +28,7 @@ async function main(){
  const [start,end,...extra]=process.argv.slice(2);
  if(!start||!end||extra.length)throw Error('Usage: node scripts/repair-historical-cache.cjs START_UTC END_UTC_EXCLUSIVE');
  const config=JSON.parse(fs.readFileSync(path.join(root,'config.json'),'utf8'));
- const result=await repair(root,config,start,end);
+ const result=await repair(root,config,start,end,{onProgress:p=>console.log(JSON.stringify(p))});
  const dir=path.join(root,'runtime/execution-audit');fs.mkdirSync(dir,{recursive:true});
  const report=path.join(dir,`cache-repair-${Date.now()}.json`);fs.writeFileSync(report,JSON.stringify(result,null,2));
  console.log(JSON.stringify({...result,report},null,2));if(!result.complete)process.exitCode=2;

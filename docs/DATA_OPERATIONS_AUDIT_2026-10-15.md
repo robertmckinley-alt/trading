@@ -38,3 +38,7 @@ Regression tests cover complete/missing/corrupt UTC cache days, malformed OHLC, 
 ## Targeted repair after the October 15 VPS diagnostic
 
 Run `node scripts/repair-historical-cache.cjs 2026-10-01T00:00:00Z 2026-10-15T00:00:00Z` to retrieve only missing/invalid completed UTC days using the existing Databento account. This is a provider retrieval, unlike the read-only diagnostic. It reuses complete files, preserves original candles and all journals, limits each invocation to 31 completed days, records before/after coverage, and exits nonzero if anything remains unresolved. Unreviewed holiday schedules remain blocked. A partial provider response cannot be promoted to complete. The dated report is saved under `runtime/execution-audit/cache-repair-*.json`. No strategy thresholds or historical P&L are changed.
+
+## Provider interruption recovery
+
+The first targeted run restored October 6 but seven days returned HTTP 503/504 or an interrupted response. Historical reads now make at most three attempts for transient server/network failures, with 2s/4s backoff and bounded Retry-After handling. Authentication, entitlement and ordinary validation failures are not blindly retried. A dropped body is discarded and the full read retried; only complete validated days are cached. The repair command uses a 45-second per-request timeout and prints day/retry progress. Re-running reuses already complete days. Persistent provider failures still leave an explicit incomplete report; no availability or completion is fabricated.
