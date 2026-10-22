@@ -33,6 +33,7 @@
     "baseUrl": "https://api.polygon.io",
     "lookbackBars": 2880,
     "paperCollection": { "enabled": true },
+    "consolidationExpansion": { "enabled": false },
     "pollIntervalMs": 60000,
     "riskRewardFallback": 1.5,
     "entryBufferTicks": 0,
