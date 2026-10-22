@@ -143,6 +143,7 @@ if [[ "$provider" == "databento-live" ]]; then
   start_live_feed
 fi
 
+start_watcher "RUNNER" "runner" "$RUNTIME_DIR/runner-watch.pid" "$RUNTIME_DIR/runner-watch.log" "$ROOT_DIR/state-runner.json" "$INTERVAL_MS"
 start_watcher "9AM" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json" "$INTERVAL_MS"
 start_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json" "$HOURLY_INTERVAL_MS"
 start_watcher "NQ opening range" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid" "$RUNTIME_DIR/nq-opening-range-breakout-watch.log" "$ROOT_DIR/state-nq-opening-range-breakout.json" "$INTERVAL_MS"
