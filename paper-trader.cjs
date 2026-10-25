@@ -568,7 +568,7 @@ async function main() {
   const strategyDefinition = requireStrategyDefinition(strategySlug, BASE);
   const statePath = statePathForStrategy(strategySlug);
   const detectorStrategySlug = strategyDefinition.detectorStrategySlug || strategyDefinition.parentStrategySlug || strategySlug;
-  const baseConfig = loadConfig();
+  const baseConfig = require('./lib/strategy-limits.cjs').applyStrategyLimits(loadConfig(), strategySlug);
   const config = {
     ...baseConfig,
     ...(detectorStrategySlug === 'nq-fresh-level-retest' ? {...require('./lib/fresh-level-retest.cjs').ACCOUNT,live:{...baseConfig.live,lookbackBars:6000}} : {}),
