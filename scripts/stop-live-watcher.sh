@@ -50,6 +50,10 @@ stop_watcher() {
   rm -f "$pid_file"
 }
 
+stop_watcher "RUNNER" "runner" "$RUNTIME_DIR/runner-watch.pid"
+stop_watcher "Fresh Level Retest" "nq-fresh-level-retest" "$RUNTIME_DIR/nq-fresh-level-retest-watch.pid"
+stop_watcher "VWAP Stretch Reversion" "nq-vwap-stretch-reversion" "$RUNTIME_DIR/nq-vwap-stretch-reversion-watch.pid"
+stop_watcher "Gold Open EMA12" "mgc-open-ema12" "$RUNTIME_DIR/mgc-open-ema12-watch.pid"
 stop_watcher "9AM" "live-9am-sweep" "$PID_FILE"
 stop_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE"
 stop_watcher "NQ opening range" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid"
@@ -78,6 +82,10 @@ const fs = require('fs');
 const path = require('path');
 for (const filename of [
   'state.json',
+  'state-runner.json',
+  'state-nq-fresh-level-retest.json',
+  'state-nq-vwap-stretch-reversion.json',
+  'state-mgc-open-ema12.json',
   'state-hourly-sweep-ifvg-bos.json',
   'state-nq-opening-range-breakout.json',
   'state-ema-20-60-momentum.json',

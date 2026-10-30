@@ -130,6 +130,10 @@ EOF
   fi
 }
 
+print_watcher "RUNNER" "runner" "$RUNTIME_DIR/runner-watch.pid" "$RUNTIME_DIR/runner-watch.log" "$ROOT_DIR/state-runner.json"
+print_watcher "Fresh Level Retest" "nq-fresh-level-retest" "$RUNTIME_DIR/nq-fresh-level-retest-watch.pid" "$RUNTIME_DIR/nq-fresh-level-retest-watch.log" "$ROOT_DIR/state-nq-fresh-level-retest.json"
+print_watcher "VWAP Stretch Reversion" "nq-vwap-stretch-reversion" "$RUNTIME_DIR/nq-vwap-stretch-reversion-watch.pid" "$RUNTIME_DIR/nq-vwap-stretch-reversion-watch.log" "$ROOT_DIR/state-nq-vwap-stretch-reversion.json"
+print_watcher "Gold Open EMA12" "mgc-open-ema12" "$RUNTIME_DIR/mgc-open-ema12-watch.pid" "$RUNTIME_DIR/mgc-open-ema12-watch.log" "$ROOT_DIR/state-mgc-open-ema12.json"
 print_watcher "9AM Asia/London Sweep" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json"
 print_watcher "1H Sweep + iFVG + 1M BOS" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json"
 print_watcher "NQ Opening Range Breakout" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid" "$RUNTIME_DIR/nq-opening-range-breakout-watch.log" "$ROOT_DIR/state-nq-opening-range-breakout.json"

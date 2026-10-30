@@ -144,6 +144,9 @@ if [[ "$provider" == "databento-live" ]]; then
 fi
 
 start_watcher "RUNNER" "runner" "$RUNTIME_DIR/runner-watch.pid" "$RUNTIME_DIR/runner-watch.log" "$ROOT_DIR/state-runner.json" "$INTERVAL_MS"
+start_watcher "Fresh Level Retest" "nq-fresh-level-retest" "$RUNTIME_DIR/nq-fresh-level-retest-watch.pid" "$RUNTIME_DIR/nq-fresh-level-retest-watch.log" "$ROOT_DIR/state-nq-fresh-level-retest.json" "$INTERVAL_MS"
+start_watcher "VWAP Stretch Reversion" "nq-vwap-stretch-reversion" "$RUNTIME_DIR/nq-vwap-stretch-reversion-watch.pid" "$RUNTIME_DIR/nq-vwap-stretch-reversion-watch.log" "$ROOT_DIR/state-nq-vwap-stretch-reversion.json" "$INTERVAL_MS"
+start_watcher "Gold Open EMA12" "mgc-open-ema12" "$RUNTIME_DIR/mgc-open-ema12-watch.pid" "$RUNTIME_DIR/mgc-open-ema12-watch.log" "$ROOT_DIR/state-mgc-open-ema12.json" "$INTERVAL_MS"
 start_watcher "9AM" "live-9am-sweep" "$PID_FILE" "$LOG_FILE" "$ROOT_DIR/state.json" "$INTERVAL_MS"
 start_watcher "hourly" "hourly-sweep-ifvg-bos" "$HOURLY_PID_FILE" "$HOURLY_LOG_FILE" "$ROOT_DIR/state-hourly-sweep-ifvg-bos.json" "$HOURLY_INTERVAL_MS"
 start_watcher "NQ opening range" "nq-opening-range-breakout" "$RUNTIME_DIR/nq-opening-range-breakout-watch.pid" "$RUNTIME_DIR/nq-opening-range-breakout-watch.log" "$ROOT_DIR/state-nq-opening-range-breakout.json" "$INTERVAL_MS"
