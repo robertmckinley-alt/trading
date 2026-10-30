@@ -832,11 +832,12 @@ test('challenger experiment rejects only its frozen underperforming segment', ()
   assert.equal(allowed.found, true);
 });
 
-test('strategy registry gives all fourteen bots isolated runtime files and risk families', () => {
-  assert.equal(STRATEGIES.length, 14);
-  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 14);
+test('strategy registry gives all fifteen bots isolated runtime files and risk families', () => {
+  assert.equal(STRATEGIES.length, 15);
+  assert.equal(new Set(STRATEGIES.map((strategy) => strategy.slug)).size, 15);
   const paths = STRATEGIES.map((strategy) => runtimeFilesForStrategy(root, strategy.slug).statePath);
-  assert.equal(new Set(paths).size, 14);
+  assert.equal(new Set(paths).size, 15);
+  assert.ok(paths.some((filePath) => filePath.endsWith('state-runner.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-opening-range-breakout.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-opening-range-retest.json')));
   assert.ok(paths.some((filePath) => filePath.endsWith('state-nq-15m-orb-close-confirmation.json')));
@@ -845,7 +846,7 @@ test('strategy registry gives all fourteen bots isolated runtime files and risk 
   assert.ok(STRATEGIES.every((strategy) => strategy.strategyFamily));
   assert.equal(ORB_RESEARCH_VARIANTS.length, 4);
   assert.equal(STRATEGY_RESEARCH_VARIANTS.length, 6);
-  assert.equal(BACKTEST_STRATEGIES.length, 33);
+  assert.equal(BACKTEST_STRATEGIES.length, 34);
   assert.ok(ORB_RESEARCH_VARIANTS.every((strategy) => strategy.source.status === 'Backtest-only candidate'));
   assert.throws(() => runtimeFilesForStrategy(root, 'not-a-strategy'), /Unknown strategy/);
 });
@@ -1180,3 +1181,120 @@ test('twenty-trade profit factor below one moves a strategy to the watchlist wit
   assert.equal(evaluation.includedInFocusTotals, false);
   assert.equal(evaluation.trades, 20);
 });
+
+test('RUNNER and HTF session sweep setups pass core validation and build trade plans', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const runner = require('../lib/runner.cjs');
+  const start = Date.parse('2026-10-23T12:30:00.000Z');
+  const candles = Array.from({ length: 90 }, (_, index) => {
+    const inCompression = index >= 74 && index < 89;
+    const isBreakout = index === 89;
+    const baseClose = 20_000 + (index * 0.2);
+    if (isBreakout) {
+      return {
+        timestamp: new Date(start + (index * 60_000)).toISOString(),
+        open: 20_018,
+        high: 20_023,
+        low: 20_016.5,
+        close: 20_022.5,
+        volume: 200
+      };
+    }
+    const halfRange = inCompression ? 2.5 : 4;
+    return {
+      timestamp: new Date(start + (index * 60_000)).toISOString(),
+      open: baseClose - 0.1,
+      high: baseClose + halfRange,
+      low: baseClose - halfRange,
+      close: baseClose,
+      volume: 100
+    };
+  });
+
+  const signal = runner.detect(candles, { ...config, allowHistoricalRunner: true }, { trades: [] });
+  assert.equal(signal.found, true, signal.reason);
+  assert.equal(signal.setup.setup.entryModel, 'runner-breakout-v1');
+  assert.equal(signal.setup.setup.reaction, 'bullish');
+  assert.equal(signal.sweepTimestamp, signal.triggerTimestamp);
+  assert.equal(signal.metadata.consolidationExpansion.qualifies, true);
+  const validation = core.validateSetup(core.normalizeSetup(signal.setup, config), config);
+  assert.equal(validation.valid, true, validation.errors.join('\n'));
+  const plan = core.buildTradePlan(core.normalizeSetup(signal.setup, config), config, core.createEmptyState(config));
+  assert.ok(plan.sizing.maxContracts >= 1);
+
+  const records = Array.from({ length: 961 }, (_, minute) => ({ minute }));
+  const runnerCheckpoints = checkpointsForDay('runner', records).map((r) => r.minute);
+  assert.equal(runnerCheckpoints[0], 585);
+  assert.equal(runnerCheckpoints.at(-1), 915);
+  const { eligible } = require('../lib/watcher-observation.cjs');
+  assert.equal(eligible({ strategySlug: 'runner' }, '2026-10-23T13:45:00.000Z'), true);
+  assert.equal(eligible({ strategySlug: 'runner' }, '2026-10-23T13:35:00.000Z'), false);
+});
+
+test('detectSignalFromCandles attaches consolidationExpansion metadata to breakout and momentum bots', () => {
+  const config = core.normalizeConfig(core.loadJson(path.join(root, 'config.json')));
+  const start = Date.parse('2026-09-01T22:45:00.000Z');
+  const candles = [];
+  for (let bar = 0; bar < 62; bar += 1) {
+    const close = bar === 61 ? 20_010 : 20_000;
+    for (let minute = 0; minute < 15; minute += 1) {
+      candles.push({
+        timestamp: new Date(start + (((bar * 15) + minute) * 60_000)).toISOString(),
+        open: close,
+        high: close + 1,
+        low: close - 1,
+        close,
+        volume: 100
+      });
+    }
+  }
+  const emaSignal = detectSignalFromCandles(candles, { ...config, strategySlug: 'ema-20-60-momentum' }, { trades: [] });
+  assert.equal(emaSignal.found, true);
+  assert.equal(emaSignal.metadata.consolidationExpansion.available, true);
+});
+
+test('challenger catalog supports consolidation-expansion, amd-alignment, and profit-lock-v1 experiments', () => {
+  const warm = Array.from({ length: 30 }, (_, i) => ({
+    id: `warm-${i}`,
+    realizedPnlUsd: 0,
+    evidenceType: 'forward-paper'
+  }));
+  const givebackTrades = Array.from({ length: 20 }, (_, index) => ({
+    id: `gb-${index + 1}`,
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    side: 'long',
+    evidenceType: 'forward-paper',
+    actualRiskUsd: 200,
+    mfeUsd: index < 10 ? 250 : 100,
+    realizedPnlUsd: index < 10 ? -200 : 100,
+    rMultiple: index < 10 ? -1 : 0.5
+  }));
+  const learned = synchronizeStrategyLearning([...warm, ...givebackTrades], { strategySlug: 'live-9am-sweep' });
+  assert.equal(learned.experimentRecommendation.catalogId, 'enable-profit-protection-v1');
+  assert.equal(learned.experimentRecommendation.dimension, 'profit-protection');
+  assert.equal(learned.experimentRecommendation.blockedValue, 'profit-lock-v1');
+
+  const applied = applyChallengerExperiment(
+    { found: true, setup: { side: 'long' }, metadata: {} },
+    { challengerExperiment: learned.experimentRecommendation },
+    {}
+  );
+  assert.equal(applied.found, true);
+  assert.equal(applied.setup.profitProtection, 'profit-lock-v1');
+  assert.equal(applied.metadata.challengerExperiment.decision, 'applied');
+
+  const rejectedCe = applyChallengerExperiment(
+    { found: true, setup: { side: 'long' }, metadata: { consolidationExpansion: { available: true, qualifies: false } } },
+    { challengerExperiment: { catalogId: 'exclude-underperforming-segment-v1', dimension: 'consolidation-expansion', blockedValue: 'unqualified' } },
+    {}
+  );
+  assert.equal(rejectedCe.found, false);
+
+  const rejectedAmd = applyChallengerExperiment(
+    { found: true, setup: { side: 'long' }, metadata: { amdContext: { classification: 'asia-high-swept', supportsLong: false, supportsShort: true } } },
+    { challengerExperiment: { catalogId: 'exclude-underperforming-segment-v1', dimension: 'amd-alignment', blockedValue: 'opposed' } },
+    {}
+  );
+  assert.equal(rejectedAmd.found, false);
+});
+

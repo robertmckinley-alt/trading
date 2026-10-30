@@ -19,7 +19,7 @@ test('lock ownership distinguishes zombies, reused PIDs, real writers and unread
     writeStat('Z');
     assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, false);
     writeStat('S');
-    fs.symlinkSync(ROOT, path.join(dir, 'cwd'));
+    fs.symlinkSync(ROOT, path.join(dir, 'cwd'), process.platform === 'win32' ? 'junction' : 'dir');
     fs.writeFileSync(path.join(dir, 'cmdline'), args.join('\0'));
     assert.equal(inspectLockOwner(owner, ROOT, slug, proc).active, true);
     assert.equal(inspectLockOwner({ pid: 123 }, ROOT, slug, proc).active, true);

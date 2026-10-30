@@ -7,8 +7,10 @@
   "maxStrategyFamilyOpenRiskUsd": {
     "liquidity-reversal": 750,
     "cash-breakout": 750,
-    "trend-momentum": 500,
-    "value-reversion": 500
+    "trend-momentum": 1000,
+    "value-reversion": 500,
+    "vwap-reversion": 500,
+    "gold-open-ema": 250
   },
   "adaptiveRiskFloorUsd": 250,
   "maxDailyLossUsd": 750,
