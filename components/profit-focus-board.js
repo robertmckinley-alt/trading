@@ -64,6 +64,25 @@ function Gates({ gates = [] }) {
   </div>;
 }
 
+function CountedTrades({ trades = [], blocked, label = 'Counted closed trades', showStrategy = true }) {
+  return <section className={styles.tradeAudit} aria-label={label}>
+    <div className={styles.auditHeading}><h3>{label}</h3><p>Only admitted new closed trades before each strategy’s trial ended. Open positions and historical selection trades are excluded.</p></div>
+    {blocked && <p className={styles.auditWarning}>Source verification is unavailable. Listed identities are diagnostic context; financial values and current trial counts are unavailable.</p>}
+    {trades.length ? <div className={styles.tableScroll} role="region" aria-label={`${label}; scroll horizontally for execution details`} tabIndex={0}>
+      <table className={styles.auditTable}>
+        <caption>Recorded net P&amp;L already includes the original modeled commissions and slippage. Times are New York time.</caption>
+        <thead><tr>{showStrategy && <th scope="col">Selected strategy</th>}<th scope="col">Trade ID</th><th scope="col">Entry / close</th><th scope="col">Side / contracts</th><th scope="col">Entry / exit price</th><th scope="col">Actual risk</th><th scope="col">Realized net P&amp;L</th><th scope="col">Net R</th></tr></thead>
+        <tbody>{trades.map(trade => <tr key={`${trade.slug}:${trade.id}`}>
+          {showStrategy && <th scope="row">{trade.name || trade.slug}</th>}<td className={styles.tradeId}>{trade.id}</td>
+          <td><span>{when(trade.filledAt)}</span><small>{when(trade.exitedAt)}</small></td><td>{trade.side || 'Unknown'}<small>{number(blocked ? null : trade.contracts)} contracts</small></td>
+          <td>{number(blocked ? null : trade.entry)}<small>{number(blocked ? null : trade.exit)}</small></td><td>{money(blocked ? null : trade.actualRiskUsd)}</td>
+          <td className={tone(blocked ? null : trade.netPnlUsd)}>{money(blocked ? null : trade.netPnlUsd)}</td><td>{risk(blocked ? null : trade.rMultiple)}</td>
+        </tr>)}</tbody>
+      </table>
+    </div> : <p className={styles.emptyForward}>{blocked ? 'A verified counted-trade ledger is unavailable until the live source recovers.' : 'No new closed trades have entered this trial yet.'}</p>}
+  </section>;
+}
+
 function StrategyAnalysis({ strategy, index, blocked }) {
   const history = strategy.history || {};
   const trial = strategy.prospective || {};
@@ -95,15 +114,16 @@ function StrategyAnalysis({ strategy, index, blocked }) {
       <section className={styles.forwardDetail} aria-labelledby={`forward-${strategy.slug}`}>
         <div className={styles.analysisIntro}><div><span className={styles.eyebrow}>Prospective trial · new trades only</span><h3 id={`forward-${strategy.slug}`}>Evidence after the frozen start</h3></div><Status status={trial.status} blocked={blocked} /></div>
         {trial.reason && <p className={styles.trialReason}>{trial.reason}</p>}
-        {finite(forward.trades) && forward.trades === 0 && <p className={styles.emptyForward}>No admitted closed trades yet. Historical winners do not count toward this trial.</p>}
+        {!blocked && finite(forward.trades) && forward.trades === 0 && <p className={styles.emptyForward}>No admitted closed trades yet. Historical winners do not count toward this trial.</p>}
         <div className={styles.forwardProgress}>
-          <span><strong>{number(forward.trades)}</strong> admitted trades</span><span><strong>{number(forward.tradingDays)}</strong> traded New York days</span>
+          <span><strong>{number(blocked ? null : forward.trades)}</strong> admitted trades</span><span><strong>{number(blocked ? null : forward.tradingDays)}</strong> traded New York days</span>
           {trial.terminalAt && <span>Trial ended <strong>{when(trial.terminalAt)}</strong></span>}
         </div>
-        <Metrics metrics={forward} prospective />
-        <div className={styles.validationGrid}><Gates gates={trial.gates} /><div className={styles.riskEvidence}>
+        <Metrics metrics={blocked ? {} : forward} prospective />
+        <CountedTrades trades={trial.trades} blocked={blocked} label={`${strategy.name}: counted closed trades`} showStrategy={false} />
+        <div className={styles.validationGrid}><Gates gates={blocked ? (trial.gates || []).map(gate => ({ ...gate, current: null, passed: false })) : trial.gates} /><div className={styles.riskEvidence}>
           <h4>Evidence & costs</h4>
-          <dl><div><dt>Approximate daily lower bound</dt><dd>{risk(forward.dailyLowerBoundR)}</dd></div><div><dt>Net result after cost stress</dt><dd>{risk(forward.stressedNetR)}</dd></div><div><dt>Trades missing recorded risk</dt><dd>{number(forward.missingRisk)}</dd></div><div><dt>Later trades excluded after stop</dt><dd>{number(trial.ignoredAfterStop)}</dd></div></dl>
+          <dl><div><dt>Approximate daily lower bound</dt><dd>{risk(blocked ? null : forward.dailyLowerBoundR)}</dd></div><div><dt>Net result after cost stress</dt><dd>{risk(blocked ? null : forward.stressedNetR)}</dd></div><div><dt>Trades missing recorded risk</dt><dd>{number(forward.missingRisk)}</dd></div><div><dt>Later trades excluded after stop</dt><dd>{number(trial.ignoredAfterStop)}</dd></div></dl>
           <p>The daily bound uses an approximate one-sided 99% calculation on daily R totals. It assumes independent daily blocks; it is not a calibrated probability of future profit.</p>
           {!!trial.excluded?.length && <details className={styles.exclusions}><summary>Why trades did not enter this trial</summary><ul>{trial.excluded.map((item, itemIndex) => <li key={itemIndex}><span>{item.reason}</span><strong>{number(item.count)}</strong></li>)}</ul></details>}
         </div></div>
@@ -144,6 +164,7 @@ export default function ProfitFocusBoard({ initialReport }) {
   const summary = report?.summary || {};
   const policy = report?.policy || {};
   const blocked = !report?.dataStatus?.ok || Boolean(error);
+  const countedTrades = strategies.flatMap(strategy => strategy.prospective?.trades || []).sort((a, b) => Date.parse(a.exitedAt) - Date.parse(b.exitedAt) || String(a.id).localeCompare(String(b.id)));
   const contributionTotal = strategies.reduce((sum, strategy) => sum + (finite(strategy.selectionPnlUsd) && strategy.selectionPnlUsd > 0 ? strategy.selectionPnlUsd : 0), 0);
   return <div className={styles.focus}>
     <header className={styles.heading}>
@@ -152,6 +173,17 @@ export default function ProfitFocusBoard({ initialReport }) {
     </header>
     <div className={styles.freshness} aria-live="polite"><span className={blocked ? styles.healthBlocked : styles.healthReady}><i aria-hidden="true" />{blocked ? 'Forward validation blocked' : 'Live source verified'}</span><span>Snapshot {when(report?.generatedAt)}</span><span>Source: {report?.source || 'Unavailable'} · refreshes every 30s</span></div>
     {blocked && <aside className={styles.blockedNotice} role="status"><strong>Historical context is visible. Forward evidence is not cleared.</strong>{error && <p>{error}</p>}{!!report?.dataStatus?.reasons?.length && <ul>{report.dataStatus.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}<p>Restore a fresh, healthy source with the frozen rules before interpreting trial progress.</p></aside>}
+
+    <section className={styles.pnlOverview} aria-labelledby="current-pnl-title">
+      <span className={styles.eyebrow}>Frozen prospective trial / selected five only</span><h2 id="current-pnl-title">New trial P&amp;L</h2>
+      <div className={styles.trialScore}>
+        <div><span>Realized net paper P&amp;L</span><strong className={tone(blocked ? null : summary.prospectivePnlUsd)}>{money(blocked ? null : summary.prospectivePnlUsd)}</strong><small>Closed trades only · open P&amp;L excluded</small></div>
+        <div><span>Counted new closed trades</span><strong>{number(blocked ? null : summary.prospectiveTrades)}</strong><small>Since {when(report?.startedAt)}</small></div>
+        <div><span>Paper criteria met</span><strong>{number(blocked ? null : summary.qualified)}<small> / {number(summary.selectedStrategies)}</small></strong><small>Separate from frozen historical profit</small></div>
+      </div>
+      <a href="#counted-trades">Reconcile the counted trades ↓</a>
+    </section>
+    <div id="counted-trades"><CountedTrades trades={countedTrades} blocked={blocked} /></div>
 
     <section className={styles.selection} aria-labelledby="selection-title">
       <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>Retrospective selection</span><h2 id="selection-title">Five winners. Different sources of profit.</h2></div><p>Selected {when(report?.selectedAt)}<br />Positive lifetime paper P&amp;L at selection.</p></div>
@@ -162,10 +194,10 @@ export default function ProfitFocusBoard({ initialReport }) {
       <div className={styles.tableScroll} role="region" aria-label="Selected strategies ledger; scroll horizontally on small screens" tabIndex={0}>
         <table className={styles.ledger}>
           <caption>Frozen selection record and separate prospective trial</caption>
-          <thead><tr><th scope="col">Selected strategy</th><th scope="col">Selection P&amp;L</th><th scope="col">Selection trades</th><th scope="col">Without best trade<small>Recorded history</small></th><th scope="col">New trial trades</th><th scope="col">Forward status</th></tr></thead>
+          <thead><tr><th scope="col">Selected strategy</th><th scope="col">Selection P&amp;L</th><th scope="col">Selection trades</th><th scope="col">Without best trade<small>Recorded history</small></th><th scope="col">New trial P&amp;L<small>Closed trades only</small></th><th scope="col">New trial trades</th><th scope="col">Forward status</th></tr></thead>
           <tbody>{strategies.map((strategy, index) => <tr key={strategy.slug}>
             <th scope="row"><span className={`${styles.strategySwatch} ${styles[`swatch${index % 5}`]}`} aria-hidden="true" /><Link href={`/strategies/${strategy.slug}`}>{strategy.name}</Link></th>
-            <td className={tone(strategy.selectionPnlUsd)}>{money(strategy.selectionPnlUsd)}</td><td>{number(strategy.selectionTrades)}</td><td className={tone(strategy.history?.netWithoutBestUsd)}>{money(strategy.history?.netWithoutBestUsd)}</td><td>{number(strategy.prospective?.metrics?.trades)} / {number(policy.minTrades)}</td><td><Status status={strategy.prospective?.status} blocked={blocked} /></td>
+            <td className={tone(strategy.selectionPnlUsd)}>{money(strategy.selectionPnlUsd)}</td><td>{number(strategy.selectionTrades)}</td><td className={tone(strategy.history?.netWithoutBestUsd)}>{money(strategy.history?.netWithoutBestUsd)}</td><td className={tone(blocked ? null : strategy.prospective?.metrics?.netPnlUsd)}>{money(blocked ? null : strategy.prospective?.metrics?.netPnlUsd)}</td><td>{number(blocked ? null : strategy.prospective?.metrics?.trades)} / {number(policy.minTrades)}</td><td><Status status={strategy.prospective?.status} blocked={blocked} /></td>
           </tr>)}</tbody>
         </table>
       </div>
@@ -175,11 +207,6 @@ export default function ProfitFocusBoard({ initialReport }) {
 
     <section className={styles.trial} aria-labelledby="trial-title">
       <div className={styles.trialIntro}><span className={styles.eyebrow}>Prospective validation / fresh start</span><h2 id="trial-title">The next trades must earn the conclusion.</h2><p>Trial began <strong>{when(report?.startedAt)}</strong>. Earlier trades and signals are excluded. The cohort and execution rules are frozen.</p></div>
-      <div className={styles.trialScore}>
-        <div><span>New admitted trades</span><strong>{number(summary.prospectiveTrades)}</strong><small>Across the selected accounts</small></div>
-        <div><span>New realized paper P&amp;L</span><strong className={tone(summary.prospectivePnlUsd)}>{money(summary.prospectivePnlUsd)}</strong><small>Separate from historical selection</small></div>
-        <div><span>Paper criteria met</span><strong>{number(summary.qualified)}<small> / {number(summary.selectedStrategies)}</small></strong><small>No automatic live promotion</small></div>
-      </div>
       <div className={styles.ruleColumns}>
         <div><h3>One fixed evaluation</h3><p>Reach <strong>{number(policy.minTrades)} new trades and {number(policy.minTradingDays)} traded New York days</strong>. Evaluate at the first close meeting both thresholds.</p><p>Pass requires profit factor ≥{number(policy.minProfitFactor)}, positive net R, positive net R after extra costs, and a positive approximate daily lower bound.</p></div>
         <div><h3>Stop counting the trial when…</h3><ul><li>Drawdown reaches {risk(policy.maxDrawdownR)}, including adverse excursion.</li><li>A day loses {risk(policy.maxDailyLossR)} net.</li><li>{number(policy.maxConsecutiveLosses)} consecutive losses occur.</li><li>{number(policy.maxCalendarDays)} calendar days expire.</li></ul><small>Stops apply to validation counts. Original accounts keep their existing rules.</small></div>

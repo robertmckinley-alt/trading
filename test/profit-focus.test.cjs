@@ -215,3 +215,63 @@ test('malformed journal shapes fail closed without throwing', () => {
     assert.equal(report(f).summary.historicalPnlUsd, null);
   }
 });
+
+test('counted-trade audit attributes P&L only to selected new trades and reconciles at every level', () => {
+  const f = fixture([trade('new-vwap-loss', 1, -284.5, { entry: 27000, finalExitPrice: 26990, actualRiskUsd: 500 })]);
+  f.snapshot.strategies[1].journal.dailyRecaps[0].tradesList.push(trade('other-selected', 2, 100.25));
+  f.snapshot.strategies.push({ slug: 'unselected', watcher: { isHealthy: true, processCount: 1 },
+    journal: { dailyRecaps: [{ date: '2026-01-04', tradesList: [trade('unselected-profit', 3, 999999)] }] } });
+  const result = report(f), audits = result.strategies.flatMap(s => s.prospective.trades);
+  assert.equal(result.dataStatus.ok, true);
+  assert.equal(result.summary.historicalPnlUsd, 500);
+  assert.equal(result.summary.historicalTrades, 5);
+  assert.deepEqual(audits.map(t => t.id), ['new-vwap-loss', 'other-selected']);
+  assert.equal(result.summary.prospectivePnlUsd, -184.25);
+  assert.equal(result.summary.prospectiveTrades, 2);
+  assert.equal(audits.reduce((total, t) => total + t.netPnlUsd, 0), result.summary.prospectivePnlUsd);
+  for (const strategy of result.strategies) {
+    assert.equal(strategy.prospective.trades.length, strategy.prospective.metrics.trades);
+    assert.equal(strategy.prospective.trades.reduce((total, t) => total + t.netPnlUsd, 0), strategy.prospective.metrics.netPnlUsd);
+    for (const t of strategy.prospective.trades) assert.equal(t.slug, strategy.slug);
+  }
+  assert.equal(audits[0].actualRiskUsd, 500);
+  assert.equal(audits[0].entry, 27000);
+  assert.equal(audits[0].exit, 26990);
+  assert.equal(audits[0].rMultiple, -0.569);
+});
+
+test('audit includes terminal breach trade but no later valid or malformed money', () => {
+  const trades = Array.from({ length: 6 }, (_, i) => trade(`stop-${i}`, i + 1, -100));
+  trades.push(trade('ignored-profit', 10, 99999), trade('ignored-null', 11, null));
+  const r = report(fixture(trades)), p = r.strategies[0].prospective;
+  assert.equal(p.status, 'stopped');
+  assert.deepEqual(p.trades.map(t => t.id), trades.slice(0, 6).map(t => t.id));
+  assert.equal(p.trades.reduce((total, t) => total + t.netPnlUsd, 0), -600);
+  assert.equal(r.summary.prospectivePnlUsd, -600);
+  assert.equal(r.summary.prospectiveTrades, 6);
+  assert.equal(p.ignoredAfterStop, 2);
+});
+
+test('source or integrity failures redact counted-trade financial fields and current total/count', () => {
+  for (const mutate of [f => { f.snapshot.source = 'remote-bridge-cache'; },
+    f => { f.snapshot.focusValidation.actualHash = 'changed'; },
+    f => { f.snapshot.strategies[3].watcher.isHealthy = false; }]) {
+    const f = fixture([trade('real-new', 1, -284.5, { entry: 27000, finalExitPrice: 26990 })]); mutate(f);
+    const r = report(f), audit = r.strategies[0].prospective.trades[0];
+    assert.equal(r.dataStatus.ok, false);
+    assert.equal(r.summary.prospectivePnlUsd, null);
+    assert.equal(r.summary.prospectiveTrades, null);
+    assert.equal(audit.id, 'real-new');
+    for (const key of ['contracts', 'entry', 'exit', 'actualRiskUsd', 'netPnlUsd', 'rMultiple']) assert.equal(audit[key], null);
+  }
+});
+
+test('admitted audit preserves recorded monetary precision until aggregation and excludes prestart signals', () => {
+  const oldSignal = trade('old-signal', 1, 9000); oldSignal.execution.signalOriginAvailableAt = at(-1);
+  const f = fixture([oldSignal, trade('decimal-a', 2, .1), trade('decimal-b', 3, .2)]);
+  const r = report(f), p = r.strategies[0].prospective;
+  assert.deepEqual(p.trades.map(t => t.netPnlUsd), [.1, .2]);
+  const cents = value => Math.round(value * 100);
+  assert.equal(cents(p.trades.reduce((total, t) => total + t.netPnlUsd, 0)), cents(p.metrics.netPnlUsd));
+  assert.equal(cents(r.summary.prospectivePnlUsd), 30);
+});
