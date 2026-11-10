@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const navigation = [
   { href: '/', label: 'Dashboard' },
+  { href: '/focus', label: 'Profit Focus' },
   { href: '/strategies/nq-dmc-market-open', label: 'Strategies' },
   { href: '/orb', label: 'ORB Lab' },
   { href: '/backtests', label: 'Backtests' },
