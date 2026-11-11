@@ -1,0 +1,71 @@
+{
+  "id": "focus-paper-1000-v2",
+  "name": "Profit Focus · $1,000 risk paper trial",
+  "startedAt": "2026-11-11T00:13:18.341Z",
+  "parents": [
+    {
+      "slug": "live-9am-sweep",
+      "name": "9AM Asia/London Sweep",
+      "family": "liquidity-reversal",
+      "accountDrawdownPercent": 10
+    },
+    {
+      "slug": "nq-vwap-stretch-reversion",
+      "name": "VWAP Stretch Reversion",
+      "family": "vwap-reversion",
+      "accountDrawdownPercent": 5
+    },
+    {
+      "slug": "nq-fresh-level-retest",
+      "name": "Fresh Level Retest",
+      "family": "liquidity-reversal",
+      "accountDrawdownPercent": 10
+    },
+    {
+      "slug": "nq-opening-range-breakout",
+      "name": "NQ Opening Range Breakout",
+      "family": "cash-breakout",
+      "accountDrawdownPercent": 10
+    },
+    {
+      "slug": "nq-15m-opening-range-retest",
+      "name": "NQ 15M Opening Range Retest",
+      "family": "cash-breakout",
+      "accountDrawdownPercent": 10
+    }
+  ],
+  "riskPerTradeUsd": 1000,
+  "startingBalanceUsd": 50000,
+  "dailyLossLimitUsd": 1000,
+  "portfolioOpenRiskUsd": 2500,
+  "familyOpenRiskUsd": 1000,
+  "baseConfig": {
+    "symbol": "NQ",
+    "tickSize": 0.25,
+    "tickValueUsd": 5,
+    "commissionPerContractUsd": 4.5,
+    "slippageTicks": 1,
+    "minimumRMultiple": 0,
+    "sameCandleConflict": "stop-first",
+    "defaultScaleOuts": [
+      {
+        "targetIndex": 0,
+        "closeFraction": 0.5
+      },
+      {
+        "targetIndex": 1,
+        "closeFraction": 0.3
+      },
+      {
+        "targetIndex": 2,
+        "closeFraction": 0.2
+      }
+    ]
+  },
+  "sourceRulesHash": "5db6ad09767c7d87f1c21731737adccbca96b086d41f6fa8cdea521c5f179a88",
+  "engineFiles": [
+    "lib/focus-paper.cjs",
+    "scripts/focus-paper-worker.cjs"
+  ],
+  "engineCodeHash": "ad4a3e957496f6e352ec8ec15081bfe1ab7d95595722e6c97ad3c5623c670170"
+}

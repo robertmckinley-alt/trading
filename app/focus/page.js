@@ -1,14 +1,14 @@
 import AppHeader from '../../components/app-header';
-import ProfitFocusBoard from '../../components/profit-focus-board';
+import FocusPaperBoard from '../../components/focus-paper-board';
 import { getStrategySnapshots } from '../../lib/live-status.cjs';
-import { buildFocusReport } from '../../lib/profit-focus.cjs';
-import manifest from '../../config/profit-focus-v1.json';
+import { buildFocusPaperView } from '../../lib/focus-paper-view.cjs';
+import policy from '../../config/focus-paper-v2.json';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const metadata = {
-  title: 'Profit Focus · DoctorTrades',
-  description: 'Five selected paper strategies, their historical profit drivers, and a separate frozen forward validation trial.'
+  title: '$1,000-risk paper trial · DoctorTrades',
+  description: 'Five separate paper accounts with up to $1,000 planned risk per trade, new realized P&L, and an isolated VWAP confirmation comparison.'
 };
 
 export default async function ProfitFocusPage() {
@@ -18,11 +18,12 @@ export default async function ProfitFocusPage() {
   } catch {
     snapshot = { ok: false, source: 'unavailable', strategies: [] };
   }
-  const report = buildFocusReport(snapshot, manifest);
+  const report = buildFocusPaperView(snapshot, policy);
+  const limits = Object.fromEntries(['riskPerTradeUsd', 'dailyLossLimitUsd', 'portfolioOpenRiskUsd', 'familyOpenRiskUsd', 'startingBalanceUsd'].map(key => [key, policy[key]]));
   return (
     <main className="page-shell command-page" id="main-content">
-      <AppHeader section="Profit Focus · paper validation" />
-      <ProfitFocusBoard initialReport={report} />
+      <AppHeader section="Profit Focus · separate $1,000-risk paper trial" />
+      <FocusPaperBoard initialReport={report} accountDefinitions={policy.parents} policyLimits={limits} />
     </main>
   );
 }
